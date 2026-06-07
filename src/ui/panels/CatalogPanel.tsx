@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { defaultDeps } from "../../core/install/runner.js";
-import { buildCatalog } from "../../core/catalog/catalog.js";
+import { buildCatalog, applyLatest, detectLatest } from "../../core/catalog/catalog.js";
 import { runRecipe } from "../../core/install/recipe.js";
 import { setEnabled } from "../../core/install/registry-file.js";
 import type { InstallDeps } from "../../core/install/types.js";
@@ -16,12 +16,34 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
   const [cursor, setCursor] = useState(0);
   const [mode, setMode] = useState<Mode>("list");
   const [status, setStatus] = useState("");
+  const [checking, setChecking] = useState(true);
 
   const reload = () => {
     const next = buildCatalog(deps);
     setItems(next);
     setCursor((c) => Math.max(0, Math.min(c, next.length - 1)));
+    setChecking(true);
   };
+
+  // Ленивый сетевой детект latest: fast-рендер уже показал installed/version,
+  // здесь догоняем update-available, не блокируя первый кадр.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      const latestById = new Map<string, string | undefined>();
+      for (const it of items) {
+        if (it.status === "not-installed") continue;
+        latestById.set(it.id, detectLatest(it, deps));
+      }
+      if (cancelled) return;
+      setItems((cur) => cur.map((it) => applyLatest(it, latestById.get(it.id))));
+      setChecking(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checking]);
 
   useInput((ch, key) => {
     const item = items[cursor];
@@ -91,16 +113,27 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
 
   return (
     <Box flexDirection="column">
-      {items.map((it, i) => (
-        <Text key={it.id} inverse={i === cursor}>
-          {MARK[it.status]} {it.title}  [{it.category}]  {it.case}
-          {it.status === "update-available" ? "  (есть обновление)" : ""}
-        </Text>
-      ))}
+      {items.map((it, i) => {
+        const loading = checking && it.status !== "not-installed" && !it.latestVersion;
+        const tail =
+          it.status === "update-available"
+            ? "  ↻ есть обновление"
+            : loading
+              ? "  ↻… проверка обновлений"
+              : "";
+        return (
+          <Text key={it.id} inverse={i === cursor}>
+            {MARK[it.status]} {it.title}  [{it.category}]  {it.case}
+            {tail}
+          </Text>
+        );
+      })}
 
       {mode === "confirmInstall" && current ? (
         <Box marginTop={1}>
-          <Text>Установить {current.id}? (y/n)</Text>
+          <Text>
+            {current.status === "update-available" ? "Обновить" : "Установить"} {current.id}? (y/n)
+          </Text>
         </Box>
       ) : null}
       {mode === "confirmRemove" && current ? (

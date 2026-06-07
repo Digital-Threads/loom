@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CATALOG_ENTRIES } from "../../../src/core/catalog/catalog-data.js";
-import { resolveEntries, buildCatalog } from "../../../src/core/catalog/catalog.js";
+import { resolveEntries, buildCatalog, applyLatest } from "../../../src/core/catalog/catalog.js";
 import type { InstallDeps } from "../../../src/core/install/types.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,5 +52,23 @@ describe("buildCatalog", () => {
     const items = buildCatalog(depsWith(tmpEmpty, okRun("x@1.0.0")), entries as any);
     expect(items[0].status).toBe("installed");
     expect(items[0].installedVersion).toBe("1.0.0");
+  });
+});
+
+describe("applyLatest", () => {
+  it("installed + latest>version → update-available", () => {
+    const item = { id:"x", title:"X", case:"c", category:"memory",
+      recipe:{ install:[], remove:[], detect:{ probe:{ cmd:"which", args:["x"] } } },
+      status:"installed" as const, installedVersion:"1.0.0" };
+    const up = applyLatest(item as any, "1.2.0");
+    expect(up.status).toBe("update-available");
+    expect(up.latestVersion).toBe("1.2.0");
+  });
+  it("latest === version → остаётся installed", () => {
+    const item = { status:"installed" as const, installedVersion:"1.2.0" } as any;
+    expect(applyLatest(item, "1.2.0").status).toBe("installed");
+  });
+  it("not-installed игнорирует latest", () => {
+    expect(applyLatest({ status:"not-installed" as const } as any, "9.9.9").status).toBe("not-installed");
   });
 });

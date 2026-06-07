@@ -6,7 +6,7 @@ import { validateManifest } from "../plugins/manifest.js";
 import { CATALOG_ENTRIES } from "./catalog-data.js";
 import type { CatalogEntry, ResolvedEntry, CatalogItem, CatalogStatus } from "./types.js";
 import type { InstallDeps } from "../install/types.js";
-import { detect } from "../install/recipe.js";
+import { detect, detectUpdate, compareVersions } from "../install/recipe.js";
 import { readInstalled } from "../install/registry-file.js";
 
 // ESM-safe аналог __dirname: проект — "type":"module" (module: ESNext),
@@ -46,4 +46,18 @@ export function buildCatalog(
       enabled: regEntry?.enabled,
     };
   });
+}
+
+// Чистый апгрейд статуса по полученному latest (без сети).
+export function applyLatest(item: CatalogItem, latest?: string): CatalogItem {
+  if (item.status === "not-installed" || !latest || !item.installedVersion) return item;
+  const isNewer = compareVersions(latest, item.installedVersion) > 0;
+  return isNewer
+    ? { ...item, status: "update-available", latestVersion: latest }
+    : { ...item, latestVersion: latest };
+}
+
+// Сетевой детект последней версии (LP2). Изолирован, чтобы fast-путь его НЕ звал.
+export function detectLatest(item: CatalogItem, deps: InstallDeps): string | undefined {
+  return detectUpdate(item.recipe.detect, deps).latest;
 }

@@ -64,3 +64,29 @@ describe("CatalogPanel действия", () => {
     expect(handled.has("q")).toBe(false);
   });
 });
+
+describe("CatalogPanel ленивый latest", () => {
+  it("ленивая загрузка latest: сначала «проверка», потом ↻", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "loom-c45-"));
+    const fake: InstallDeps = { dataDir: tmp, run: (c, a) => {
+      const key = [c, ...a].join(" ");
+      if (key.includes("view") || key.includes("search")) return { ok: true, stdout: "1.2.0", stderr: "" }; // latest
+      // detect-probe: aimux npm ls -g → installed + version 1.0.0
+      if (a.includes("ls")) return { ok: true, stdout: "@digital-threads/aimux@1.0.0", stderr: "" };
+      return { ok: true, stdout: "", stderr: "" };
+    } };
+    const { lastFrame } = render(<CatalogPanel deps={fake} />);
+    // первый кадр: установленные показывают индикатор проверки
+    expect(lastFrame()!).toMatch(/проверка|↻…/);
+    await Promise.resolve(); await Promise.resolve();
+    expect(lastFrame()!).toContain("↻");
+  });
+
+  it("not-installed не показывает индикатор проверки обновлений", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "loom-c45b-"));
+    const fake: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
+    const { lastFrame } = render(<CatalogPanel deps={fake} />);
+    expect(lastFrame()!).not.toMatch(/проверка|↻…/);
+    expect(lastFrame()!).toContain("○");
+  });
+});
