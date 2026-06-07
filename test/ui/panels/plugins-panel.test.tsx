@@ -61,4 +61,26 @@ describe("PluginsPanel render smoke", () => {
     // футер списка
     expect(f).toContain("e вкл/выкл");
   });
+
+  it("хоткей p вызывает packAction и показывает путь", async () => {
+    let called = false;
+    const packAction = async () => {
+      called = true;
+      return "/tmp/workspace-pack.md";
+    };
+    const { lastFrame, stdin } = render(<PluginsPanel packAction={packAction} />);
+    await Promise.resolve();
+    stdin.write("p");
+    await Promise.resolve();
+    await Promise.resolve();
+    // дать промису packAction разрешиться
+    await new Promise((r) => setTimeout(r, 20));
+    expect(called).toBe(true);
+    expect(lastFrame()!).toMatch(/pack записан|\/tmp\/workspace-pack\.md/);
+  });
+
+  it("футер упоминает p — собрать pack", () => {
+    const { lastFrame } = render(<PluginsPanel packAction={async () => "x"} />);
+    expect(lastFrame()!.toLowerCase()).toContain("pack");
+  });
 });

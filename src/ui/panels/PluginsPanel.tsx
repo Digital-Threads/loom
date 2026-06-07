@@ -39,7 +39,21 @@ function loadRows(): PluginRow[] {
     }));
 }
 
-export function PluginsPanel() {
+async function defaultPackAction(): Promise<string> {
+  const { collectPackInput } = await import("../../core/pack/collect-pack.js");
+  const { buildPack } = await import("../../core/pack/build-pack.js");
+  const { writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const input = await collectPackInput();
+  const md = buildPack(input);
+  const path = join(process.cwd(), "workspace-pack.md");
+  writeFileSync(path, md, "utf8");
+  return path;
+}
+
+export function PluginsPanel(
+  { packAction = defaultPackAction }: { packAction?: () => Promise<string> } = {},
+) {
   const [rows, setRows] = useState<PluginRow[]>(loadRows);
   const [cursor, setCursor] = useState(0);
   const [mode, setMode] = useState<Mode>("list");
@@ -161,6 +175,12 @@ export function PluginsPanel() {
       setStatus("");
       return;
     }
+    if (ch === "p") {
+      packAction()
+        .then((path) => setStatus(`pack записан: ${path}`))
+        .catch((e) => setStatus(`Ошибка pack: ${(e as Error).message}`));
+      return;
+    }
     const row = rows[cursor];
     if (!row) return;
     if (ch === "e") {
@@ -260,6 +280,6 @@ function footerFor(mode: Mode): string {
     case "confirmInstall":
       return "y — установить · n/Esc — отмена";
     default:
-      return "↑/↓ выбор · e вкл/выкл · d удалить · a добавить";
+      return "↑/↓ выбор · e вкл/выкл · d удалить · a добавить · p собрать pack";
   }
 }
