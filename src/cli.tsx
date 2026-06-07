@@ -3,12 +3,25 @@ import React from "react";
 import { render } from "ink";
 import { App } from "./ui/App.js";
 import { loadDynamicPlugins } from "./core/plugins/index.js";
+import { runPluginCli } from "./cli/plugin-cli.js";
+import { defaultDeps } from "./core/install/runner.js";
 
-// Наполняем реестр динамическими плагинами ДО первого рендера, чтобы App
-// видел полный список. Ошибки загрузки не валят запуск — только печатаем.
-const errs = await loadDynamicPlugins();
-if (errs.length) {
-  console.error("Loom: проблемы загрузки плагинов:\n" + errs.join("\n"));
+async function main(): Promise<void> {
+  // `loom plugin <add|remove|list>` → headless CLI без рендера TUI.
+  if (process.argv[2] === "plugin") {
+    const res = runPluginCli(process.argv.slice(3), defaultDeps());
+    for (const l of res.lines) console.log(l);
+    process.exit(res.code);
+  }
+
+  // Иначе — обычный TUI. Наполняем реестр динамическими плагинами ДО первого
+  // рендера, чтобы App видел полный список. Ошибки загрузки не валят запуск.
+  const errs = await loadDynamicPlugins();
+  if (errs.length) {
+    console.error("Loom: проблемы загрузки плагинов:\n" + errs.join("\n"));
+  }
+
+  render(<App />);
 }
 
-render(<App />);
+await main();
