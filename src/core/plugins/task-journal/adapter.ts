@@ -1,0 +1,97 @@
+import { execFileSync } from "node:child_process";
+
+export interface TjEvent {
+  event_id: string;
+  task_id: string;
+  type: string;
+  timestamp: string;
+  text: string;
+  meta?: { title?: string; [k: string]: unknown };
+}
+
+export interface TaskSummary {
+  id: string;
+  title: string;
+  status: "open" | "closed";
+}
+
+export interface TaskDetail {
+  decisions: TjEvent[];
+  findings: TjEvent[];
+  rejections: TjEvent[];
+}
+
+export function tasksFromEvents(events: TjEvent[]): TaskSummary[] {
+  const byTask = new Map<string, TjEvent[]>();
+  for (const ev of events) {
+    const list = byTask.get(ev.task_id) ?? [];
+    list.push(ev);
+    byTask.set(ev.task_id, list);
+  }
+
+  const summaries: { summary: TaskSummary; latest: string }[] = [];
+  for (const [id, list] of byTask) {
+    const openEvent = list.find((e) => e.type === "open");
+    let title = "";
+    if (openEvent) {
+      title = openEvent.meta?.title ?? openEvent.text ?? "";
+    } else if (list.length > 0) {
+      title = list[0].text ?? "";
+    }
+
+    let latestClose = "";
+    let latestReopen = "";
+    let latest = "";
+    for (const e of list) {
+      if (e.timestamp > latest) latest = e.timestamp;
+      if (e.type === "close" && e.timestamp > latestClose) latestClose = e.timestamp;
+      if (e.type === "reopen" && e.timestamp > latestReopen) latestReopen = e.timestamp;
+    }
+
+    const status: "open" | "closed" =
+      latestClose !== "" && latestClose >= latestReopen ? "closed" : "open";
+
+    summaries.push({ summary: { id, title, status }, latest });
+  }
+
+  summaries.sort((a, b) => (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : 0));
+  return summaries.map((s) => s.summary);
+}
+
+export function taskDetailFromEvents(events: TjEvent[], id: string): TaskDetail {
+  const own = events
+    .filter((e) => e.task_id === id)
+    .sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
+
+  return {
+    decisions: own.filter((e) => e.type === "decision"),
+    findings: own.filter((e) => e.type === "finding"),
+    rejections: own.filter((e) => e.type === "rejection"),
+  };
+}
+
+function exportEvents(projectRoot: string): TjEvent[] {
+  const raw = execFileSync(
+    "task-journal",
+    ["export", "--format", "json", "--project", projectRoot],
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? (parsed as TjEvent[]) : [];
+}
+
+export function listTasks(projectRoot: string): TaskSummary[] {
+  try {
+    return tasksFromEvents(exportEvents(projectRoot));
+  } catch {
+    return [];
+  }
+}
+
+export function taskDetail(projectRoot: string, id: string): TaskDetail {
+  try {
+    return taskDetailFromEvents(exportEvents(projectRoot), id);
+  } catch {
+    return { decisions: [], findings: [], rejections: [] };
+  }
+}
