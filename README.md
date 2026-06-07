@@ -37,12 +37,18 @@ For development, without a build step:
 bun run dev
 ```
 
-As a global `loom` command — once the dependencies are published to npm (`@digital-threads/aimux` is currently a local `file:` dependency; publishing is on the backlog):
+As a global `loom` command — once the dependencies are published to npm (`@digital-threads/aimux` is currently a local `file:` dependency; the exact publish order is in [`.docs/loom/publishing.md`](../.docs/loom/publishing.md)):
 
 ```bash
 npm install -g @digital-threads/loom
 loom
+loom plugin add @digital-threads/loom-plugin-aimux   # add plugins from npm
 ```
+
+The repo is a Bun workspace. The host lives at the root; the shared types contract and the three bundled plugins live under `packages/`:
+
+- `@digital-threads/loom-contract` — types-only plugin contract.
+- `@digital-threads/loom-plugin-aimux`, `@digital-threads/loom-plugin-token-pilot`, `@digital-threads/loom-plugin-task-journal` — the bundled adapters.
 
 ## What you need for the full picture
 

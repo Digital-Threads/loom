@@ -2,15 +2,29 @@
   "name": "@digital-threads/loom",
   "version": "0.0.1",
   "type": "module",
+  "description": "Loom — a TUI host that unifies aimux, Token Pilot and Task Journal behind a single plugin-based interface.",
+  "license": "MIT",
+  "author": "Digital-Threads",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Digital-Threads/loom.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "workspaces": ["packages/*"],
   "bin": {
     "loom": "dist/cli.js"
   },
+  "files": ["dist", "README.md"],
   "scripts": {
     "dev": "bun run src/cli.tsx",
-    "build": "tsc -p tsconfig.json",
+    "build:packages": "bun run --filter '@digital-threads/loom-contract' build && bun run --filter '@digital-threads/loom-plugin-*' build",
+    "build:host": "tsc -p tsconfig.json",
+    "build": "bun run build:packages && bun run build:host",
     "start": "node dist/cli.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "bun run build:host"
   },
   "dependencies": {
     "@digital-threads/aimux": "file:../aimux",

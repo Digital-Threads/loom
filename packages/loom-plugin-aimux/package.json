@@ -2,14 +2,30 @@
   "name": "@digital-threads/loom-plugin-aimux",
   "version": "0.1.0",
   "type": "module",
-  "main": "./src/adapter.ts",
+  "description": "Loom plugin wrapping aimux: manage CLI subscriptions/profiles and unified sessions as Loom tabs and actions.",
+  "license": "MIT",
+  "author": "Digital-Threads",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Digital-Threads/loom.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/adapter.js",
+  "types": "./dist/adapter.d.ts",
   "exports": {
     ".": {
-      "types": "./src/adapter.ts",
-      "import": "./src/adapter.ts"
+      "development": "./src/adapter.ts",
+      "types": "./dist/adapter.d.ts",
+      "import": "./dist/adapter.js"
     }
   },
-  "comment": "exports → src для types и рантайма (работает под Bun/vitest/tsc). Билд в dist — Phase 12.",
+  "files": ["dist", "src", "plugin.json", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
   "dependencies": {
     "@digital-threads/loom-contract": "workspace:*",
     "@digital-threads/aimux": "file:../../../aimux"

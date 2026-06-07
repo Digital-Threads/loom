@@ -2,11 +2,27 @@
   "name": "@digital-threads/loom-contract",
   "version": "0.1.0",
   "type": "module",
-  "types": "./src/index.ts",
+  "description": "TypeScript contract (types only) for Loom plugins: LoomPlugin, ViewSpec, SettingsSchema and related interfaces.",
+  "license": "MIT",
+  "author": "Digital-Threads",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Digital-Threads/loom.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
-  "files": ["src"]
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  }
 }
