@@ -5,6 +5,10 @@ import { join } from "node:path";
 import {
   fetchToStaging,
   installPlugin,
+  isFlagShaped,
+  isValidGitUrl,
+  isValidMarketplaceSource,
+  isValidNpmSpec,
   planInstall,
   removePlugin,
 } from "../../../src/core/install/install.js";
@@ -88,14 +92,15 @@ describe("installPlugin — local", () => {
 
     const res = installPlugin({ type: "local", path: src }, deps);
     expect(res.ok).toBe(true);
-    expect(calls).toContainEqual(["claude", "plugin", "marketplace", "add", "./"]);
+    expect(calls).toContainEqual(["claude", "plugin", "marketplace", "add", "--", "./"]);
     expect(calls).toContainEqual([
       "claude",
       "plugin",
       "install",
-      "x@x",
       "--scope",
       "user",
+      "--",
+      "x@x",
     ]);
   });
 
@@ -164,7 +169,7 @@ describe("removePlugin", () => {
     calls.length = 0;
 
     removePlugin("demo", deps);
-    expect(calls).toContainEqual(["claude", "plugin", "uninstall", "x@x"]);
+    expect(calls).toContainEqual(["claude", "plugin", "uninstall", "--", "x@x"]);
   });
 
   it("не установлен → ok:false", () => {
@@ -175,13 +180,24 @@ describe("removePlugin", () => {
 
 describe("fetchToStaging — npm/git (покрыто только мок-вызовом run)", () => {
   it("npm: зовёт npm pack + tar extract", () => {
-    const { run, calls } = fakeRun();
-    // tar в фейке не распакует — fetch вернёт ошибку, но вызовы зафиксированы.
+    // npm pack печатает имя tgz на stdout → flow доходит до tar (фейк tar ничего не делает).
+    const calls: string[][] = [];
+    const run: CmdRunner = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (cmd === "npm") return { ok: true, stdout: "demo-1.0.0.tgz\n", stderr: "" };
+      return { ok: true, stdout: "", stderr: "" };
+    };
     const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
     fetchToStaging({ type: "npm", spec: "demo@1.0.0" }, deps);
     expect(calls[0][0]).toBe("npm");
-    expect(calls[0].slice(0, 3)).toEqual(["npm", "pack", "demo@1.0.0"]);
+    expect(calls[0].slice(0, 2)).toEqual(["npm", "pack"]);
+    // "--" end-of-options стоит прямо перед spec.
+    expect(calls[0].slice(-2)).toEqual(["--", "demo@1.0.0"]);
     expect(calls.some((c) => c[0] === "tar")).toBe(true);
+    // tar: флаги/опции, затем "--", затем файл (имя tgz последним аргументом).
+    const tarCall = calls.find((c) => c[0] === "tar")!;
+    expect(tarCall[tarCall.length - 2]).toBe("--");
+    expect(tarCall[tarCall.length - 1]).toMatch(/demo-1\.0\.0\.tgz$/);
   });
 
   it("git: зовёт git clone --depth 1", () => {
@@ -191,6 +207,76 @@ describe("fetchToStaging — npm/git (покрыто только мок-выз�
     expect(res.ok).toBe(true);
     expect(calls[0].slice(0, 4)).toEqual(["git", "clone", "--depth", "1"]);
     expect(calls[0]).toContain("https://example/repo.git");
+  });
+});
+
+// ── Argument-injection hardening ─────────────────────────────────────────────
+describe("валидаторы входа (argument injection)", () => {
+  it("isFlagShaped: flag-shaped и пробел-в-начале → true; нормальное → false", () => {
+    expect(isFlagShaped("-x")).toBe(true);
+    expect(isFlagShaped("--upload-pack=y")).toBe(true);
+    expect(isFlagShaped("  --evil")).toBe(true);
+    expect(isFlagShaped("https://github.com/o/r.git")).toBe(false);
+    expect(isFlagShaped("owner/repo")).toBe(false);
+  });
+
+  it("isValidGitUrl", () => {
+    expect(isValidGitUrl("https://github.com/o/r.git")).toBe(true);
+    expect(isValidGitUrl("git@github.com:o/r.git")).toBe(true);
+    expect(isValidGitUrl("github:o/r")).toBe(true);
+    expect(isValidGitUrl("-x")).toBe(false);
+    expect(isValidGitUrl("--upload-pack=evil")).toBe(false);
+    expect(isValidGitUrl(" https://x")).toBe(false);
+  });
+
+  it("isValidNpmSpec", () => {
+    expect(isValidNpmSpec("@scope/pkg@1.2.3")).toBe(true);
+    expect(isValidNpmSpec("demo@1.0.0")).toBe(true);
+    expect(isValidNpmSpec("pkg")).toBe(true);
+    expect(isValidNpmSpec("-x")).toBe(false);
+    expect(isValidNpmSpec("--registry=evil")).toBe(false);
+    expect(isValidNpmSpec(" demo")).toBe(false);
+  });
+
+  it("isValidMarketplaceSource", () => {
+    expect(isValidMarketplaceSource("owner/repo")).toBe(true);
+    expect(isValidMarketplaceSource("https://github.com/o/r")).toBe(true);
+    expect(isValidMarketplaceSource("./")).toBe(true);
+    expect(isValidMarketplaceSource("-evil")).toBe(false);
+    expect(isValidMarketplaceSource(" owner/repo")).toBe(false);
+  });
+});
+
+describe("fetchToStaging — отсекает злонамеренный вход без запуска команды", () => {
+  it("git url flag-shaped → ok:false, run НЕ позван", () => {
+    const { run, calls } = fakeRun();
+    const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
+    const res = fetchToStaging({ type: "git", url: "--upload-pack=evil" }, deps);
+    expect(res.ok).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it("npm spec flag-shaped → ok:false, run НЕ позван", () => {
+    const { run, calls } = fakeRun();
+    const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
+    const res = fetchToStaging({ type: "npm", spec: "-x" }, deps);
+    expect(res.ok).toBe(false);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("finalizeInstall — claude marketplace add отсекает злонамеренный source", () => {
+  it("cp.source='-evil' → marketplace add НЕ в calls, install Loom-части прошла (warning)", () => {
+    const src = makeLocalPlugin(
+      baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "-evil" } }),
+    );
+    const { deps, calls } = makeDeps();
+
+    const res = installPlugin({ type: "local", path: src }, deps);
+    expect(res.ok).toBe(true);
+    expect(res.warning).toBeTruthy();
+    // marketplace add с источником НЕ должен попасть в вызовы.
+    expect(calls.some((c) => c[2] === "marketplace" && c[3] === "add")).toBe(false);
   });
 });
 

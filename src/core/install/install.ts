@@ -21,6 +21,50 @@ import type {
   InstallSource,
 } from "./types.js";
 
+// ── Валидаторы входа (argument-injection hardening) ──────────────────────────
+// Любой пользовательский source попадает в argv git/npm/tar/claude. Без проверки
+// значение вида "-x" / "--upload-pack=evil" протащит флаг. Все валидаторы чистые
+// и экспортируются для тестов.
+
+// Значение «похоже на флаг»: начинается с "-" (после возможных пробелов) — отсекаем.
+export function isFlagShaped(value: string): boolean {
+  return /^\s*-/.test(value);
+}
+
+// git url: https?:// | git@host:path | github:owner/repo. Никаких флагов/пробелов в начале.
+export function isValidGitUrl(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (isFlagShaped(value)) return false;
+  if (/^https?:\/\/\S+$/.test(value)) return true;
+  if (/^git@[A-Za-z0-9._-]+:[A-Za-z0-9._/-]+$/.test(value)) return true;
+  if (/^github:[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(value)) return true;
+  return false;
+}
+
+// npm package-spec: опц. scope + имя + опц. версия/диапазон. Не flag-shaped, без пробелов в начале.
+export function isValidNpmSpec(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (isFlagShaped(value)) return false;
+  return /^(@[a-z0-9-._]+\/)?[a-z0-9-._]+(@[a-z0-9-._^~*x><=. |]+)?$/i.test(value);
+}
+
+// claude marketplace source: https?:// | owner/repo (github-форма) | ./локальный путь. Не flag-shaped.
+export function isValidMarketplaceSource(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (isFlagShaped(value)) return false;
+  if (/^https?:\/\/\S+$/.test(value)) return true;
+  if (/^\.{1,2}\//.test(value)) return true; // ./ или ../ локальный путь
+  if (/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(value)) return true; // owner/repo
+  return false;
+}
+
+// Имя найденного tgz: только безопасные символы и расширение .tgz, не flag-shaped.
+export function isValidTgzName(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (isFlagShaped(value)) return false;
+  return /^[A-Za-z0-9._@/+-]+\.tgz$/.test(value);
+}
+
 // Человекочитаемое описание источника для записи в реестр.
 function describeSource(source: InstallSource): string {
   switch (source.type) {
@@ -62,25 +106,40 @@ export function fetchToStaging(
     }
 
     if (source.type === "npm") {
+      if (!isValidNpmSpec(source.spec)) {
+        return { ok: false, error: `invalid npm spec: ${source.spec}` };
+      }
       const dest = mkdtempSync(join(tmpdir(), "loom-npm-"));
-      const packed = deps.run("npm", ["pack", source.spec, "--pack-destination", dest]);
+      // end-of-options "--" перед spec — spec не может быть распознан как флаг.
+      const packed = deps.run("npm", ["pack", "--pack-destination", dest, "--", source.spec]);
       if (!packed.ok) return { ok: false, error: `npm pack failed: ${packed.stderr}` };
       // Имя tgz печатает npm pack на stdout (последняя строка). Если пусто — ищем в dest.
-      let tgz = packed.stdout.trim().split(/\r?\n/).pop() ?? "";
-      if (tgz) tgz = join(dest, tgz);
+      let tgzName = packed.stdout.trim().split(/\r?\n/).pop() ?? "";
+      let tgz = tgzName ? join(dest, tgzName) : "";
       if (!tgz || !existsSync(tgz)) {
         const found = existsSync(dest) ? readdirSync(dest).find((f) => f.endsWith(".tgz")) : undefined;
+        tgzName = found ?? tgzName;
         tgz = found ? join(dest, found) : tgz;
       }
+      // Имя tgz должно быть безопасным и не flag-shaped (defensive против подмены вывода).
+      if (!isValidTgzName(tgzName)) {
+        return { ok: false, error: `invalid tgz name: ${tgzName}` };
+      }
       const out = mkdtempSync(join(tmpdir(), "loom-npm-x-"));
-      const ex = deps.run("tar", ["-xzf", tgz, "-C", out, "--strip-components=1"]);
+      // Защита от пути, начинающегося с "-": префиксуем "./". Затем "--" перед файлом.
+      const safeTgz = tgz.startsWith("-") ? `./${tgz}` : tgz;
+      const ex = deps.run("tar", ["-xzf", "-C", out, "--strip-components=1", "--", safeTgz]);
       if (!ex.ok) return { ok: false, error: `tar extract failed: ${ex.stderr}` };
       return { ok: true, dir: out };
     }
 
     // git
+    if (!isValidGitUrl(source.url)) {
+      return { ok: false, error: `invalid git url: ${source.url}` };
+    }
     const dir = mkdtempSync(join(tmpdir(), "loom-git-"));
-    const cloned = deps.run("git", ["clone", "--depth", "1", source.url, dir]);
+    // end-of-options "--" перед url — url не может быть распознан как флаг.
+    const cloned = deps.run("git", ["clone", "--depth", "1", "--", source.url, dir]);
     if (!cloned.ok) return { ok: false, error: `git clone failed: ${cloned.stderr}` };
     return { ok: true, dir };
   } catch (err) {
@@ -148,20 +207,32 @@ export function finalizeInstall(
   if (plan.claudePlugin) {
     const cp = plan.claudePlugin;
     if (cp.source) {
-      const added = deps.run("claude", ["plugin", "marketplace", "add", cp.source]);
-      if (!added.ok) warning = `claude marketplace add: ${added.stderr}`;
+      // Невалидный/flag-shaped source → НЕ запускаем команду, только warning (как и прочие claude-ошибки).
+      if (!isValidMarketplaceSource(cp.source)) {
+        warning = `claude marketplace add skipped: invalid source ${cp.source}`;
+      } else {
+        const added = deps.run("claude", ["plugin", "marketplace", "add", "--", cp.source]);
+        if (!added.ok) warning = `claude marketplace add: ${added.stderr}`;
+      }
     }
-    const installed = deps.run("claude", [
-      "plugin",
-      "install",
-      `${cp.name}@${cp.marketplace}`,
-      "--scope",
-      "user",
-    ]);
-    if (!installed.ok) {
-      warning = warning
-        ? `${warning}; claude install: ${installed.stderr}`
-        : `claude install: ${installed.stderr}`;
+    // name@marketplace собирается из manifest, но defensive: flag-shaped поля не пропускаем.
+    if (isFlagShaped(cp.name) || isFlagShaped(cp.marketplace)) {
+      const msg = `claude install skipped: invalid name/marketplace ${cp.name}@${cp.marketplace}`;
+      warning = warning ? `${warning}; ${msg}` : msg;
+    } else {
+      const installed = deps.run("claude", [
+        "plugin",
+        "install",
+        "--scope",
+        "user",
+        "--",
+        `${cp.name}@${cp.marketplace}`,
+      ]);
+      if (!installed.ok) {
+        warning = warning
+          ? `${warning}; claude install: ${installed.stderr}`
+          : `claude install: ${installed.stderr}`;
+      }
     }
   }
 
@@ -218,8 +289,8 @@ export function removePlugin(name: string, deps: InstallDeps): { ok: boolean; er
   delete reg.plugins[name];
   writeInstalled(deps, reg);
 
-  if (cp) {
-    deps.run("claude", ["plugin", "uninstall", `${cp.name}@${cp.marketplace}`]);
+  if (cp && !isFlagShaped(cp.name) && !isFlagShaped(cp.marketplace)) {
+    deps.run("claude", ["plugin", "uninstall", "--", `${cp.name}@${cp.marketplace}`]);
   }
 
   return { ok: true };
