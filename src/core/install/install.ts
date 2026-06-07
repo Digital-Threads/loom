@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateManifest } from "../plugins/manifest.js";
+import { runRecipe, synthesizeRecipeFromClaudePlugin } from "./recipe.js";
+import type { RecipeCtx } from "./recipe.js";
 import { readInstalled, writeInstalled } from "./registry-file.js";
 import type {
   ClaudePluginRef,
@@ -90,6 +92,25 @@ function normalizeClaudePlugin(
   return { name: cp.name, marketplace: cp.marketplace, source };
 }
 
+// Defensive: из синтезированного claudePlugin-рецепта убираем шаг
+// `claude plugin marketplace add -- <src>`, если source flag-shaped/невалидный
+// (argument-injection hardening — раньше делала прошитая claude-ветка finalize).
+function sanitizeSynthRecipe(
+  recipe: import("@digital-threads/loom-contract").InstallRecipe,
+): import("@digital-threads/loom-contract").InstallRecipe {
+  const install = recipe.install.filter((step) => {
+    const isMarketplaceAdd =
+      step.cmd === "claude" &&
+      step.args[0] === "plugin" &&
+      step.args[1] === "marketplace" &&
+      step.args[2] === "add";
+    if (!isMarketplaceAdd) return true;
+    const src = step.args[step.args.length - 1];
+    return isValidMarketplaceSource(src);
+  });
+  return { ...recipe, install };
+}
+
 // Кладёт сырьё плагина в каталог, возвращает путь к корню (где plugin.json).
 // npm/git реально качают через deps.run; в тестах run фейковый — эффектов нет.
 export function fetchToStaging(
@@ -165,6 +186,11 @@ export function planInstall(source: InstallSource, deps: InstallDeps): InstallRe
   if (!v.ok) return { ok: false, error: v.error };
   const manifest = v.manifest;
 
+  const recipe = manifest.install
+    ?? (manifest.claudePlugin
+      ? sanitizeSynthRecipe(synthesizeRecipeFromClaudePlugin(normalizeClaudePlugin(manifest.claudePlugin)))
+      : { install: [], detect: { probe: { cmd: "true", args: [] } }, remove: [] });
+
   const plan: InstallPlan = {
     name: manifest.name,
     version: manifest.version,
@@ -174,6 +200,7 @@ export function planInstall(source: InstallSource, deps: InstallDeps): InstallRe
     claudePlugin: manifest.claudePlugin
       ? normalizeClaudePlugin(manifest.claudePlugin)
       : undefined,
+    recipe,
   };
   return { ok: true, plan };
 }
@@ -184,6 +211,7 @@ export function finalizeInstall(
   plan: InstallPlan,
   stagingDir: string,
   deps: InstallDeps,
+  ctx: RecipeCtx = { scope: "user" },
 ): { ok: boolean; error?: string; warning?: string } {
   try {
     rmSync(plan.installDir, { recursive: true, force: true });
@@ -203,39 +231,8 @@ export function finalizeInstall(
   };
   writeInstalled(deps, reg);
 
-  let warning: string | undefined;
-  if (plan.claudePlugin) {
-    const cp = plan.claudePlugin;
-    if (cp.source) {
-      // Невалидный/flag-shaped source → НЕ запускаем команду, только warning (как и прочие claude-ошибки).
-      if (!isValidMarketplaceSource(cp.source)) {
-        warning = `claude marketplace add skipped: invalid source ${cp.source}`;
-      } else {
-        const added = deps.run("claude", ["plugin", "marketplace", "add", "--", cp.source]);
-        if (!added.ok) warning = `claude marketplace add: ${added.stderr}`;
-      }
-    }
-    // name@marketplace собирается из manifest, но defensive: flag-shaped поля не пропускаем.
-    if (isFlagShaped(cp.name) || isFlagShaped(cp.marketplace)) {
-      const msg = `claude install skipped: invalid name/marketplace ${cp.name}@${cp.marketplace}`;
-      warning = warning ? `${warning}; ${msg}` : msg;
-    } else {
-      const installed = deps.run("claude", [
-        "plugin",
-        "install",
-        "--scope",
-        "user",
-        "--",
-        `${cp.name}@${cp.marketplace}`,
-      ]);
-      if (!installed.ok) {
-        warning = warning
-          ? `${warning}; claude install: ${installed.stderr}`
-          : `claude install: ${installed.stderr}`;
-      }
-    }
-  }
-
+  const rec = runRecipe(plan.recipe.install, ctx, deps);
+  const warning = rec.ok ? rec.warning : `install recipe: ${rec.error}`;
   return { ok: true, warning };
 }
 
@@ -244,6 +241,7 @@ export function installPlugin(
   source: InstallSource,
   deps: InstallDeps,
   onConfirm: (plan: InstallPlan) => boolean = () => true,
+  ctx: RecipeCtx = { scope: "user" },
 ): InstallResult {
   const planned = planInstall(source, deps);
   if (!planned.ok || !planned.plan) return planned;
@@ -259,25 +257,35 @@ export function installPlugin(
     return { ok: false, error: staged.error ?? "fetch failed", plan: planned.plan };
   }
 
-  const fin = finalizeInstall(planned.plan, staged.dir, deps);
+  const fin = finalizeInstall(planned.plan, staged.dir, deps, ctx);
   if (!fin.ok) return { ok: false, error: fin.error, plan: planned.plan };
   return { ok: true, plan: planned.plan, warning: fin.warning };
 }
 
 // Удаляет плагин: убирает installDir, чистит реестр, пробует снять claude-плагин.
-export function removePlugin(name: string, deps: InstallDeps): { ok: boolean; error?: string } {
+export function removePlugin(
+  name: string,
+  deps: InstallDeps,
+  ctx: RecipeCtx = { scope: "user" },
+): { ok: boolean; error?: string } {
   const reg = readInstalled(deps);
   const entry = reg.plugins[name];
   if (!entry) return { ok: false, error: `plugin not installed: ${name}` };
 
-  // Прочитать claudePlugin из установленного plugin.json ДО удаления (defensive).
-  let cp: ClaudePluginRef | undefined;
+  // Собрать recipe из установленного plugin.json ДО удаления (defensive).
+  let removeSteps: InstallPlan["recipe"]["remove"] = [];
   try {
     const raw = JSON.parse(readFileSync(join(entry.installPath, "plugin.json"), "utf8")) as unknown;
     const v = validateManifest(raw);
-    if (v.ok && v.manifest.claudePlugin) cp = normalizeClaudePlugin(v.manifest.claudePlugin);
+    if (v.ok) {
+      const recipe = v.manifest.install
+        ?? (v.manifest.claudePlugin
+          ? synthesizeRecipeFromClaudePlugin(normalizeClaudePlugin(v.manifest.claudePlugin))
+          : { install: [], detect: { probe: { cmd: "true", args: [] } }, remove: [] });
+      removeSteps = recipe.remove;
+    }
   } catch {
-    // нет/битый манифест — пропускаем claude-uninstall
+    // нет/битый манифест — пропускаем remove-рецепт
   }
 
   try {
@@ -289,9 +297,8 @@ export function removePlugin(name: string, deps: InstallDeps): { ok: boolean; er
   delete reg.plugins[name];
   writeInstalled(deps, reg);
 
-  if (cp && !isFlagShaped(cp.name) && !isFlagShaped(cp.marketplace)) {
-    deps.run("claude", ["plugin", "uninstall", "--", `${cp.name}@${cp.marketplace}`]);
-  }
+  // Defensive: провал remove-рецепта не блокирует чистку.
+  runRecipe(removeSteps, ctx, deps);
 
   return { ok: true };
 }

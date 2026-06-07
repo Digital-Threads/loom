@@ -84,13 +84,13 @@ describe("installPlugin — local", () => {
     expect(reg.plugins.demo.installPath).toBe(installed);
   });
 
-  it("claudePlugin → вызывает marketplace add + install", () => {
+  it("claudePlugin без install → синтез shim-рецепта (marketplace add + install --scope)", () => {
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "./" } }),
     );
     const { deps, calls } = makeDeps();
 
-    const res = installPlugin({ type: "local", path: src }, deps);
+    const res = installPlugin({ type: "local", path: src }, deps, () => true, { scope: "user" });
     expect(res.ok).toBe(true);
     expect(calls).toContainEqual(["claude", "plugin", "marketplace", "add", "--", "./"]);
     expect(calls).toContainEqual([
@@ -102,6 +102,24 @@ describe("installPlugin — local", () => {
       "--",
       "x@x",
     ]);
+  });
+
+  it("manifest.install → finalize гоняет рецепт install со scope", () => {
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [
+            { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "x@x"], scoped: true },
+          ],
+          detect: { probe: { cmd: "claude", args: ["plugin", "list"] } },
+          remove: [{ cmd: "claude", args: ["plugin", "uninstall", "x@x"] }],
+        },
+      }),
+    );
+    const { deps, calls } = makeDeps();
+    const res = installPlugin({ type: "local", path: src }, deps, () => true, { scope: "project" });
+    expect(res.ok).toBe(true);
+    expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "project", "x@x"]);
   });
 
   it("onConfirm=false → ничего не копирует и не пишет реестр", () => {
@@ -170,6 +188,22 @@ describe("removePlugin", () => {
 
     removePlugin("demo", deps);
     expect(calls).toContainEqual(["claude", "plugin", "uninstall", "--", "x@x"]);
+  });
+
+  it("manifest.install → removePlugin гоняет рецепт remove", () => {
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [],
+          detect: { probe: { cmd: "claude", args: ["plugin", "list"] } },
+          remove: [{ cmd: "claude", args: ["plugin", "uninstall", "x@x"] }],
+        },
+      }),
+    );
+    const { deps, calls } = makeDeps();
+    installPlugin({ type: "local", path: src }, deps);
+    removePlugin("demo", deps);
+    expect(calls).toContainEqual(["claude", "plugin", "uninstall", "x@x"]);
   });
 
   it("не установлен → ok:false", () => {
@@ -265,8 +299,8 @@ describe("fetchToStaging — отсекает злонамеренный вхо�
   });
 });
 
-describe("finalizeInstall — claude marketplace add отсекает злонамеренный source", () => {
-  it("cp.source='-evil' → marketplace add НЕ в calls, install Loom-части прошла (warning)", () => {
+describe("синтез claudePlugin-рецепта отсекает злонамеренный source", () => {
+  it("cp.source='-evil' → marketplace add НЕ в calls, install Loom-части прошла", () => {
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "-evil" } }),
     );
@@ -274,9 +308,10 @@ describe("finalizeInstall — claude marketplace add отсекает злона
 
     const res = installPlugin({ type: "local", path: src }, deps);
     expect(res.ok).toBe(true);
-    expect(res.warning).toBeTruthy();
-    // marketplace add с источником НЕ должен попасть в вызовы.
+    // marketplace add с flag-shaped источником НЕ должен попасть в вызовы (отфильтрован в plan).
     expect(calls.some((c) => c[2] === "marketplace" && c[3] === "add")).toBe(false);
+    // install-шаг при этом синтезируется и выполняется.
+    expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "user", "--", "x@x"]);
   });
 });
 

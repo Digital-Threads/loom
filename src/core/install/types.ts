@@ -1,6 +1,8 @@
 // Типы пайплайна установки/удаления Loom-плагинов (Task 10.2).
 // Всё инъектируется (dataDir + CmdRunner), чтобы тесты не имели реальных сайд-эффектов.
-import type { LoomPluginManifest } from "@digital-threads/loom-contract";
+import type { InstallRecipe, LoomPluginManifest } from "@digital-threads/loom-contract";
+export type { InstallRecipe } from "@digital-threads/loom-contract";
+export type { RecipeCtx, DetectResult, Scope } from "./recipe.js";
 
 // Откуда берём плагин.
 export type InstallSource =
@@ -39,6 +41,7 @@ export interface InstallPlan {
   installDir: string; // <dataDir>/plugins/<name>/<version>
   permissions: string[]; // manifest.permissions ?? []
   claudePlugin?: ClaudePluginRef;
+  recipe: InstallRecipe; // из manifest.install или shim из claudePlugin
 }
 
 export interface InstallResult {
