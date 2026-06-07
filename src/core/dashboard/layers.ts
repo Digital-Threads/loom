@@ -1,4 +1,5 @@
 import type { LoomPlugin } from "../plugins/types.js";
+import type { WorkspaceData } from "../data/loader.js";
 
 export const LAYER_ORDER = [
   "accounts", "efficiency", "memory",
@@ -48,4 +49,18 @@ export function groupTabsByLayer(
   return LAYER_ORDER
     .filter((l) => byLayer.has(l) && byLayer.get(l)!.length > 0)
     .map((l) => ({ layer: l, label: layerLabel(l), tabs: byLayer.get(l)! }));
+}
+
+// По-слойная сводка для обзора: одна строка на присутствующий слой, в порядке LAYER_ORDER.
+export function layerSummary(data: WorkspaceData): Array<{ text: string }> {
+  const lines: Array<{ text: string }> = [];
+  const subs = data.subscriptions?.length ?? 0;
+  const sess = data.sessions?.length ?? 0;
+  if (subs > 0 || sess > 0) lines.push({ text: `${layerLabel("accounts")}: Подписок ${subs} · Сессий ${sess}` });
+  const used = (data.tokenEvents ?? []).reduce((s, e: any) => s + (e.used ?? 0), 0);
+  const saved = (data.tokenEvents ?? []).reduce((s, e: any) => s + (e.saved ?? 0), 0);
+  if (used > 0 || saved > 0) lines.push({ text: `${layerLabel("efficiency")}: Потрачено ${used} · Сэкономлено ${saved}` });
+  const taskN = data.tasks?.length ?? 0;
+  if (taskN > 0) lines.push({ text: `${layerLabel("memory")}: Задач ${taskN}` });
+  return lines;
 }

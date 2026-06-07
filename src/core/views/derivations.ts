@@ -1,7 +1,8 @@
 import type { WorkspaceData } from "../data/loader.js";
 import { tokenMetricsFromEvents } from "@digital-threads/loom-plugin-task-journal";
-import { tokensForTask, tokensBySessionForTask } from "../metrics/tokens-per-task.js";
+import { tokensForTask, tokensBySessionForTask, tasksWithTokens } from "../metrics/tokens-per-task.js";
 import { relatedSessions } from "../metrics/related-sessions.js";
+import { layerSummary } from "../dashboard/layers.js";
 
 // Реестр дериваций v1 — чистые функции над WorkspaceData. Кросс-плагинные склейки
 // (join sessions+tokens, корреляция токенов задачи и т.п.) принадлежат хосту, не плагину:
@@ -124,6 +125,25 @@ export function taskRecordedMetricLine(data: WorkspaceData, taskId: string): str
   return last ? `в журнале записано: потрачено ${last.used} · сэкономлено ${last.saved}` : "";
 }
 
+// Строки таблицы Задач с токенами: оборачивает tasksWithTokens. ЧЕСТНОСТЬ overlap →
+// число завышено (double-count) → не выдаём за факт, помечаем "≈ … (перекрытие)".
+export function tasksWithTokensRows(data: WorkspaceData) {
+  return tasksWithTokens(data.taskEvents, data.tasks, data.tokenEvents).map((r) => ({
+    id: r.id,
+    title: r.title.slice(0, 50),
+    status: r.status,
+    used: r.used,
+    saved: r.saved,
+    overlap: r.overlap,
+    tokens: r.overlap ? `≈ ${r.used}/${r.saved} (перекрытие)` : `${r.used}/${r.saved}`,
+  }));
+}
+
+// По-слойная сводка для обзора — оборачивает layerSummary (см. dashboard/layers.ts).
+export function layerSummaryLines(data: WorkspaceData) {
+  return layerSummary(data);
+}
+
 // Ключи реестра — имена, на которые ViewSpec ссылается через {fn,args}.
 // Имена соответствуют спеке view-schema.md (раздел «Реестр деривлаций v1»).
 export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) => unknown> = {
@@ -142,4 +162,7 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   taskTokensSummary,
   taskTokenBreakdownLines,
   taskRecordedMetricLine,
+  // dashboard-деривации (Task 4)
+  tasksWithTokensRows,
+  layerSummaryLines,
 };
