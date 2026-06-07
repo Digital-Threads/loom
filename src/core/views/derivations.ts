@@ -3,6 +3,7 @@ import { tokenMetricsFromEvents } from "@digital-threads/loom-plugin-task-journa
 import { tokensForTask, tokensBySessionForTask, tasksWithTokens } from "../metrics/tokens-per-task.js";
 import { relatedSessions } from "../metrics/related-sessions.js";
 import { layerSummary } from "../dashboard/layers.js";
+import { buildTimeline } from "../timeline/timeline.js";
 
 // Реестр дериваций v1 — чистые функции над WorkspaceData. Кросс-плагинные склейки
 // (join sessions+tokens, корреляция токенов задачи и т.п.) принадлежат хосту, не плагину:
@@ -144,6 +145,30 @@ export function layerSummaryLines(data: WorkspaceData) {
   return layerSummary(data);
 }
 
+// Строки «Ленты» (LP10): display-обёртка над buildTimeline. Порядок (новые сверху) и
+// набор источников приходят из buildTimeline; здесь добавляем стабильный key (source-ts-i,
+// уникальный даже при равном ts) и человекочитаемое when (ISO; "~" — приблизительный ts
+// при tsAccuracy="ingest"). Текст token-pilot ("used X, saved Y") приводим к принятому в
+// этом файле display-формату "потрачено X · сэкономлено Y"; прочие источники — как есть.
+export function timelineRows(
+  data: WorkspaceData,
+): Array<{ key: string; when: string; source: string; type: string; text: string }> {
+  return buildTimeline(data).map((e, i) => {
+    let text = e.text;
+    if (e.type === "tokens") {
+      const m = e.text.match(/used (\d+), saved (\d+)/);
+      if (m) text = `потрачено ${m[1]} · сэкономлено ${m[2]}`;
+    }
+    return {
+      key: `${e.source}-${e.ts}-${i}`,
+      when: (e.tsAccuracy === "ingest" ? "~" : "") + new Date(e.ts).toISOString(),
+      source: e.source,
+      type: e.type,
+      text,
+    };
+  });
+}
+
 // Ключи реестра — имена, на которые ViewSpec ссылается через {fn,args}.
 // Имена соответствуют спеке view-schema.md (раздел «Реестр деривлаций v1»).
 export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) => unknown> = {
@@ -165,4 +190,6 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   // dashboard-деривации (Task 4)
   tasksWithTokensRows,
   layerSummaryLines,
+  // timeline-деривации (LP10)
+  timelineRows,
 };
