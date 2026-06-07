@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { SettingsSchema } from "../types.js";
 
 export interface TokenUsageRow {
   sessionId: string;
@@ -73,4 +74,17 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
   }
 
   return events;
+}
+
+export function settingsSchema(): SettingsSchema {
+  return {
+    fields: [
+      { key: "hooks.mode", label: "Режим хуков", type: "enum", options: ["off", "advisory", "deny-enhanced"] },
+      { key: "hooks.denyThreshold", label: "Порог строк для deny", type: "number" },
+      { key: "sessionStart.enabled", label: "Напоминание при старте сессии", type: "boolean" },
+      { key: "smartRead.smallFileThreshold", label: "Порог малого файла (строк)", type: "number" },
+      { key: "cache.maxSizeMB", label: "Размер кэша (МБ)", type: "number" },
+      { key: "updates.checkOnStartup", label: "Проверять обновления при старте", type: "boolean" },
+    ],
+  };
 }

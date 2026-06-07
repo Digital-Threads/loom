@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import type { SettingsSchema } from "../types.js";
 
 export interface TjEvent {
   event_id: string;
@@ -149,4 +150,10 @@ export function writeTokenMetric(projectRoot: string, taskId: string, t: TaskTok
   } catch {
     return false;
   }
+}
+
+// У task-journal нет конфиг-файла (сверено --help): запись только action-образная
+// (create/event/close). Настраиваемых полей нет → схема пустая.
+export function settingsSchema(): SettingsSchema {
+  return { fields: [] };
 }

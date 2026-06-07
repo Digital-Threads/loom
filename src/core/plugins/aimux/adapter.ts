@@ -4,6 +4,7 @@ import {
   unifyAllSessions,
   type HealthReport,
 } from "@digital-threads/aimux/core";
+import type { SettingsSchema } from "../types.js";
 
 export interface Subscription {
   name: string;
@@ -41,4 +42,10 @@ export function listSessions(): SessionRow[] {
     profile: s.lastProfile ?? "",
     lastUsedAtMs: s.updatedAtMs,
   }));
+}
+
+// aimux-конфиг профиле-образный (cli/model/env на профиль) — это actions (add subscription),
+// а не плоские настройки. Плоских глобальных настроек у aimux нет → схема пустая.
+export function settingsSchema(): SettingsSchema {
+  return { fields: [] };
 }
