@@ -20,6 +20,37 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
 }
 
+function isStep(v: unknown): boolean {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  const s = v as Record<string, unknown>;
+  return (
+    isNonEmptyString(s.cmd) &&
+    Array.isArray(s.args) &&
+    (s.args as unknown[]).every((a) => typeof a === "string")
+  );
+}
+
+function validateInstallRecipe(install: unknown): string | null {
+  if (typeof install !== "object" || install === null || Array.isArray(install)) {
+    return "install must be an object";
+  }
+  const r = install as Record<string, unknown>;
+  if (!Array.isArray(r.install) || !(r.install as unknown[]).every(isStep)) {
+    return "install.install must be RecipeStep[]";
+  }
+  if (!Array.isArray(r.remove) || !(r.remove as unknown[]).every(isStep)) {
+    return "install.remove must be RecipeStep[]";
+  }
+  const d = r.detect;
+  if (typeof d !== "object" || d === null || Array.isArray(d)) {
+    return "install.detect must be an object";
+  }
+  if (!isStep((d as Record<string, unknown>).probe)) {
+    return "install.detect.probe must be a RecipeStep";
+  }
+  return null;
+}
+
 // Чистая, defensive — НЕ бросает. Проверяет только структуру (не semver apiVersion).
 // Неизвестные/лишние поля игнорируются (forward-compat).
 export function validateManifest(raw: unknown): ValidateResult {
@@ -66,6 +97,11 @@ export function validateManifest(raw: unknown): ValidateResult {
     if (!isNonEmptyString(t.id) || !isNonEmptyString(t.title)) {
       return { ok: false, error: "provides.tabs entries must have id and title" };
     }
+  }
+
+  if (m.install !== undefined) {
+    const recipeErr = validateInstallRecipe(m.install);
+    if (recipeErr) return { ok: false, error: recipeErr };
   }
 
   return { ok: true, manifest: raw as LoomPluginManifest };

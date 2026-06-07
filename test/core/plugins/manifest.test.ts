@@ -108,4 +108,39 @@ describe("validateManifest", () => {
   it("экспортирует LOOM_CONTRACT_VERSION", () => {
     expect(LOOM_CONTRACT_VERSION).toBe("1.0");
   });
+
+  it("валидный install-рецепт проходит", () => {
+    const m = {
+      ...valid,
+      install: {
+        install: [{ cmd: "npm", args: ["i", "-g", "x"] }],
+        detect: { probe: { cmd: "which", args: ["x"] } },
+        remove: [{ cmd: "npm", args: ["rm", "-g", "x"] }],
+      },
+    };
+    expect(validateManifest(m).ok).toBe(true);
+  });
+
+  it("install без detect.probe → ошибка", () => {
+    const m = { ...valid, install: { install: [], detect: {}, remove: [] } };
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/detect\.probe/);
+  });
+
+  it("step без cmd → ошибка", () => {
+    const m = {
+      ...valid,
+      install: {
+        install: [{ args: [] }],
+        detect: { probe: { cmd: "x", args: [] } },
+        remove: [],
+      },
+    };
+    expect(validateManifest(m).ok).toBe(false);
+  });
+
+  it("отсутствие install (legacy claudePlugin) → ок", () => {
+    expect(validateManifest(valid).ok).toBe(true);
+  });
 });
