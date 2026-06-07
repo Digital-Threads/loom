@@ -1,2 +1,4 @@
 node_modules
 dist
+.token-pilot
+.task-journal
