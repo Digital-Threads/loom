@@ -2,7 +2,9 @@
   "name": "@digital-threads/loom",
   "version": "0.0.1",
   "type": "module",
-  "bin": { "loom": "dist/cli.js" },
+  "bin": {
+    "loom": "dist/cli.js"
+  },
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build": "tsc -p tsconfig.json",
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.14",
+    "ink-testing-library": "^4.0.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   }
