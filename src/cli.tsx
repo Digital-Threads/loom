@@ -4,12 +4,20 @@ import { render } from "ink";
 import { App } from "./ui/App.js";
 import { loadDynamicPlugins } from "./core/plugins/index.js";
 import { runPluginCli } from "./cli/plugin-cli.js";
+import { runPackCli } from "./cli/pack-cli.js";
 import { defaultDeps } from "./core/install/runner.js";
 
 async function main(): Promise<void> {
   // `loom plugin <add|remove|list>` → headless CLI без рендера TUI.
   if (process.argv[2] === "plugin") {
     const res = runPluginCli(process.argv.slice(3), defaultDeps());
+    for (const l of res.lines) console.log(l);
+    process.exit(res.code);
+  }
+
+  // `loom pack [--out <file>] [--copy]` → headless CLI без рендера TUI.
+  if (process.argv[2] === "pack") {
+    const res = await runPackCli(process.argv.slice(3), {});
     for (const l of res.lines) console.log(l);
     process.exit(res.code);
   }
