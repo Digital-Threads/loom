@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SettingsSchema } from "../types.js";
 
@@ -87,4 +87,58 @@ export function settingsSchema(): SettingsSchema {
       { key: "updates.checkOnStartup", label: "Проверять обновления при старте", type: "boolean" },
     ],
   };
+}
+
+function getDotted(obj: Record<string, unknown>, path: string): unknown {
+  let cur: unknown = obj;
+  for (const part of path.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[part];
+  }
+  return cur;
+}
+
+function setDotted(obj: Record<string, unknown>, path: string, value: unknown): void {
+  const parts = path.split(".");
+  let cur: Record<string, unknown> = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    const next = cur[k];
+    if (next === null || typeof next !== "object") cur[k] = {};
+    cur = cur[k] as Record<string, unknown>;
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+export function readSettings(projectRoot: string): Record<string, unknown> {
+  try {
+    const raw = readFileSync(join(projectRoot, ".token-pilot.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function settingValue(projectRoot: string, key: string): unknown {
+  return getDotted(readSettings(projectRoot), key);
+}
+
+// updates keyed by dotted path; deep-merges into existing .token-pilot.json,
+// preserving all other keys. Returns false on any I/O error.
+export function writeSettings(projectRoot: string, updates: Record<string, unknown>): boolean {
+  try {
+    const current = readSettings(projectRoot);
+    for (const [path, value] of Object.entries(updates)) setDotted(current, path, value);
+    writeFileSync(
+      join(projectRoot, ".token-pilot.json"),
+      JSON.stringify(current, null, 2) + "\n",
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
