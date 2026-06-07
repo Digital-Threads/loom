@@ -103,3 +103,50 @@ export function taskDetail(projectRoot: string, id: string): TaskDetail {
     return { decisions: [], findings: [], rejections: [] };
   }
 }
+
+export interface TaskTokens {
+  used: number;
+  saved: number;
+}
+
+const TOKEN_METRIC_PREFIX = "loom-tokens:";
+
+export function formatTokenMetric(t: TaskTokens): string {
+  return `${TOKEN_METRIC_PREFIX} ${JSON.stringify({ used: t.used, saved: t.saved })}`;
+}
+
+export function parseTokenMetric(text: string): TaskTokens | null {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith(TOKEN_METRIC_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(trimmed.slice(TOKEN_METRIC_PREFIX.length));
+    const used = parsed?.used;
+    const saved = parsed?.saved;
+    if (typeof used !== "number" || !Number.isFinite(used)) return null;
+    if (typeof saved !== "number" || !Number.isFinite(saved)) return null;
+    return { used, saved };
+  } catch {
+    return null;
+  }
+}
+
+export function tokenMetricsFromEvents(events: TjEvent[], id: string): TaskTokens[] {
+  return events
+    .filter((e) => e.task_id === id && e.type === "evidence")
+    .sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0))
+    .map((e) => parseTokenMetric(e.text))
+    .filter((m): m is TaskTokens => m !== null);
+}
+
+export function writeTokenMetric(projectRoot: string, taskId: string, t: TaskTokens): boolean {
+  try {
+    execFileSync(
+      "task-journal",
+      ["event", "--type", "evidence", "--text", formatTokenMetric(t), taskId],
+      { cwd: projectRoot, encoding: "utf8" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
