@@ -4,6 +4,7 @@ import { defaultDeps } from "../../core/install/runner.js";
 import { buildCatalog, applyLatest, detectLatest } from "../../core/catalog/catalog.js";
 import { runRecipe } from "../../core/install/recipe.js";
 import { setEnabled } from "../../core/install/registry-file.js";
+import { loomRegistry } from "../../core/plugins/index.js";
 import type { InstallDeps } from "../../core/install/types.js";
 import type { CatalogItem } from "../../core/catalog/types.js";
 
@@ -11,15 +12,30 @@ const MARK = { installed: "✓", "not-installed": "○", "update-available": "�
 
 type Mode = "list" | "confirmInstall" | "confirmRemove";
 
+// Порядок слоёв = порядок ключей реестра (порядок регистрации, LP1).
+// Явный потребитель groupByCategory(), чтобы метод LP1 не был мёртвым кодом.
+const layerOrder = [...loomRegistry.groupByCategory().keys()];
+
+// Стабильно сортируем плоский items[] по позиции category в порядке реестра.
+// Группировка — только визуальная: cursor индексирует ЭТОТ же плоский массив,
+// поэтому ↑/↓ и действия (Task 4/4.5) продолжают работать по плоскому порядку.
+function orderByLayer(items: CatalogItem[]): CatalogItem[] {
+  const pos = (c: string) => {
+    const i = layerOrder.indexOf(c);
+    return i === -1 ? layerOrder.length : i;
+  };
+  return [...items].sort((a, b) => pos(a.category) - pos(b.category));
+}
+
 export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
-  const [items, setItems] = useState<CatalogItem[]>(() => buildCatalog(deps));
+  const [items, setItems] = useState<CatalogItem[]>(() => orderByLayer(buildCatalog(deps)));
   const [cursor, setCursor] = useState(0);
   const [mode, setMode] = useState<Mode>("list");
   const [status, setStatus] = useState("");
   const [checking, setChecking] = useState(true);
 
   const reload = () => {
-    const next = buildCatalog(deps);
+    const next = orderByLayer(buildCatalog(deps));
     setItems(next);
     setCursor((c) => Math.max(0, Math.min(c, next.length - 1)));
     setChecking(true);
@@ -121,11 +137,20 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
             : loading
               ? "  ↻… проверка обновлений"
               : "";
+        // Заголовок слоя — отдельной строкой перед сменой category (визуальная секция).
+        const isFirstOfLayer = i === 0 || items[i - 1].category !== it.category;
         return (
-          <Text key={it.id} inverse={i === cursor}>
-            {MARK[it.status]} {it.title}  [{it.category}]  {it.case}
-            {tail}
-          </Text>
+          <React.Fragment key={it.id}>
+            {isFirstOfLayer ? (
+              <Text bold color="cyan">
+                — {it.category} —
+              </Text>
+            ) : null}
+            <Text inverse={i === cursor}>
+              {MARK[it.status]} {it.title}  {it.case}
+              {tail}
+            </Text>
+          </React.Fragment>
         );
       })}
 
@@ -149,6 +174,9 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
       ) : null}
 
       <Box marginTop={1}>
+        <Text dimColor>✓ установлен · ○ нет · ↻ обновление</Text>
+      </Box>
+      <Box>
         <Text dimColor>↑/↓ выбор · Enter — установить · u обновить · d удалить · e вкл/выкл</Text>
       </Box>
     </Box>

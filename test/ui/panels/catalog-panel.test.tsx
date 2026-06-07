@@ -65,6 +65,24 @@ describe("CatalogPanel действия", () => {
   });
 });
 
+describe("CatalogPanel группировка по слоям", () => {
+  it("группирует по слоям из loomRegistry.groupByCategory (LP1): заголовки слоёв в порядке реестра", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "loom-c6-"));
+    const fake: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
+    const { lastFrame } = render(<CatalogPanel deps={fake} />);
+    // Снимаем ANSI-коды (Text bold/color оборачивает заголовок), чтобы проверять
+    // именно текст строк, а не escape-последовательности.
+    const f = lastFrame()!.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
+    // Заголовок слоя — ОТДЕЛЬНОЙ строкой (секция), не колонкой [category].
+    expect(f).toMatch(/^\s*—\s*accounts\s*—\s*$/m);
+    expect(f).toMatch(/^\s*—\s*efficiency\s*—\s*$/m);
+    expect(f).toMatch(/^\s*—\s*memory\s*—\s*$/m);
+    // Порядок секций = порядок регистрации реестра.
+    expect(f.indexOf("— accounts —")).toBeLessThan(f.indexOf("— memory —"));
+    expect(f.indexOf("— efficiency —")).toBeLessThan(f.indexOf("— memory —"));
+  });
+});
+
 describe("CatalogPanel ленивый latest", () => {
   it("ленивая загрузка latest: сначала «проверка», потом ↻", async () => {
     const tmp = mkdtempSync(join(tmpdir(), "loom-c45-"));
