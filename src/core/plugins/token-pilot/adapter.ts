@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SettingsSchema } from "../types.js";
+import type { SettingsSchema, LoomPlugin } from "../types.js";
 
 export interface TokenUsageRow {
   sessionId: string;
@@ -142,3 +142,23 @@ export function writeSettings(projectRoot: string, updates: Record<string, unkno
     return false;
   }
 }
+
+// plugin-объект собран из существующих функций выше — без новой логики.
+export const plugin: LoomPlugin<{
+  tokens: TokenUsageRow[];
+  tokenEvents: TokenEvent[];
+}> = {
+  id: "token-pilot",
+  title: "token-pilot",
+  tabs: [{ id: "tokens", title: "Токены" }],
+  load: (ctx) => ({
+    tokens: tokenUsageBySession(ctx.projectRoot),
+    tokenEvents: tokenEventsByTime(ctx.projectRoot),
+  }),
+  settings: {
+    schema: settingsSchema(),
+    read: (ctx) => readSettings(ctx.projectRoot),
+    write: (ctx, updates) => writeSettings(ctx.projectRoot, updates),
+  },
+  actions: [],
+};

@@ -35,13 +35,18 @@ describe("settingsSchema адаптеров", () => {
     expect(tjSettingsSchema().fields.length).toBe(0);
   });
 
-  it("LoomPlugin принимает опциональный settingsSchema", () => {
+  it("LoomPlugin принимает опциональный settings", () => {
     const plugin: LoomPlugin = {
       id: "tp",
       title: "Token Pilot",
-      tabs: ["Settings"],
-      settingsSchema: tpSettingsSchema(),
+      tabs: [{ id: "settings", title: "Settings" }],
+      load: () => ({}),
+      settings: {
+        schema: tpSettingsSchema(),
+        read: () => ({}),
+        write: () => false,
+      },
     };
-    expect(plugin.settingsSchema!.fields.length).toBeGreaterThan(0);
+    expect(plugin.settings!.schema.fields.length).toBeGreaterThan(0);
   });
 });

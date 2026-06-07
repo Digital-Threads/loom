@@ -6,7 +6,7 @@ import {
   unifyAllSessions,
   type HealthReport,
 } from "@digital-threads/aimux/core";
-import type { SettingsSchema } from "../types.js";
+import type { SettingsSchema, LoomPlugin } from "../types.js";
 
 export interface Subscription {
   name: string;
@@ -71,3 +71,38 @@ export function addSubscription(
     return { ok: false, error: (e as Error).message };
   }
 }
+
+// plugin-объект собран из существующих функций выше — без новой логики.
+export const plugin: LoomPlugin<{
+  subscriptions: Subscription[];
+  sessions: SessionRow[];
+  health: HealthReport[];
+}> = {
+  id: "aimux",
+  title: "aimux",
+  tabs: [
+    { id: "subscriptions", title: "Подписки" },
+    { id: "sessions", title: "Сессии" },
+  ],
+  load: (_ctx) => ({
+    subscriptions: listSubscriptions(),
+    sessions: listSessions(),
+    health: listHealth(),
+  }),
+  settings: {
+    schema: settingsSchema(),
+    read: () => ({}),
+    write: () => false,
+  },
+  actions: [
+    {
+      id: "addSubscription",
+      label: "Добавить подписку",
+      run: (_ctx, args) =>
+        addSubscription(
+          String(args?.name ?? ""),
+          (args?.opts as { cli?: string; model?: string; fallbackModel?: string }) ?? {},
+        ),
+    },
+  ],
+};

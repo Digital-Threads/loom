@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { SettingsSchema } from "../types.js";
+import type { SettingsSchema, LoomPlugin } from "../types.js";
 
 export interface TjEvent {
   event_id: string;
@@ -192,3 +192,58 @@ export function closeTask(projectRoot: string, taskId: string, opts: CloseTaskOp
     return false;
   }
 }
+
+// plugin-объект собран из существующих функций выше — без новой логики.
+export const plugin: LoomPlugin<{
+  taskEvents: TjEvent[];
+  tasks: TaskSummary[];
+}> = {
+  id: "task-journal",
+  title: "task-journal",
+  tabs: [{ id: "tasks", title: "Задачи" }],
+  load: (ctx) => {
+    const taskEvents = loadTaskEvents(ctx.projectRoot);
+    return { taskEvents, tasks: tasksFromEvents(taskEvents) };
+  },
+  settings: {
+    schema: settingsSchema(),
+    read: () => ({}),
+    write: () => false,
+  },
+  actions: [
+    {
+      id: "openTask",
+      label: "Открыть задачу",
+      run: (ctx, args) => {
+        const id = openTask(ctx.projectRoot, String(args?.title ?? ""), args?.goal as string | undefined);
+        return id ? { ok: true } : { ok: false, error: "не удалось создать" };
+      },
+    },
+    {
+      id: "closeTask",
+      label: "Закрыть задачу",
+      confirm: true,
+      run: (ctx, args) => {
+        const ok = closeTask(
+          ctx.projectRoot,
+          String(args?.taskId ?? ""),
+          (args?.opts as CloseTaskOptions) ?? { outcomeTag: "done" },
+        );
+        return { ok, error: ok ? undefined : "ошибка закрытия" };
+      },
+    },
+    {
+      id: "writeTokenMetric",
+      label: "Записать токен-метрику",
+      confirm: true,
+      run: (ctx, args) => {
+        const ok = writeTokenMetric(
+          ctx.projectRoot,
+          String(args?.taskId ?? ""),
+          (args?.tokens as TaskTokens) ?? { used: 0, saved: 0 },
+        );
+        return { ok, error: ok ? undefined : "ошибка записи" };
+      },
+    },
+  ],
+};
