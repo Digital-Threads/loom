@@ -1,15 +1,94 @@
 import React, { useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import { defaultDeps } from "../../core/install/runner.js";
 import { buildCatalog } from "../../core/catalog/catalog.js";
+import { runRecipe } from "../../core/install/recipe.js";
+import { setEnabled } from "../../core/install/registry-file.js";
 import type { InstallDeps } from "../../core/install/types.js";
 import type { CatalogItem } from "../../core/catalog/types.js";
 
 const MARK = { installed: "✓", "not-installed": "○", "update-available": "↻" } as const;
 
+type Mode = "list" | "confirmInstall" | "confirmRemove";
+
 export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
-  const [items] = useState<CatalogItem[]>(() => buildCatalog(deps));
-  const [cursor] = useState(0);
+  const [items, setItems] = useState<CatalogItem[]>(() => buildCatalog(deps));
+  const [cursor, setCursor] = useState(0);
+  const [mode, setMode] = useState<Mode>("list");
+  const [status, setStatus] = useState("");
+
+  const reload = () => {
+    const next = buildCatalog(deps);
+    setItems(next);
+    setCursor((c) => Math.max(0, Math.min(c, next.length - 1)));
+  };
+
+  useInput((ch, key) => {
+    const item = items[cursor];
+    if (!item) return;
+
+    if (mode === "confirmInstall") {
+      if (ch === "y" || ch === "Y") {
+        const res = runRecipe(item.recipe.install, { scope: "user" }, deps);
+        setStatus(res.ok ? `✓ установлен ${item.id}` : `Ошибка: ${res.error}`);
+        setMode("list");
+        reload();
+        return;
+      }
+      if (ch === "n" || ch === "N" || key.escape) {
+        setMode("list");
+        setStatus("Отменено");
+      }
+      return;
+    }
+
+    if (mode === "confirmRemove") {
+      if (ch === "y" || ch === "Y") {
+        const res = runRecipe(item.recipe.remove, { scope: "user" }, deps);
+        setStatus(res.ok ? `Удалён ${item.id}` : `Ошибка: ${res.error}`);
+        setMode("list");
+        reload();
+        return;
+      }
+      if (ch === "n" || ch === "N" || key.escape) {
+        setMode("list");
+        setStatus("Отменено");
+      }
+      return;
+    }
+
+    // list
+    if (key.upArrow) {
+      setCursor((c) => Math.max(0, c - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setCursor((c) => Math.min(items.length - 1, c + 1));
+      return;
+    }
+    if (key.return || ch === "i") {
+      if (item.status === "not-installed") setMode("confirmInstall");
+      return;
+    }
+    if (ch === "u") {
+      if (item.status === "update-available") setMode("confirmInstall");
+      return;
+    }
+    if (ch === "d") {
+      if (item.status !== "not-installed") setMode("confirmRemove");
+      return;
+    }
+    if (ch === "e") {
+      if (item.status !== "not-installed") {
+        setEnabled(deps, item.id, !item.enabled);
+        reload();
+      }
+      return;
+    }
+  });
+
+  const current = items[cursor];
+
   return (
     <Box flexDirection="column">
       {items.map((it, i) => (
@@ -18,6 +97,24 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
           {it.status === "update-available" ? "  (есть обновление)" : ""}
         </Text>
       ))}
+
+      {mode === "confirmInstall" && current ? (
+        <Box marginTop={1}>
+          <Text>Установить {current.id}? (y/n)</Text>
+        </Box>
+      ) : null}
+      {mode === "confirmRemove" && current ? (
+        <Box marginTop={1}>
+          <Text>Удалить {current.id}? (y/n)</Text>
+        </Box>
+      ) : null}
+
+      {status ? (
+        <Box marginTop={1}>
+          <Text dimColor>{status}</Text>
+        </Box>
+      ) : null}
+
       <Box marginTop={1}>
         <Text dimColor>↑/↓ выбор · Enter — установить · u обновить · d удалить · e вкл/выкл</Text>
       </Box>
