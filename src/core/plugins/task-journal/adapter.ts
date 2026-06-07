@@ -157,3 +157,38 @@ export function writeTokenMetric(projectRoot: string, taskId: string, t: TaskTok
 export function settingsSchema(): SettingsSchema {
   return { fields: [] };
 }
+
+export function openTask(projectRoot: string, title: string, goal?: string): string | null {
+  try {
+    const args = ["create", title];
+    if (goal) args.push("--goal", goal);
+    const out = execFileSync("task-journal", args, { cwd: projectRoot, encoding: "utf8" });
+    // Эмпирически `task-journal create` печатает голый id на одной строке (напр. "tj-7ft7swrwfr").
+    // Берём последний whitespace-токен последней непустой строки — устойчиво и к голому id.
+    const lines = out.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return null;
+    const id = lines[lines.length - 1].split(/\s+/).pop() ?? "";
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
+export interface CloseTaskOptions {
+  reason?: string;
+  outcome?: string;
+  outcomeTag?: "done" | "abandoned" | "superseded";
+}
+
+export function closeTask(projectRoot: string, taskId: string, opts: CloseTaskOptions = {}): boolean {
+  try {
+    const args = ["close", taskId];
+    if (opts.reason) args.push("--reason", opts.reason);
+    if (opts.outcome) args.push("--outcome", opts.outcome);
+    if (opts.outcomeTag) args.push("--outcome-tag", opts.outcomeTag);
+    execFileSync("task-journal", args, { cwd: projectRoot, encoding: "utf8" });
+    return true;
+  } catch {
+    return false;
+  }
+}

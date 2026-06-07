@@ -1,16 +1,48 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { WorkspaceData } from "../../core/data/loader.js";
+import { closeTask, writeTokenMetric } from "../../core/plugins/task-journal/adapter.js";
+import { tokensForTask } from "../../core/metrics/tokens-per-task.js";
 import { TaskDetail } from "./TaskDetail.js";
 
 export function TasksPanel({ data }: { data: WorkspaceData }) {
   const [cursor, setCursor] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<"close" | "metric" | null>(null);
+  const [status, setStatus] = useState("");
   const tasks = data.tasks;
 
   useInput((input, key) => {
     if (openId) {
-      if (key.escape) setOpenId(null);
+      if (confirm !== null) {
+        if (input === "y") {
+          if (confirm === "close") {
+            const ok = closeTask(process.cwd(), openId, { outcomeTag: "done" });
+            setStatus(ok ? "задача закрыта (обновится при перезапуске)" : "ошибка закрытия");
+          } else {
+            const t = tokensForTask(data.taskEvents, openId, data.tokenEvents);
+            const ok = writeTokenMetric(process.cwd(), openId, t);
+            setStatus(
+              ok
+                ? `метрика записана: ${t.used}/${t.saved} (обновится при перезапуске)`
+                : "ошибка записи метрики",
+            );
+          }
+          setConfirm(null);
+        } else if (input === "n" || key.escape) {
+          setConfirm(null);
+          setStatus("отмена");
+        }
+        return;
+      }
+      if (key.escape) {
+        setOpenId(null);
+        setStatus("");
+      } else if (input === "c") {
+        setConfirm("close");
+      } else if (input === "t") {
+        setConfirm("metric");
+      }
       return;
     }
     if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
@@ -30,6 +62,8 @@ export function TasksPanel({ data }: { data: WorkspaceData }) {
         sessions={data.sessions}
         tokens={data.tokens}
         tokenEvents={data.tokenEvents}
+        confirm={confirm}
+        status={status}
       />
     );
   }

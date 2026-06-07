@@ -13,6 +13,8 @@ export function TaskDetail({
   sessions,
   tokens,
   tokenEvents,
+  confirm,
+  status,
 }: {
   events: TjEvent[];
   id: string;
@@ -20,6 +22,8 @@ export function TaskDetail({
   sessions: SessionRow[];
   tokens: TokenUsageRow[];
   tokenEvents: TokenEvent[];
+  confirm?: "close" | "metric" | null;
+  status?: string;
 }) {
   const detail = taskDetailFromEvents(events, id);
   const related = relatedSessions(events, id, sessions, tokens);
@@ -70,7 +74,12 @@ export function TaskDetail({
           <Text dimColor>  в журнале записано: потрачено {lastRecorded.used} · сэкономлено {lastRecorded.saved}</Text>
         )}
       </Box>
-      <Text dimColor>{"\n"}Esc — назад к списку</Text>
+      {confirm === "close" && <Text color="yellow">Закрыть задачу? (y/n)</Text>}
+      {confirm === "metric" && (
+        <Text color="yellow">Записать метрику токенов в журнал? (y/n)</Text>
+      )}
+      <Text dimColor>{"\n"}c — закрыть · t — записать токены · Esc — назад</Text>
+      {status ? <Text dimColor>{status}</Text> : null}
     </Box>
   );
 }
