@@ -80,6 +80,14 @@ function exportEvents(projectRoot: string): TjEvent[] {
   return Array.isArray(parsed) ? (parsed as TjEvent[]) : [];
 }
 
+export function loadTaskEvents(projectRoot: string): TjEvent[] {
+  try {
+    return exportEvents(projectRoot);
+  } catch {
+    return [];
+  }
+}
+
 export function listTasks(projectRoot: string): TaskSummary[] {
   try {
     return tasksFromEvents(exportEvents(projectRoot));
