@@ -12,5 +12,11 @@
       { "id": "sessions", "title": "Сессии" }
     ],
     "actions": [{ "id": "addSubscription", "label": "Добавить подписку" }]
+  },
+  "install": {
+    "install": [{ "cmd": "npm", "args": ["install","-g","@digital-threads/aimux"] }],
+    "detect": { "probe": { "cmd": "npm", "args": ["ls","-g","@digital-threads/aimux"] },
+                "versionRegex": "@digital-threads/aimux@([0-9.]+)" },
+    "remove": [{ "cmd": "npm", "args": ["uninstall","-g","@digital-threads/aimux"] }]
   }
 }

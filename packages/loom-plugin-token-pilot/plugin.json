@@ -9,5 +9,14 @@
   "provides": {
     "tabs": [{ "id": "tokens", "title": "Токены" }],
     "settings": true
+  },
+  "install": {
+    "install": [
+      { "cmd": "claude", "args": ["plugin","marketplace","add","https://github.com/Digital-Threads/token-pilot"] },
+      { "cmd": "claude", "args": ["plugin","install","--scope","{scope}","token-pilot@token-pilot"], "scoped": true }
+    ],
+    "detect": { "probe": { "cmd": "claude", "args": ["plugin","list"] },
+                "presenceMatch": "token-pilot@token-pilot" },
+    "remove": [{ "cmd": "claude", "args": ["plugin","uninstall","token-pilot@token-pilot"] }]
   }
 }

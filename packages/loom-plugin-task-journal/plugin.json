@@ -13,5 +13,19 @@
       { "id": "closeTask", "label": "Закрыть задачу" },
       { "id": "writeTokenMetric", "label": "Записать токен-метрику" }
     ]
+  },
+  "install": {
+    "install": [
+      { "cmd": "cargo", "args": ["install","task-journal-cli","--bin","task-journal"], "optional": true },
+      { "cmd": "cargo", "args": ["install","task-journal-mcp"], "optional": true },
+      { "cmd": "claude", "args": ["plugin","marketplace","add","github:Digital-Threads/Task-Journal"] },
+      { "cmd": "claude", "args": ["plugin","install","--scope","{scope}","task-journal@task-journal"], "scoped": true }
+    ],
+    "detect": { "probe": { "cmd": "claude", "args": ["plugin","list"] },
+                "presenceMatch": "task-journal@task-journal" },
+    "remove": [
+      { "cmd": "claude", "args": ["plugin","uninstall","task-journal@task-journal"] },
+      { "cmd": "cargo", "args": ["uninstall","task-journal-cli","task-journal-mcp"], "optional": true }
+    ]
   }
 }
