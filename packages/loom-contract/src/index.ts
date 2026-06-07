@@ -204,6 +204,8 @@ export interface RecipeStep {
   args: string[];         // может содержать плейсхолдер "{scope}"
   scoped?: boolean;       // true → требует подстановки scope в args
   optional?: boolean;     // true → провал шага НЕ фейлит рецепт (только warning)
+  // true → интерактивный (OAuth/выбор), Loom НЕ запускает его, а отдаёт пользователю (semi-auto).
+  interactive?: boolean;
 }
 
 // Как определить, что плагин стоит, и его версию.

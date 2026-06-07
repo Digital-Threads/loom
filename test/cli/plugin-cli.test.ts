@@ -164,6 +164,18 @@ describe("runPluginCli add", () => {
     expect(claudeInstall).toBeDefined();
     expect(claudeInstall).toContain("cp@mk");
   });
+
+  it("add с interactive-рецептом печатает manual-команды", () => {
+    const src = makeLocalPlugin(baseManifest({ install: {
+      install: [{ cmd: "npm", args: ["install","-g","aimux"] },
+                { cmd: "aimux", args: ["auth","login"], interactive: true }],
+      detect: { probe: { cmd: "which", args: ["aimux"] } }, remove: [] } }));
+    const { deps } = makeDeps();
+    const r = runPluginCli(["add", src, "--yes"], deps);
+    expect(r.code).toBe(0);
+    expect(r.lines.join("\n")).toMatch(/вручную/);
+    expect(r.lines.join("\n")).toContain("aimux auth login");
+  });
 });
 
 describe("runPluginCli remove", () => {

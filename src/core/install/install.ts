@@ -213,7 +213,7 @@ export function finalizeInstall(
   stagingDir: string,
   deps: InstallDeps,
   ctx: RecipeCtx = { scope: "user" },
-): { ok: boolean; error?: string; warning?: string; missing?: string[] } {
+): { ok: boolean; error?: string; warning?: string; missing?: string[]; manual?: string[][] } {
   const pf = preflightRecipe(plan.recipe, { check: ctx.preflightCheck });
   if (!pf.ok) {
     return { ok: false, missing: pf.missing,
@@ -246,7 +246,7 @@ export function finalizeInstall(
   };
   writeInstalled(deps, reg);
 
-  return { ok: true, warning: rec.warning };
+  return { ok: true, warning: rec.warning, manual: rec.manual };
 }
 
 // Полный пайплайн: план → подтверждение → финализация.
@@ -272,7 +272,7 @@ export function installPlugin(
 
   const fin = finalizeInstall(planned.plan, staged.dir, deps, ctx);
   if (!fin.ok) return { ok: false, error: fin.error, missing: fin.missing, plan: planned.plan };
-  return { ok: true, plan: planned.plan, warning: fin.warning };
+  return { ok: true, plan: planned.plan, warning: fin.warning, manual: fin.manual };
 }
 
 // Удаляет плагин: убирает installDir, чистит реестр, пробует снять claude-плагин.

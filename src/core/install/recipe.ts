@@ -7,7 +7,7 @@ export interface RecipeCtx {
   // инъекция preflight-чека (тесты); прод по умолчанию = реальный checkPrerequisites
   preflightCheck?: (names: string[]) => { ok: boolean; missing: string[]; tools: { name: string; hint: string }[] };
 }
-export interface RunResult { ok: boolean; error?: string; warning?: string; planned?: string[][]; }
+export interface RunResult { ok: boolean; error?: string; warning?: string; planned?: string[][]; manual?: string[][]; }
 export interface DetectResult { installed: boolean; version?: string; }
 
 export function isValidScope(s: string): s is Scope {
@@ -38,6 +38,7 @@ export function substituteScope(args: string[], scope: Scope): string[] {
 // dryRun → не запускает, возвращает planned (cmd+args после подстановки).
 export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps): RunResult {
   const planned: string[][] = [];
+  const manual: string[][] = [];
   let warning: string | undefined;
   const platform = ctx.platform ?? process.platform;
   for (const step of steps) {
@@ -46,6 +47,10 @@ export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps
     }
     const args = step.scoped ? substituteScope(step.args, ctx.scope) : step.args;
     const realCmd = resolveProbeCmd(step.cmd, platform);
+    if (step.interactive) {
+      manual.push([realCmd, ...args]); // собираем, НЕ запускаем
+      continue;                         // авто-шаги дальше выполняются
+    }
     planned.push([realCmd, ...args]);
     if (ctx.dryRun) continue;
     const res = deps.run(realCmd, args);
@@ -55,7 +60,7 @@ export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps
       return { ok: false, error: msg, planned };
     }
   }
-  return { ok: true, warning, planned };
+  return { ok: true, warning, planned, manual: manual.length ? manual : undefined };
 }
 
 // Детект: probe; installed = probe.ok (+ presenceMatch, если задан); version = versionRegex(probe.stdout).

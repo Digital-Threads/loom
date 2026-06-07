@@ -129,6 +129,10 @@ function addCmd(rest: string[], deps: InstallDeps): CliResult {
   }
   lines.push(`✓ установлен ${plan.name}@${plan.version}`);
   if (res.warning) lines.push(`⚠ ${res.warning}`);
+  if (res.manual?.length) {
+    lines.push("Дальше нужно выполнить вручную:");
+    for (const cmd of res.manual) lines.push(`  ${cmd.join(" ")}`);
+  }
   return { code: 0, lines };
 }
 

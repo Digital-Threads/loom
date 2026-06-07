@@ -50,6 +50,7 @@ export interface InstallResult {
   error?: string;
   warning?: string;
   missing?: string[]; // отсутствующие пререк-инструменты (preflight, LP2)
+  manual?: string[][]; // интерактивные шаги (semi-auto): cmd+args, которые юзер выполняет сам
 }
 
 // Запись в реестре установленных плагинов.

@@ -150,6 +150,19 @@ describe("installPlugin — local", () => {
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/plugin\.json/);
   });
+
+  it("manifest.install с interactive-шагом → авто-часть встаёт, manual отдан, не падает", () => {
+    const src = makeLocalPlugin(baseManifest({ install: {
+      install: [{ cmd: "npm", args: ["install","-g","aimux"] },
+                { cmd: "aimux", args: ["auth","login"], interactive: true }],
+      detect: { probe: { cmd: "which", args: ["aimux"] } }, remove: [] } }));
+    const { deps, calls } = makeDeps();
+    const res = installPlugin({ type: "local", path: src }, deps, () => true, { scope: "user" });
+    expect(res.ok).toBe(true);
+    expect(calls).toContainEqual(["npm","install","-g","aimux"]);
+    expect(calls.some((c) => c[0] === "aimux")).toBe(false);
+    expect(res.manual).toEqual([["aimux","auth","login"]]);
+  });
 });
 
 describe("planInstall", () => {
