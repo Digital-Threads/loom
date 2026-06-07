@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { Tabs } from "./Tabs.js";
-import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
+import { loadWorkspaceData, isWorkspaceEmpty, type WorkspaceData } from "../core/data/loader.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { ViewRenderer } from "./views/ViewRenderer.js";
 import { PluginsPanel } from "./panels/PluginsPanel.js";
+import { OnboardingPanel } from "./panels/OnboardingPanel.js";
 import { overviewView, settingsView } from "./views/host-views.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 
@@ -61,6 +62,10 @@ export function App() {
       <Box marginTop={1} flexDirection="column">
         {data === null ? (
           <Text dimColor>Загрузка…</Text>
+        ) : active === 0 && isWorkspaceEmpty(data) ? (
+          // Пустой старт: на «Обзоре» вместо нулей показываем онбординг.
+          // Прочие вкладки (Плагины/Настройки) работают как обычно — туда можно уйти.
+          <OnboardingPanel key={active} />
         ) : active === PLUGINS_TAB ? (
           // Host-экран управления плагинами — не ViewSpec. key={active} перемонтирует панель.
           <PluginsPanel key={active} />

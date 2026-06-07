@@ -15,6 +15,19 @@ export interface WorkspaceData {
   errors: string[];
 }
 
+// Пустой старт: ни один плагин не отдал полезных данных.
+// health/errors не учитываем — health может быть от незапущенных сессий,
+// а errors сигнализируют о сбоях загрузки, а не об отсутствии настройки.
+export function isWorkspaceEmpty(data: WorkspaceData): boolean {
+  return (
+    data.subscriptions.length === 0 &&
+    data.sessions.length === 0 &&
+    data.tokens.length === 0 &&
+    data.taskEvents.length === 0 &&
+    data.tasks.length === 0
+  );
+}
+
 async function safe<T>(fn: () => T | Promise<T>, fallback: T, errors: string[], label: string): Promise<T> {
   try {
     return await fn();
