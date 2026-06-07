@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readWorkspaceConfig } from "../../../src/core/workspace/config.js";
+import { readFileSync } from "node:fs";
+import { parse } from "yaml";
+import { readWorkspaceConfig, writeWorkspaceConfig } from "../../../src/core/workspace/config.js";
 
 let dir: string | undefined;
 afterEach(() => {
@@ -37,5 +39,31 @@ describe("LP8 readWorkspaceConfig — defensive", () => {
     expect(cfg.profiles.default?.profile).toBe("work");
     expect(cfg.plugins["token-pilot"]?.enabled).toBe(true);
     expect(cfg.plugins["task-journal"]?.enabled).toBe(false);
+  });
+});
+
+describe("LP8 writeWorkspaceConfig — patch, сохраняет чужие ключи", () => {
+  it("создаёт файл, если его нет", () => {
+    dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
+    const ok = writeWorkspaceConfig(dir, { workspace: { name: "fresh" } });
+    expect(ok).toBe(true);
+    expect(readWorkspaceConfig(dir).workspace.name).toBe("fresh");
+  });
+  it("патчит секцию plugins, не теряя другие плагины", () => {
+    dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
+    writeWorkspaceConfig(dir, { plugins: { "token-pilot": { enabled: true }, "task-journal": { enabled: true } } });
+    writeWorkspaceConfig(dir, { plugins: { "task-journal": { enabled: false } } });
+    const cfg = readWorkspaceConfig(dir);
+    expect(cfg.plugins["token-pilot"]?.enabled).toBe(true);
+    expect(cfg.plugins["task-journal"]?.enabled).toBe(false);
+  });
+  it("сохраняет НЕзнакомые ключи файла (напр. integration:)", () => {
+    dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
+    writeFileSync(join(dir, ".ai-workspace.yaml"),
+      ["version: 1","integration:","  event_bus: true","plugins:","  aimux:","    enabled: true"].join("\n"), "utf8");
+    writeWorkspaceConfig(dir, { plugins: { aimux: { enabled: false } } });
+    const onDisk = parse(readFileSync(join(dir, ".ai-workspace.yaml"), "utf8"));
+    expect(onDisk.integration.event_bus).toBe(true);
+    expect(onDisk.plugins.aimux.enabled).toBe(false);
   });
 });
