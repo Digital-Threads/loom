@@ -55,6 +55,10 @@ export interface LoomPlugin<TData = unknown> {
   settings?: PluginSettings;
   actions?: PluginAction[];
   views?: Record<string, ViewSpec | ViewSpec[]>;     // ключ = PluginTab.id; массив = виды сверху-вниз
+  // Одно-плагинные деривации для {fn} в view-спеках — знают схему событий своего плагина.
+  // data — WorkspaceData в рантайме хоста; в types-only контракте тип unknown,
+  // чтобы не тащить WorkspaceData в этот пакет.
+  derivations?: Record<string, (data: unknown, ...args: unknown[]) => unknown>;
 }
 
 // ── Декларативная view-схема (Task 7.2) ──────────────────────────────────────

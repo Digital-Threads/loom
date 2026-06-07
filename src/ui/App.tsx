@@ -7,29 +7,26 @@ import { ViewRenderer } from "./views/ViewRenderer.js";
 import { overviewView, settingsView } from "./views/host-views.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 
-const TABS = ["Обзор", "Подписки", "Сессии", "Задачи", "Токены", "Настройки"];
+// Плагинные вкладки в порядке реестра (Обзор … Настройки строятся вокруг них).
+// Порядок: Обзор, [aimux: Подписки, Сессии], [token-pilot: Токены], [task-journal: Задачи], Настройки.
+// ОСОЗНАННОЕ изменение порядка против хардкода 7.x (раньше Задачи шли перед Токенами) —
+// теперь порядок определяется порядком регистрации плагинов.
+const pluginTabs: { pluginId: string; tabId: string; title: string }[] = loomRegistry
+  .list()
+  .flatMap((p) => p.tabs.map((t) => ({ pluginId: p.id, tabId: t.id, title: t.title })));
 
-// Маппинг таб → (плагин?, view-spec). Host-вкладки (Обзор/Настройки) — без плагина.
+const TABS = ["Обзор", ...pluginTabs.map((t) => t.title), "Настройки"];
+
+// Маппинг таб → (плагин?, view-spec). 0 → host overview; последняя → host settings;
+// между — соответствующая плагинная вкладка (plugin.views[tabId]).
 function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSpec[] } | null {
-  const aimux = loomRegistry.get("aimux");
-  const tokenPilot = loomRegistry.get("token-pilot");
-  const taskJournal = loomRegistry.get("task-journal");
-  switch (active) {
-    case 0:
-      return { spec: overviewView };
-    case 1:
-      return aimux?.views?.subscriptions ? { plugin: aimux, spec: aimux.views.subscriptions } : null;
-    case 2:
-      return aimux?.views?.sessions ? { plugin: aimux, spec: aimux.views.sessions } : null;
-    case 3:
-      return taskJournal?.views?.tasks ? { plugin: taskJournal, spec: taskJournal.views.tasks } : null;
-    case 4:
-      return tokenPilot?.views?.tokens ? { plugin: tokenPilot, spec: tokenPilot.views.tokens } : null;
-    case 5:
-      return { spec: settingsView };
-    default:
-      return null;
-  }
+  if (active === 0) return { spec: overviewView };
+  if (active === TABS.length - 1) return { spec: settingsView };
+  const entry = pluginTabs[active - 1];
+  if (!entry) return null;
+  const plugin = loomRegistry.get(entry.pluginId);
+  const spec = plugin?.views?.[entry.tabId];
+  return spec ? { plugin, spec } : null;
 }
 
 export function App() {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { settingsSchema as tpSettingsSchema } from "../../../src/core/plugins/token-pilot/adapter.js";
-import { settingsSchema as aimuxSettingsSchema } from "../../../src/core/plugins/aimux/adapter.js";
-import { settingsSchema as tjSettingsSchema } from "../../../src/core/plugins/task-journal/adapter.js";
+import { settingsSchema as tpSettingsSchema } from "@digital-threads/loom-plugin-token-pilot";
+import { settingsSchema as aimuxSettingsSchema } from "@digital-threads/loom-plugin-aimux";
+import { settingsSchema as tjSettingsSchema } from "@digital-threads/loom-plugin-task-journal";
 import type { LoomPlugin } from "../../../src/core/plugins/types.js";
 
 describe("settingsSchema адаптеров", () => {

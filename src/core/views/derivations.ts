@@ -1,5 +1,5 @@
 import type { WorkspaceData } from "../data/loader.js";
-import { taskDetailFromEvents, tokenMetricsFromEvents } from "../plugins/task-journal/adapter.js";
+import { tokenMetricsFromEvents } from "@digital-threads/loom-plugin-task-journal";
 import { tokensForTask, tokensBySessionForTask } from "../metrics/tokens-per-task.js";
 import { relatedSessions } from "../metrics/related-sessions.js";
 
@@ -40,10 +40,6 @@ export function taskTitle(data: WorkspaceData, taskId: string): string {
   return data.tasks.find((t) => t.id === taskId)?.title ?? "";
 }
 
-export function taskDetail(data: WorkspaceData, taskId: string) {
-  return taskDetailFromEvents(data.taskEvents, taskId);
-}
-
 export function tokensForTaskD(data: WorkspaceData, taskId: string) {
   return tokensForTask(data.taskEvents, taskId, data.tokenEvents);
 }
@@ -54,10 +50,6 @@ export function tokensBySessionForTaskD(data: WorkspaceData, taskId: string) {
 
 export function relatedSessionsD(data: WorkspaceData, taskId: string) {
   return relatedSessions(data.taskEvents, taskId, data.sessions, data.tokens);
-}
-
-export function tokenMetrics(data: WorkspaceData, taskId: string) {
-  return tokenMetricsFromEvents(data.taskEvents, taskId);
 }
 
 // ── Display-деривации для декларативных видов (Task 7.4) ──────────────────────
@@ -103,20 +95,6 @@ export function taskRows(data: WorkspaceData): Array<{ id: string; title: string
   return data.tasks.map((t) => ({ id: t.id, title: t.title.slice(0, 60), status: t.status }));
 }
 
-// Секции событий задачи как {text}-айтемы (cleaned + slice(0,100) — как section() в TaskDetail).
-function eventLines(events: { event_id: string; text: string }[]): Array<{ event_id: string; text: string }> {
-  return events.map((e) => ({ event_id: e.event_id, text: e.text.replace(/\s+/g, " ").slice(0, 100) }));
-}
-export function taskDecisions(data: WorkspaceData, taskId: string) {
-  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).decisions);
-}
-export function taskFindings(data: WorkspaceData, taskId: string) {
-  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).findings);
-}
-export function taskRejections(data: WorkspaceData, taskId: string) {
-  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).rejections);
-}
-
 // «Вероятно связанные сессии» — {text:"id8 · profile||— · used/saved"} (как в TaskDetail).
 export function relatedSessionLines(data: WorkspaceData, taskId: string): Array<{ sessionId: string; text: string }> {
   return relatedSessions(data.taskEvents, taskId, data.sessions, data.tokens).map((r) => ({
@@ -152,21 +130,14 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   sessionsWithTokens,
   tokenTotals,
   taskTitle,
-  taskDetail,
-  taskDetailFromEvents: taskDetail,
   tokensForTask: tokensForTaskD,
   tokensBySessionForTask: tokensBySessionForTaskD,
   relatedSessions: relatedSessionsD,
-  tokenMetrics,
-  tokenMetricsFromEvents: tokenMetrics,
   // display-деривации (7.4)
   tokenTotalsLine,
   sessionRows,
   tokenRows,
   taskRows,
-  taskDecisions,
-  taskFindings,
-  taskRejections,
   relatedSessionLines,
   taskTokensSummary,
   taskTokenBreakdownLines,

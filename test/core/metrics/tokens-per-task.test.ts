@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { tokensForTask } from "../../../src/core/metrics/tokens-per-task.js";
-import type { TjEvent } from "../../../src/core/plugins/task-journal/adapter.js";
-import type { TokenEvent } from "../../../src/core/plugins/token-pilot/adapter.js";
+import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
+import type { TokenEvent } from "@digital-threads/loom-plugin-token-pilot";
 
 function ev(partial: Partial<TjEvent> & Pick<TjEvent, "task_id" | "type" | "timestamp">): TjEvent {
   return {

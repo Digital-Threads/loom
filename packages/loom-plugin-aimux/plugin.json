@@ -5,8 +5,12 @@
   "title": "Aimux",
   "version": "0.1.0",
   "apiVersion": "1.0",
-  "entry": "./dist/adapter.js",
+  "entry": "./src/adapter.ts",
   "provides": {
-    "tabs": []
+    "tabs": [
+      { "id": "subscriptions", "title": "Подписки" },
+      { "id": "sessions", "title": "Сессии" }
+    ],
+    "actions": [{ "id": "addSubscription", "label": "Добавить подписку" }]
   }
 }

@@ -7,7 +7,7 @@ import {
   listSubscriptions,
   listHealth,
   listSessions,
-} from "../../../../src/core/plugins/aimux/adapter.js";
+} from "@digital-threads/loom-plugin-aimux";
 
 let dir: string;
 beforeAll(() => {

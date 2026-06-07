@@ -2,14 +2,16 @@
   "name": "@digital-threads/loom-plugin-aimux",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/adapter.js",
+  "main": "./src/adapter.ts",
   "exports": {
     ".": {
       "types": "./src/adapter.ts",
-      "default": "./dist/adapter.js"
+      "import": "./src/adapter.ts"
     }
   },
+  "comment": "exports → src для types и рантайма (работает под Bun/vitest/tsc). Билд в dist — Phase 12.",
   "dependencies": {
-    "@digital-threads/loom-contract": "workspace:*"
+    "@digital-threads/loom-contract": "workspace:*",
+    "@digital-threads/aimux": "file:../../../aimux"
   }
 }

@@ -1,8 +1,8 @@
 import { loomRegistry } from "../plugins/index.js";
 import type { LoomContext } from "../plugins/types.js";
-import type { TokenUsageRow, TokenEvent } from "../plugins/token-pilot/adapter.js";
-import type { TjEvent, TaskSummary } from "../plugins/task-journal/adapter.js";
-import type { listSubscriptions, listSessions, listHealth } from "../plugins/aimux/adapter.js";
+import type { TokenUsageRow, TokenEvent } from "@digital-threads/loom-plugin-token-pilot";
+import type { TjEvent, TaskSummary } from "@digital-threads/loom-plugin-task-journal";
+import type { listSubscriptions, listSessions, listHealth } from "@digital-threads/loom-plugin-aimux";
 
 export interface WorkspaceData {
   subscriptions: ReturnType<typeof listSubscriptions>;

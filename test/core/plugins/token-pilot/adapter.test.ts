@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { tokenUsageBySession } from "../../../../src/core/plugins/token-pilot/adapter.js";
+import { tokenUsageBySession } from "@digital-threads/loom-plugin-token-pilot";
 
 let dir: string;
 beforeAll(() => {

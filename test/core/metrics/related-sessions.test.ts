@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { relatedSessions } from "../../../src/core/metrics/related-sessions.js";
-import type { TjEvent } from "../../../src/core/plugins/task-journal/adapter.js";
-import type { SessionRow } from "../../../src/core/plugins/aimux/adapter.js";
-import type { TokenUsageRow } from "../../../src/core/plugins/token-pilot/adapter.js";
+import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
+import type { SessionRow } from "@digital-threads/loom-plugin-aimux";
+import type { TokenUsageRow } from "@digital-threads/loom-plugin-token-pilot";
 
 function ev(partial: Partial<TjEvent> & Pick<TjEvent, "task_id" | "type" | "timestamp">): TjEvent {
   return {

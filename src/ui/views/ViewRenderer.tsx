@@ -9,6 +9,7 @@ import type {
 } from "../../core/plugins/types.js";
 import type { WorkspaceData } from "../../core/data/loader.js";
 import { resolveBind, getDotted, type BindContext } from "../../core/views/resolve.js";
+import { allDerivations } from "../../core/views/all-derivations.js";
 import {
   viewReducer,
   initialViewState,
@@ -71,7 +72,7 @@ function buildOpts(
   if (!current) return { opts: { listLength: 0 }, current };
 
   if (current.kind === "table") {
-    const ctx: BindContext = { data, idParam: frame.idParam };
+    const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
     const rows = (resolveBind(current.source, ctx) as Record<string, unknown>[]) ?? [];
     const selectedRow = rows[state.cursor];
     const selectedId = current.onSelect
@@ -150,7 +151,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
         );
         let status = "отмена";
         if (binding) {
-          const ctx: BindContext = { data, idParam: frame.idParam };
+          const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
           status = runAction(binding, ctx, plugin);
         }
         dispatch({ type: "setStatus", text: status });
@@ -174,7 +175,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
         if (action?.confirm) {
           dispatch({ type: "actionKey", key: input });
         } else {
-          const ctx: BindContext = { data, idParam: frame.idParam };
+          const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
           dispatch({ type: "setStatus", text: runAction(binding, ctx, plugin) });
         }
       }
@@ -185,7 +186,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
   if (inDetail) {
     const detailSpec = resolveDetailSpec(frame.viewKey, specs, plugin);
     if (detailSpec) {
-      const ctx: BindContext = { data, idParam: frame.idParam };
+      const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
       return (
         <DetailView
           spec={detailSpec}
@@ -198,7 +199,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
   }
 
   // Список видов сверху вниз. Интерактивной таблице отдаём cursor.
-  const ctx: BindContext = { data, idParam: frame.idParam };
+  const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
   return (
     <Box flexDirection="column">
       {specs.map((s, i) => {

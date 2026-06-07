@@ -5,8 +5,13 @@
   "title": "Task Journal",
   "version": "0.1.0",
   "apiVersion": "1.0",
-  "entry": "./dist/adapter.js",
+  "entry": "./src/adapter.ts",
   "provides": {
-    "tabs": []
+    "tabs": [{ "id": "tasks", "title": "Задачи" }],
+    "actions": [
+      { "id": "openTask", "label": "Открыть задачу" },
+      { "id": "closeTask", "label": "Закрыть задачу" },
+      { "id": "writeTokenMetric", "label": "Записать токен-метрику" }
+    ]
   }
 }

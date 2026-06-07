@@ -5,9 +5,10 @@ import {
   taskTitle,
   derivations,
 } from "../../../src/core/views/derivations.js";
+import { allDerivations } from "../../../src/core/views/all-derivations.js";
 import { tokensForTask } from "../../../src/core/metrics/tokens-per-task.js";
 import type { WorkspaceData } from "../../../src/core/data/loader.js";
-import type { TjEvent } from "../../../src/core/plugins/task-journal/adapter.js";
+import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
 
 function makeData(over: Partial<WorkspaceData> = {}): WorkspaceData {
   return {
@@ -93,18 +94,21 @@ describe("derivation wrappers call the real metric functions", () => {
     expect(viaDerivation).toEqual({ used: 100, saved: 10 });
   });
 
-  it("registry exposes the spec-named derivations", () => {
+  it("resolver-visible map exposes the spec-named derivations (host + plugin-contributed)", () => {
+    // После Phase 9 одно-плагинные деривации (taskDetail/tokenMetrics) контрибьютит
+    // плагин task-journal; резолвер видит их через объединённую карту allDerivations().
+    const merged = allDerivations();
     for (const name of [
       "sessionsWithTokens",
       "tokenTotals",
       "taskTitle",
-      "taskDetailFromEvents",
+      "taskDetail",
       "tokensForTask",
       "tokensBySessionForTask",
       "relatedSessions",
-      "tokenMetricsFromEvents",
+      "tokenMetrics",
     ]) {
-      expect(typeof derivations[name]).toBe("function");
+      expect(typeof merged[name]).toBe("function");
     }
   });
 });

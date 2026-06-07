@@ -10,7 +10,7 @@ import {
   loadTaskEvents,
   type TaskTokens,
   type TjEvent,
-} from "../../../../src/core/plugins/task-journal/adapter.js";
+} from "@digital-threads/loom-plugin-task-journal";
 
 function ev(partial: Partial<TjEvent> & Pick<TjEvent, "task_id" | "type" | "timestamp">): TjEvent {
   return {

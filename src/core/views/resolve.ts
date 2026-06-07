@@ -6,6 +6,9 @@ export interface BindContext {
   data: WorkspaceData;
   idParam?: string;
   row?: Record<string, unknown>;
+  // Объединённая карта деривлаций (host + плагины). Если задана, resolveBind резолвит
+  // {fn} против неё; иначе — против host-built-in derivations (дефолт для тестов).
+  derivations?: Record<string, (data: WorkspaceData, ...args: any[]) => unknown>;
 }
 
 // Спец-ключи контекста: строковый Bind/arg, равный одному из них, читается из ctx,
@@ -44,11 +47,16 @@ export function resolveFieldRef(path: FieldRef, ctx: BindContext): unknown {
 // ("idParam"/"taskId"), берётся из ctx.idParam; прочие строки трактуются как литералы
 // (а НЕ как пути) — args в ViewSpec всегда плоские параметры деривации, не выражения.
 // Числа/булевы/прочее — как есть. Неизвестный fn → undefined (defensive, не бросаем).
-export function resolveBind(bind: Bind, ctx: BindContext): unknown {
+export function resolveBind(
+  bind: Bind,
+  ctx: BindContext,
+  derivationsMap: Record<string, (data: WorkspaceData, ...args: any[]) => unknown> =
+    ctx.derivations ?? derivations,
+): unknown {
   if (typeof bind === "string") {
     return resolveFieldRef(bind, ctx);
   }
-  const fn = derivations[bind.fn];
+  const fn = derivationsMap[bind.fn];
   if (!fn) return undefined;
   const args = (bind.args ?? []).map((arg) => {
     if (typeof arg === "string") {
