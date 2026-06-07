@@ -201,3 +201,91 @@ describe("runPluginCli unknown", () => {
     expect(res.lines.join("\n")).toContain("Использование");
   });
 });
+
+describe("runPluginCli --scope", () => {
+  it("add --scope project прокидывает scope в рецепт", () => {
+    const { deps, calls } = makeDeps();
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [
+            { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/x/tp"] },
+            {
+              cmd: "claude",
+              args: ["plugin", "install", "--scope", "{scope}", "token-pilot@token-pilot"],
+              scoped: true,
+            },
+          ],
+          detect: {
+            probe: { cmd: "claude", args: ["plugin", "list"] },
+            presenceMatch: "token-pilot@token-pilot",
+          },
+          remove: [{ cmd: "claude", args: ["plugin", "uninstall", "token-pilot@token-pilot"] }],
+        },
+      }),
+    );
+    const r = runPluginCli(["add", src, "--yes", "--scope", "project"], deps);
+    expect(r.code).toBe(0);
+    expect(calls).toContainEqual([
+      "claude",
+      "plugin",
+      "install",
+      "--scope",
+      "project",
+      "token-pilot@token-pilot",
+    ]);
+  });
+
+  it("add без --scope → scope=user по умолчанию", () => {
+    const { deps, calls } = makeDeps();
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [
+            {
+              cmd: "claude",
+              args: ["plugin", "install", "--scope", "{scope}", "x@x"],
+              scoped: true,
+            },
+          ],
+          detect: { probe: { cmd: "claude", args: ["plugin", "list"] } },
+          remove: [],
+        },
+      }),
+    );
+    runPluginCli(["add", src, "--yes"], deps);
+    expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "user", "x@x"]);
+  });
+
+  it("невалидный --scope → ошибка, команда не запускается", () => {
+    const { deps, calls } = makeDeps();
+    const r = runPluginCli(["add", "x", "--yes", "--scope", "evil"], deps);
+    expect(r.code).toBe(1);
+    expect(calls.length).toBe(0);
+  });
+});
+
+describe("runPluginCli detect", () => {
+  it("detect <name> печатает installed/version", () => {
+    const { deps } = makeDeps();
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [],
+          detect: { probe: { cmd: "which", args: ["x"] }, versionRegex: "v([0-9.]+)" },
+          remove: [],
+        },
+      }),
+    );
+    runPluginCli(["add", src, "--yes"], deps);
+    const r = runPluginCli(["detect", "demo"], deps);
+    expect(r.code).toBe(0);
+    expect(r.lines.join("\n")).toContain("установлен demo");
+  });
+
+  it("detect несуществующего → code 1", () => {
+    const { deps } = makeDeps();
+    const r = runPluginCli(["detect", "nope"], deps);
+    expect(r.code).toBe(1);
+  });
+});
