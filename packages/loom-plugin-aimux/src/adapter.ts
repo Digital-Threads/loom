@@ -81,6 +81,7 @@ export const plugin: LoomPlugin<{
   id: "aimux",
   title: "aimux",
   category: "accounts",
+  capabilities: { install: false, data: true, settings: false, actions: true },
   tabs: [
     { id: "subscriptions", title: "Подписки" },
     { id: "sessions", title: "Сессии" },

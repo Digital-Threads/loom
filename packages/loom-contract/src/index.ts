@@ -59,11 +59,22 @@ export type LoomCategory =
   | "automation"    // автоматизация (будущий слой)
   | "observability"; // наблюдаемость (будущий слой)
 
+// Декларация возможностей плагина (LP1). Флаги «есть/нет», не команды.
+// install — есть ли install-рецепт (реальные команды появятся в LP2);
+// здесь только признак наличия. data/settings/actions — что плагин привносит.
+export interface PluginCapabilities {
+  install: boolean;   // у адаптера есть install-рецепт (LP2); пока false
+  data: boolean;      // плагин отдаёт данные через load()
+  settings: boolean;  // есть редактируемые настройки (непустая settings.schema)
+  actions: boolean;   // есть хотя бы одно действие
+}
+
 // data source абстрагирован за load(): плагин сам знает способ (core-import / файл / CLI)
 export interface LoomPlugin<TData = unknown> {
   id: string;
   title: string;
   category?: LoomCategory; // слот слоя; отсутствие = слой не объявлен
+  capabilities?: PluginCapabilities; // декларация возможностей (LP1)
   tabs: PluginTab[];                                 // вкладки, которые вносит плагин
   load(ctx: LoomContext): TData | Promise<TData>;    // забор данных плагина
   settings?: PluginSettings;

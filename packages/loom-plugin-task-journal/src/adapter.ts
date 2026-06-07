@@ -213,6 +213,7 @@ export const plugin: LoomPlugin<{
   id: "task-journal",
   title: "task-journal",
   category: "memory",
+  capabilities: { install: false, data: true, settings: false, actions: true },
   tabs: [{ id: "tasks", title: "Задачи" }],
   load: (ctx) => {
     const taskEvents = loadTaskEvents(ctx.projectRoot);
