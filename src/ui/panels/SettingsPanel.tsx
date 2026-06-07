@@ -1,19 +1,27 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import {
-  settingsSchema as tpSchema,
-  readSettings,
-  settingValue,
-  writeSettings,
-} from "../../core/plugins/token-pilot/adapter.js";
-import { settingsSchema as aimuxSchema } from "../../core/plugins/aimux/adapter.js";
-import { settingsSchema as tjSchema } from "../../core/plugins/task-journal/adapter.js";
+import { loomRegistry } from "../../core/plugins/index.js";
+import type { LoomContext, LoomPlugin, SettingField } from "../../core/plugins/types.js";
+
+function getDotted(obj: Record<string, unknown>, path: string): unknown {
+  let cur: unknown = obj;
+  for (const part of path.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[part];
+  }
+  return cur;
+}
 
 export function SettingsPanel() {
-  const cwd = process.cwd();
-  const tpFields = tpSchema().fields;
-  const aimuxFields = aimuxSchema().fields;
-  const tjFields = tjSchema().fields;
+  const ctx: LoomContext = { projectRoot: process.cwd() };
+  const list = loomRegistry.list();
+
+  // единый плоский список редактируемых полей со ссылкой на их плагин
+  const editable = list.flatMap((p) =>
+    (p.settings?.schema.fields ?? [])
+      .filter(() => Boolean(p.settings))
+      .map((field) => ({ plugin: p, field })),
+  );
 
   const [selected, setSelected] = useState(0);
   const [editBuffer, setEditBuffer] = useState<string | null>(null);
@@ -21,16 +29,21 @@ export function SettingsPanel() {
   // bump to force re-read after writes
   const [, setVersion] = useState(0);
 
-  const field = tpFields[selected];
+  const entry = editable[selected];
 
   function display(value: unknown): string {
     if (value === undefined || value === null) return "—";
     return String(value);
   }
 
-  function save(key: string, value: unknown) {
-    const ok = writeSettings(cwd, { [key]: value });
-    setStatus(ok ? `сохранено: ${key}=${String(value)}` : "ошибка записи");
+  function readValue(plugin: LoomPlugin, field: SettingField): unknown {
+    if (!plugin.settings) return undefined;
+    return getDotted(plugin.settings.read(ctx), field.key);
+  }
+
+  function save(plugin: LoomPlugin, field: SettingField, value: unknown) {
+    const ok = plugin.settings!.write(ctx, { [field.key]: value });
+    setStatus(ok ? `сохранено: ${field.key}=${String(value)}` : "ошибка записи");
     setVersion((v) => v + 1);
   }
 
@@ -54,7 +67,7 @@ export function SettingsPanel() {
           setStatus("отмена");
           return;
         }
-        save(field.key, num);
+        if (entry) save(entry.plugin, entry.field, num);
         setEditBuffer(null);
         return;
       }
@@ -69,24 +82,27 @@ export function SettingsPanel() {
     }
 
     // navigation mode
+    if (editable.length === 0) return;
     if (key.upArrow) {
-      setSelected((s) => (s - 1 + tpFields.length) % tpFields.length);
+      setSelected((s) => (s - 1 + editable.length) % editable.length);
       return;
     }
     if (key.downArrow) {
-      setSelected((s) => (s + 1) % tpFields.length);
+      setSelected((s) => (s + 1) % editable.length);
       return;
     }
     if (key.return) {
-      const current = settingValue(cwd, field.key);
+      if (!entry) return;
+      const field = entry.field;
+      const current = readValue(entry.plugin, field);
       if (field.type === "boolean") {
-        save(field.key, !current);
+        save(entry.plugin, field, !current);
       } else if (field.type === "enum") {
         const options = field.options ?? [];
         if (options.length === 0) return;
         const idx = options.indexOf(String(current));
         const next = options[(idx + 1) % options.length];
-        save(field.key, next);
+        save(entry.plugin, field, next);
       } else if (field.type === "number") {
         setEditBuffer(current === undefined || current === null ? "" : String(current));
       } else {
@@ -95,48 +111,39 @@ export function SettingsPanel() {
     }
   });
 
-  // read fresh on each render
-  readSettings(cwd);
-
   return (
     <Box flexDirection="column">
       <Text bold>Настройки</Text>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text bold>token-pilot</Text>
-        {tpFields.map((f, i) => {
-          const isSelected = i === selected;
-          const editing = isSelected && editBuffer !== null;
-          const valueText = editing
-            ? `[${editBuffer}_]`
-            : display(settingValue(cwd, f.key));
-          const prefix = isSelected ? "► " : "  ";
-          return (
-            <Text key={f.key} inverse={isSelected && !editing}>
-              {prefix}
-              {f.label}: {valueText}
-            </Text>
-          );
-        })}
-      </Box>
-
-      <Box flexDirection="column" marginTop={1}>
-        <Text bold>aimux</Text>
-        {aimuxFields.length === 0 ? (
-          <Text dimColor>нет настраиваемых параметров (запись через действия)</Text>
-        ) : (
-          aimuxFields.map((f) => <Text key={f.key}>{f.label}</Text>)
-        )}
-      </Box>
-
-      <Box flexDirection="column" marginTop={1}>
-        <Text bold>task-journal</Text>
-        {tjFields.length === 0 ? (
-          <Text dimColor>нет настраиваемых параметров (запись через действия)</Text>
-        ) : (
-          tjFields.map((f) => <Text key={f.key}>{f.label}</Text>)
-        )}
-      </Box>
+      {list.map((p) => {
+        const fields = p.settings?.schema.fields ?? [];
+        return (
+          <Box key={p.id} flexDirection="column" marginTop={1}>
+            <Text bold>{p.title}</Text>
+            {fields.length === 0 ? (
+              <Text dimColor>нет настраиваемых параметров (запись через действия)</Text>
+            ) : (
+              fields.map((f) => {
+                const idx = editable.findIndex(
+                  (e) => e.plugin.id === p.id && e.field.key === f.key,
+                );
+                const isSelected = idx === selected;
+                const editing = isSelected && editBuffer !== null;
+                const valueText = editing
+                  ? `[${editBuffer}_]`
+                  : display(readValue(p, f));
+                const prefix = isSelected ? "► " : "  ";
+                return (
+                  <Text key={f.key} inverse={isSelected && !editing}>
+                    {prefix}
+                    {f.label}: {valueText}
+                  </Text>
+                );
+              })
+            )}
+          </Box>
+        );
+      })}
 
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { WorkspaceData } from "../../core/data/loader.js";
-import { closeTask, writeTokenMetric } from "../../core/plugins/task-journal/adapter.js";
+import { loomRegistry } from "../../core/plugins/index.js";
 import { tokensForTask } from "../../core/metrics/tokens-per-task.js";
 import { TaskDetail } from "./TaskDetail.js";
 
@@ -16,12 +16,18 @@ export function TasksPanel({ data }: { data: WorkspaceData }) {
     if (openId) {
       if (confirm !== null) {
         if (input === "y") {
+          const ctx = { projectRoot: process.cwd() };
+          const tj = loomRegistry.get("task-journal");
           if (confirm === "close") {
-            const ok = closeTask(process.cwd(), openId, { outcomeTag: "done" });
+            const action = tj?.actions?.find((a) => a.id === "closeTask");
+            const res = action?.run(ctx, { taskId: openId, opts: { outcomeTag: "done" } });
+            const ok = Boolean(res?.ok);
             setStatus(ok ? "задача закрыта (обновится при перезапуске)" : "ошибка закрытия");
           } else {
             const t = tokensForTask(data.taskEvents, openId, data.tokenEvents);
-            const ok = writeTokenMetric(process.cwd(), openId, t);
+            const action = tj?.actions?.find((a) => a.id === "writeTokenMetric");
+            const res = action?.run(ctx, { taskId: openId, tokens: t });
+            const ok = Boolean(res?.ok);
             setStatus(
               ok
                 ? `метрика записана: ${t.used}/${t.saved} (обновится при перезапуске)`
