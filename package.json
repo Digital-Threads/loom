@@ -1,0 +1,23 @@
+{
+  "name": "@digital-threads/loom",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": { "loom": "dist/cli.js" },
+  "scripts": {
+    "dev": "bun run src/cli.tsx",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@digital-threads/aimux": "file:../aimux",
+    "ink": "^7.0.1",
+    "react": "^19.2.5",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  }
+}
