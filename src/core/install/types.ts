@@ -49,6 +49,7 @@ export interface InstallResult {
   plan?: InstallPlan;
   error?: string;
   warning?: string;
+  missing?: string[]; // отсутствующие пререк-инструменты (preflight, LP2)
 }
 
 // Запись в реестре установленных плагинов.

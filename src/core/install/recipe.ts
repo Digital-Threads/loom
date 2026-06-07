@@ -2,7 +2,11 @@ import type { InstallRecipe, RecipeStep, DetectSpec } from "@digital-threads/loo
 import type { InstallDeps } from "./types.js";
 
 export type Scope = "user" | "project";
-export interface RecipeCtx { scope: Scope; dryRun?: boolean; platform?: NodeJS.Platform; }
+export interface RecipeCtx {
+  scope: Scope; dryRun?: boolean; platform?: NodeJS.Platform;
+  // инъекция preflight-чека (тесты); прод по умолчанию = реальный checkPrerequisites
+  preflightCheck?: (names: string[]) => { ok: boolean; missing: string[]; tools: { name: string; hint: string }[] };
+}
 export interface RunResult { ok: boolean; error?: string; warning?: string; planned?: string[][]; }
 export interface DetectResult { installed: boolean; version?: string; }
 

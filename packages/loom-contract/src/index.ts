@@ -220,6 +220,8 @@ export interface DetectSpec {
 
 // Полный рецепт плагина: установка / детект / удаление.
 export interface InstallRecipe {
+  // явные пререк-инструменты (LP2/preflight). Отсутствует → выводятся из step.cmd.
+  requires?: ("node" | "npm" | "cargo" | "claude")[];
   install: RecipeStep[];  // выполняются по порядку
   detect: DetectSpec;
   remove: RecipeStep[];   // выполняются по порядку

@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateManifest } from "../plugins/manifest.js";
+import { preflightRecipe } from "./preflight.js";
 import { runRecipe, synthesizeRecipeFromClaudePlugin } from "./recipe.js";
 import type { RecipeCtx } from "./recipe.js";
 import { readInstalled, writeInstalled } from "./registry-file.js";
@@ -212,7 +213,13 @@ export function finalizeInstall(
   stagingDir: string,
   deps: InstallDeps,
   ctx: RecipeCtx = { scope: "user" },
-): { ok: boolean; error?: string; warning?: string } {
+): { ok: boolean; error?: string; warning?: string; missing?: string[] } {
+  const pf = preflightRecipe(plan.recipe, { check: ctx.preflightCheck });
+  if (!pf.ok) {
+    return { ok: false, missing: pf.missing,
+      error: `не хватает инструментов: ${pf.missing.join(", ")}${pf.hint ? ` — ${pf.hint}` : ""}` };
+  }
+
   try {
     rmSync(plan.installDir, { recursive: true, force: true });
     mkdirSync(plan.installDir, { recursive: true });
@@ -264,7 +271,7 @@ export function installPlugin(
   }
 
   const fin = finalizeInstall(planned.plan, staged.dir, deps, ctx);
-  if (!fin.ok) return { ok: false, error: fin.error, plan: planned.plan };
+  if (!fin.ok) return { ok: false, error: fin.error, missing: fin.missing, plan: planned.plan };
   return { ok: true, plan: planned.plan, warning: fin.warning };
 }
 
