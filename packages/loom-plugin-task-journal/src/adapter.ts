@@ -212,6 +212,7 @@ export const plugin: LoomPlugin<{
 }> = {
   id: "task-journal",
   title: "task-journal",
+  category: "memory",
   tabs: [{ id: "tasks", title: "Задачи" }],
   load: (ctx) => {
     const taskEvents = loadTaskEvents(ctx.projectRoot);

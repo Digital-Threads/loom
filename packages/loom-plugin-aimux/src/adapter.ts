@@ -80,6 +80,7 @@ export const plugin: LoomPlugin<{
 }> = {
   id: "aimux",
   title: "aimux",
+  category: "accounts",
   tabs: [
     { id: "subscriptions", title: "Подписки" },
     { id: "sessions", title: "Сессии" },

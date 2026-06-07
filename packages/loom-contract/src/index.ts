@@ -46,10 +46,24 @@ export interface PluginTab {
   title: string; // отображаемое имя
 }
 
+// ── Слой платформы (LP1) ─────────────────────────────────────────────────────
+// 8 слоёв AI-разработки из видения §3. Опционально: динамические плагины без
+// объявленного слоя валидны (попадают в группу undefined).
+export type LoomCategory =
+  | "accounts"      // доступ/аккаунты (aimux)
+  | "efficiency"    // эффективность/токены (token-pilot)
+  | "memory"        // память/рассуждения (task-journal)
+  | "learning"      // обучение (будущий слой)
+  | "knowledge"     // знания (будущий слой)
+  | "quality"       // качество (будущий слой)
+  | "automation"    // автоматизация (будущий слой)
+  | "observability"; // наблюдаемость (будущий слой)
+
 // data source абстрагирован за load(): плагин сам знает способ (core-import / файл / CLI)
 export interface LoomPlugin<TData = unknown> {
   id: string;
   title: string;
+  category?: LoomCategory; // слот слоя; отсутствие = слой не объявлен
   tabs: PluginTab[];                                 // вкладки, которые вносит плагин
   load(ctx: LoomContext): TData | Promise<TData>;    // забор данных плагина
   settings?: PluginSettings;

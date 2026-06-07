@@ -150,6 +150,7 @@ export const plugin: LoomPlugin<{
 }> = {
   id: "token-pilot",
   title: "token-pilot",
+  category: "efficiency",
   tabs: [{ id: "tokens", title: "Токены" }],
   load: (ctx) => ({
     tokens: tokenUsageBySession(ctx.projectRoot),
