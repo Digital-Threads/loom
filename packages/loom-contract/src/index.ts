@@ -191,4 +191,34 @@ export interface LoomPluginManifest {
     marketplace: string;
     source?: string | { source: "github"; repo: string };
   };
+
+  // рецепт установки (LP2). Отсутствует → хост синтезирует из claudePlugin (shim).
+  install?: InstallRecipe;
+}
+
+// ── Рецепт установки (LP2) ───────────────────────────────────────────────────
+// Шаг рецепта установки/удаления. cmd+args — публичная команда плагина.
+// scoped:true → хост подставит "{scope}"-плейсхолдер реальным scope (user|project).
+export interface RecipeStep {
+  cmd: string;            // "npm" | "claude" | "cargo" | "which" | ...
+  args: string[];         // может содержать плейсхолдер "{scope}"
+  scoped?: boolean;       // true → требует подстановки scope в args
+  optional?: boolean;     // true → провал шага НЕ фейлит рецепт (только warning)
+}
+
+// Как определить, что плагин стоит, и его версию.
+// Запускаем probe; installed = probe.ok; version = versionFrom(probe.stdout) (если задан regex).
+export interface DetectSpec {
+  probe: RecipeStep;      // напр. {cmd:"npm", args:["ls","-g","@digital-threads/aimux"]}
+  versionRegex?: string;  // извлечь версию из stdout (1-я группа)
+  // presenceMatch: для команд вроде `claude plugin list`, где probe.ok НЕ значит «нужный плагин стоит».
+  //   Если задан — installed требует ещё и совпадения имени в stdout. (Используется в Task 6.)
+  presenceMatch?: string;
+}
+
+// Полный рецепт плагина: установка / детект / удаление.
+export interface InstallRecipe {
+  install: RecipeStep[];  // выполняются по порядку
+  detect: DetectSpec;
+  remove: RecipeStep[];   // выполняются по порядку
 }
