@@ -221,6 +221,14 @@ export function finalizeInstall(
     return { ok: false, error: `copy failed: ${(err as Error).message}` };
   }
 
+  // Рецепт гоняем ПОСЛЕ копирования, но ДО записи реестра: при провале
+  // обязательного шага откатываем файлы и не оставляем запись в реестре.
+  const rec = runRecipe(plan.recipe.install, ctx, deps);
+  if (!rec.ok) {
+    rmSync(plan.installDir, { recursive: true, force: true });
+    return { ok: false, error: `install recipe failed: ${rec.error}` };
+  }
+
   const reg = readInstalled(deps);
   reg.plugins[plan.name] = {
     version: plan.version,
@@ -231,9 +239,7 @@ export function finalizeInstall(
   };
   writeInstalled(deps, reg);
 
-  const rec = runRecipe(plan.recipe.install, ctx, deps);
-  const warning = rec.ok ? rec.warning : `install recipe: ${rec.error}`;
-  return { ok: true, warning };
+  return { ok: true, warning: rec.warning };
 }
 
 // Полный пайплайн: план → подтверждение → финализация.
