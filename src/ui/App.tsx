@@ -7,7 +7,7 @@ import { ViewRenderer } from "./views/ViewRenderer.js";
 import { PluginsPanel } from "./panels/PluginsPanel.js";
 import { CatalogPanel } from "./panels/CatalogPanel.js";
 import { OnboardingPanel } from "./panels/OnboardingPanel.js";
-import { overviewView, settingsView, tasksTokensView } from "./views/host-views.js";
+import { overviewView, settingsView, tasksTokensView, timelineView } from "./views/host-views.js";
 import { buildPluginTabs } from "../core/dashboard/layers.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 
@@ -16,29 +16,33 @@ import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 // buildPluginTabs возвращает LayerTab[] с { pluginId, tabId, title }.
 const pluginTabs = buildPluginTabs(loomRegistry.list());
 
-// Порядок: Обзор, Каталог, Задачи и токены, [плагинные вкладки по слоям], Настройки, Плагины.
-// "Каталог", "Задачи и токены" и "Плагины" — host-экраны. "Каталог"/"Плагины" — отдельные
-// панели; "Задачи и токены" — кросс-слойный ViewSpec (рендерится тем же ViewRenderer).
-const TABS = ["Обзор", "Каталог", "Задачи и токены", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
+// Порядок: Обзор, Каталог, Задачи и токены, Лента, [плагинные вкладки по слоям], Настройки, Плагины.
+// "Каталог", "Задачи и токены", "Лента" и "Плагины" — host-экраны. "Каталог"/"Плагины" —
+// отдельные панели; "Задачи и токены"/"Лента" — кросс-слойные ViewSpec (тот же ViewRenderer).
+const TABS = ["Обзор", "Каталог", "Задачи и токены", "Лента", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
 
 // Индекс host-вкладки каталога (сразу после «Обзора»).
 const CATALOG_TAB = 1;
 // Индекс host-вкладки «Задачи и токены» (кросс-слойный вид, сразу после «Каталога»).
 const TASKS_TOKENS_TAB = 2;
+// Индекс host-вкладки «Лента» (кросс-слойная хронология, сразу после «Задач и токенов»).
+const TIMELINE_TAB = 3;
 // Индекс host-вкладки управления плагинами (последняя).
 const PLUGINS_TAB = TABS.length - 1;
 // Индекс host-вкладки настроек (предпоследняя).
 const SETTINGS_TAB = TABS.length - 2;
 
 // Маппинг таб → (плагин?, view-spec). 0 → host overview; TASKS_TOKENS_TAB → host tasks+tokens;
-// SETTINGS_TAB → host settings; между — соответствующая плагинная вкладка (plugin.views[tabId]).
+// TIMELINE_TAB → host timeline; SETTINGS_TAB → host settings; между — соответствующая плагинная
+// вкладка (plugin.views[tabId]).
 // PLUGINS_TAB сюда НЕ попадает — он рендерится <PluginsPanel/> напрямую в App.
 function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSpec[] } | null {
   if (active === 0) return { spec: overviewView };
   if (active === TASKS_TOKENS_TAB) return { spec: tasksTokensView };
+  if (active === TIMELINE_TAB) return { spec: timelineView };
   if (active === SETTINGS_TAB) return { spec: settingsView };
-  // Обзор=0, Каталог=1, Задачи и токены=2 — плагинные вкладки начинаются с индекса 3.
-  const entry = pluginTabs[active - 3];
+  // Обзор=0, Каталог=1, Задачи и токены=2, Лента=3 — плагинные вкладки с индекса 4.
+  const entry = pluginTabs[active - 4];
   if (!entry) return null;
   const plugin = loomRegistry.get(entry.pluginId);
   const spec = plugin?.views?.[entry.tabId];

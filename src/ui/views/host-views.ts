@@ -52,3 +52,20 @@ export const tasksTokensView: ViewSpec = {
     { header: "Токены (оценка)", value: "tokens", align: "right" },
   ],
 };
+
+// «Лента» (LP10): единая хронология всех слоёв. Источник — деривация timelineRows
+// (обёртка над buildTimeline): новые сверху, "~" в when — приблизительный ts (ingest).
+// Колонки приведены к контракту Column (value/width/header). gap=2 — дефолт TableView.
+export const timelineView: ViewSpec = {
+  kind: "table",
+  source: { fn: "timelineRows" },
+  rowKey: "key",
+  gap: 2,
+  empty: "Лента пуста",
+  columns: [
+    { value: "when" },
+    { value: "source", width: 12 },
+    { value: "type", width: 10 },
+    { value: "text" },
+  ],
+};
