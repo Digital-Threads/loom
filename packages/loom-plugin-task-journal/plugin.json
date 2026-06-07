@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "type": "loom-plugin",
+  "name": "task-journal",
+  "title": "Task Journal",
+  "version": "0.1.0",
+  "apiVersion": "1.0",
+  "entry": "./dist/adapter.js",
+  "provides": {
+    "tabs": []
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@digital-threads/loom-plugin-aimux",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/adapter.js",
+  "exports": {
+    ".": {
+      "types": "./src/adapter.ts",
+      "default": "./dist/adapter.js"
+    }
+  },
+  "dependencies": {
+    "@digital-threads/loom-contract": "workspace:*"
+  }
+}

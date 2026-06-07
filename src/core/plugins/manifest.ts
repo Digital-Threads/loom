@@ -1,39 +1,12 @@
 // Манифест Loom-плагина (plugin.json в корне пакета) + структурный валидатор.
 // Решения зафиксированы в .docs/loom/plugin-manifest.md (Task 8.1). Это имплементация 8.2.
+//
+// Phase 9.1: тип LoomPluginManifest переехал в @digital-threads/loom-contract.
+// LOOM_CONTRACT_VERSION и validateManifest — рантайм-логика хоста, остаются здесь.
+import type { LoomPluginManifest } from "@digital-threads/loom-contract";
 
-export interface LoomPluginManifest {
-  // идентификация
-  schemaVersion: 1; // версия формата манифеста
-  type: "loom-plugin"; // дискриминатор
-  name: string; // = LoomPlugin.id, уникален
-  title: string; // отображаемое
-  version: string; // semver кода плагина
-  apiVersion: string; // версия контракта LoomPlugin ("^1.0")
-  description?: string;
-  author?: { name: string; email?: string; url?: string };
-  keywords?: string[];
-
-  // загрузка кода
-  entry: string; // путь к собранному ESM, напр "./dist/adapter.js"
-  export?: string; // имя экспорта, default "plugin"
-
-  // что привносит — для preview/меню/прав ДО динамического import()
-  provides: {
-    tabs: { id: string; title: string }[];
-    settings?: boolean;
-    actions?: { id: string; label: string }[];
-  };
-
-  // права (декларативно; формат verb:target). v1 — хранятся+показываются, НЕ enforced.
-  permissions?: string[];
-
-  // связь с реальным CC-плагином
-  claudePlugin?: {
-    name: string;
-    marketplace: string;
-    source?: string | { source: "github"; repo: string };
-  };
-}
+// Re-export типа для обратной совместимости существующих импортёров manifest.ts.
+export type { LoomPluginManifest } from "@digital-threads/loom-contract";
 
 // Версия контракта LoomPlugin, под который собран хост.
 // 8.3 будет сверять apiVersion манифеста с этой константой (semver). Тут НЕ используется.

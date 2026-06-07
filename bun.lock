@@ -6,6 +6,7 @@
       "name": "@digital-threads/loom",
       "dependencies": {
         "@digital-threads/aimux": "file:../aimux",
+        "@digital-threads/loom-contract": "workspace:*",
         "ink": "^7.0.1",
         "react": "^19.2.5",
         "yaml": "^2.8.3",
@@ -18,11 +19,44 @@
         "vitest": "^4.1.4",
       },
     },
+    "packages/loom-contract": {
+      "name": "@digital-threads/loom-contract",
+      "version": "0.1.0",
+    },
+    "packages/loom-plugin-aimux": {
+      "name": "@digital-threads/loom-plugin-aimux",
+      "version": "0.1.0",
+      "dependencies": {
+        "@digital-threads/loom-contract": "workspace:*",
+      },
+    },
+    "packages/loom-plugin-task-journal": {
+      "name": "@digital-threads/loom-plugin-task-journal",
+      "version": "0.1.0",
+      "dependencies": {
+        "@digital-threads/loom-contract": "workspace:*",
+      },
+    },
+    "packages/loom-plugin-token-pilot": {
+      "name": "@digital-threads/loom-plugin-token-pilot",
+      "version": "0.1.0",
+      "dependencies": {
+        "@digital-threads/loom-contract": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.3.0", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA=="],
 
     "@digital-threads/aimux": ["@digital-threads/aimux@file:../aimux", { "dependencies": { "commander": "^14.0.3", "ink": "^7.0.1", "ink-ui": "^0.4.0", "react": "^19.2.5", "yaml": "^2.8.3" }, "devDependencies": { "@types/node": "^25.6.0", "@types/react": "^19.2.14", "tsx": "^4.21.0", "typescript": "^6.0.3", "vitest": "^4.1.4" }, "bin": { "aimux": "dist/cli.js" } }],
+
+    "@digital-threads/loom-contract": ["@digital-threads/loom-contract@workspace:packages/loom-contract"],
+
+    "@digital-threads/loom-plugin-aimux": ["@digital-threads/loom-plugin-aimux@workspace:packages/loom-plugin-aimux"],
+
+    "@digital-threads/loom-plugin-task-journal": ["@digital-threads/loom-plugin-task-journal@workspace:packages/loom-plugin-task-journal"],
+
+    "@digital-threads/loom-plugin-token-pilot": ["@digital-threads/loom-plugin-token-pilot@workspace:packages/loom-plugin-token-pilot"],
 
     "@emnapi/core": ["@emnapi/core@1.10.0", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.1", "tslib": "^2.4.0" } }, "sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw=="],
 

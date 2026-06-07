@@ -2,6 +2,7 @@
   "name": "@digital-threads/loom",
   "version": "0.0.1",
   "type": "module",
+  "workspaces": ["packages/*"],
   "bin": {
     "loom": "dist/cli.js"
   },
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@digital-threads/aimux": "file:../aimux",
+    "@digital-threads/loom-contract": "workspace:*",
     "ink": "^7.0.1",
     "react": "^19.2.5",
     "yaml": "^2.8.3"
