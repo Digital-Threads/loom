@@ -7,36 +7,38 @@ import { ViewRenderer } from "./views/ViewRenderer.js";
 import { PluginsPanel } from "./panels/PluginsPanel.js";
 import { CatalogPanel } from "./panels/CatalogPanel.js";
 import { OnboardingPanel } from "./panels/OnboardingPanel.js";
-import { overviewView, settingsView } from "./views/host-views.js";
+import { overviewView, settingsView, tasksTokensView } from "./views/host-views.js";
+import { buildPluginTabs } from "../core/dashboard/layers.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 
-// Плагинные вкладки в порядке реестра (Обзор … Настройки строятся вокруг них).
-// Порядок: Обзор, [aimux: Подписки, Сессии], [token-pilot: Токены], [task-journal: Задачи], Настройки.
-// ОСОЗНАННОЕ изменение порядка против хардкода 7.x (раньше Задачи шли перед Токенами) —
-// теперь порядок определяется порядком регистрации плагинов.
-const pluginTabs: { pluginId: string; tabId: string; title: string }[] = loomRegistry
-  .list()
-  .flatMap((p) => p.tabs.map((t) => ({ pluginId: p.id, tabId: t.id, title: t.title })));
+// Плагинные вкладки, сгруппированные по слою (порядок LAYER_ORDER), а не по реестру (LP4).
+// Порядок слоёв: accounts → efficiency → memory → … (см. LAYER_ORDER в layers.ts).
+// buildPluginTabs возвращает LayerTab[] с { pluginId, tabId, title }.
+const pluginTabs = buildPluginTabs(loomRegistry.list());
 
-// Порядок: Обзор, Каталог, [плагинные вкладки], Настройки, Плагины.
-// "Каталог" и "Плагины" — host-экраны (НЕ ViewSpec), рендерятся отдельными панелями.
-const TABS = ["Обзор", "Каталог", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
+// Порядок: Обзор, Каталог, Задачи и токены, [плагинные вкладки по слоям], Настройки, Плагины.
+// "Каталог", "Задачи и токены" и "Плагины" — host-экраны. "Каталог"/"Плагины" — отдельные
+// панели; "Задачи и токены" — кросс-слойный ViewSpec (рендерится тем же ViewRenderer).
+const TABS = ["Обзор", "Каталог", "Задачи и токены", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
 
 // Индекс host-вкладки каталога (сразу после «Обзора»).
 const CATALOG_TAB = 1;
+// Индекс host-вкладки «Задачи и токены» (кросс-слойный вид, сразу после «Каталога»).
+const TASKS_TOKENS_TAB = 2;
 // Индекс host-вкладки управления плагинами (последняя).
 const PLUGINS_TAB = TABS.length - 1;
 // Индекс host-вкладки настроек (предпоследняя).
 const SETTINGS_TAB = TABS.length - 2;
 
-// Маппинг таб → (плагин?, view-spec). 0 → host overview; SETTINGS_TAB → host settings;
-// между — соответствующая плагинная вкладка (plugin.views[tabId]).
+// Маппинг таб → (плагин?, view-spec). 0 → host overview; TASKS_TOKENS_TAB → host tasks+tokens;
+// SETTINGS_TAB → host settings; между — соответствующая плагинная вкладка (plugin.views[tabId]).
 // PLUGINS_TAB сюда НЕ попадает — он рендерится <PluginsPanel/> напрямую в App.
 function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSpec[] } | null {
   if (active === 0) return { spec: overviewView };
+  if (active === TASKS_TOKENS_TAB) return { spec: tasksTokensView };
   if (active === SETTINGS_TAB) return { spec: settingsView };
-  // Обзор=0, Каталог=1 — плагинные вкладки начинаются с индекса 2.
-  const entry = pluginTabs[active - 2];
+  // Обзор=0, Каталог=1, Задачи и токены=2 — плагинные вкладки начинаются с индекса 3.
+  const entry = pluginTabs[active - 3];
   if (!entry) return null;
   const plugin = loomRegistry.get(entry.pluginId);
   const spec = plugin?.views?.[entry.tabId];

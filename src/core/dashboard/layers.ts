@@ -51,6 +51,13 @@ export function groupTabsByLayer(
     .map((l) => ({ layer: l, label: layerLabel(l), tabs: byLayer.get(l)! }));
 }
 
+// Плоский список плагинных вкладок, сгруппированных по слою (порядок LAYER_ORDER).
+export function buildPluginTabs(
+  plugins: Array<Pick<LoomPlugin, "id" | "tabs"> & { category?: string }>,
+): LayerTab[] {
+  return groupTabsByLayer(plugins).flatMap((g) => g.tabs);
+}
+
 // По-слойная сводка для обзора: одна строка на присутствующий слой, в порядке LAYER_ORDER.
 export function layerSummary(data: WorkspaceData): Array<{ text: string }> {
   const lines: Array<{ text: string }> = [];
