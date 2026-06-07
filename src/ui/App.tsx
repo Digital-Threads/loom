@@ -4,10 +4,11 @@ import { Tabs } from "./Tabs.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { SubscriptionsPanel } from "./panels/SubscriptionsPanel.js";
 import { SessionsPanel } from "./panels/SessionsPanel.js";
+import { TokensPanel } from "./panels/TokensPanel.js";
 import { OverviewPanel } from "./panels/OverviewPanel.js";
 import { SettingsPanel } from "./panels/SettingsPanel.js";
 
-const TABS = ["Обзор", "Подписки", "Сессии", "Настройки"];
+const TABS = ["Обзор", "Подписки", "Сессии", "Токены", "Настройки"];
 
 export function App() {
   const { exit } = useApp();
@@ -36,6 +37,8 @@ export function App() {
           <SubscriptionsPanel data={data} />
         ) : active === 2 ? (
           <SessionsPanel data={data} />
+        ) : active === 3 ? (
+          <TokensPanel data={data} />
         ) : (
           <SettingsPanel />
         )}
