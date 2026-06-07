@@ -6,7 +6,7 @@ import {
   unifyAllSessions,
   type HealthReport,
 } from "@digital-threads/aimux/core";
-import type { SettingsSchema, LoomPlugin } from "../types.js";
+import type { SettingsSchema, LoomPlugin, ViewSpec } from "../types.js";
 
 export interface Subscription {
   name: string;
@@ -105,4 +105,29 @@ export const plugin: LoomPlugin<{
         ),
     },
   ],
+  // Декларативные виды вкладок (Task 7.4) — точное воспроизведение Subscriptions/SessionsPanel.
+  views: {
+    // SubscriptionsPanel: "{★|space} {name.padEnd(14)} {cli}" — gap=1 даёт ровно 1 пробел до cli.
+    subscriptions: {
+      kind: "table",
+      source: "subscriptions",
+      rowKey: "name",
+      gap: 1,
+      empty: "Нет подписок",
+      columns: [
+        { value: "name", width: 14, marker: { when: "isSource", truthy: "★", falsy: " " } },
+        { value: "cli" },
+      ],
+    } satisfies ViewSpec,
+    // SessionsPanel: "{id8}  {profile.padEnd(12)} {used/saved}" — profileTokens склеивает
+    // profile.padEnd(12)+" "+tokens; gap=2 даёт 2 пробела после id (как в панели).
+    sessions: {
+      kind: "table",
+      source: { fn: "sessionRows" },
+      rowKey: "sessionId",
+      gap: 2,
+      empty: "Нет сессий",
+      columns: [{ value: "idShort" }, { value: "profileTokens" }],
+    } satisfies ViewSpec,
+  },
 };

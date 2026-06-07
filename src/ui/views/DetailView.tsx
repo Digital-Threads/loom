@@ -17,6 +17,10 @@ export function DetailView({
   const title = resolveBind(spec.title, ctx);
   const idParam = ctx.idParam ?? "";
 
+  const confirmBinding = confirmKey
+    ? spec.actions?.find((a) => a.key === confirmKey)
+    : undefined;
+
   return (
     <Box flexDirection="column">
       <Text bold>{String(title || idParam)}</Text>
@@ -24,11 +28,17 @@ export function DetailView({
 
       {spec.sections.map((sec) => {
         const items = (resolveBind(sec.items, ctx) as Record<string, unknown>[]) ?? [];
+        const lead = sec.lead !== undefined ? resolveBind(sec.lead, ctx) : undefined;
+        const trailerRaw = sec.trailer !== undefined ? resolveBind(sec.trailer, ctx) : undefined;
+        const trailer = trailerRaw === undefined || trailerRaw === null ? "" : String(trailerRaw);
         return (
           <Box key={sec.label} flexDirection="column" marginTop={1}>
             <Text bold>
-              {sec.label} ({items.length})
+              {sec.label}
+              {sec.hideCount ? "" : ` (${items.length})`}
+              {sec.note ? <Text dimColor> {sec.note}</Text> : null}
             </Text>
+            {lead !== undefined && <Text>  {String(lead ?? "—")}</Text>}
             {items.length === 0 ? (
               <Text dimColor>  {sec.empty ?? "—"}</Text>
             ) : (
@@ -36,6 +46,7 @@ export function DetailView({
                 <Text key={i}>  • {String(getDotted(item, sec.itemText) ?? "")}</Text>
               ))
             )}
+            {trailer ? <Text dimColor>  {trailer}</Text> : null}
           </Box>
         );
       })}
@@ -50,6 +61,12 @@ export function DetailView({
         </Box>
       )}
 
+      {confirmBinding && (
+        <Text color="yellow">
+          {confirmBinding.confirmPrompt ?? `Подтвердить действие "${confirmKey}"? (y/n)`}
+        </Text>
+      )}
+
       {spec.actions && spec.actions.length > 0 && (
         <Text dimColor>
           {"\n"}
@@ -57,7 +74,6 @@ export function DetailView({
         </Text>
       )}
 
-      {confirmKey && <Text color="yellow">Подтвердить действие "{confirmKey}"? (y/n)</Text>}
       {status ? <Text dimColor>{status}</Text> : null}
     </Box>
   );

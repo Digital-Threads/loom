@@ -60,6 +60,92 @@ export function tokenMetrics(data: WorkspaceData, taskId: string) {
   return tokenMetricsFromEvents(data.taskEvents, taskId);
 }
 
+// ── Display-деривации для декларативных видов (Task 7.4) ──────────────────────
+// Возвращают строки с уже-сформатированными полями под колонки/секции рендереров.
+// Пинненные деривации выше (sessionsWithTokens/tokenTotals/taskDetail*) НЕ трогаем —
+// их форма зафиксирована toEqual-тестами. Эти display-деривации — отдельные.
+
+// Итоговая строка токенов одной summary-строкой "потрачено X · сэкономлено Y"
+// (Bind не вытаскивает под-поле из {used,saved}; SummaryView вставляет "label: value",
+// поэтому итог = одна строка-значение под лейблом "Всего" → "Всего: потрачено X · …").
+export function tokenTotalsLine(data: WorkspaceData): string {
+  const t = tokenTotals(data);
+  return `потрачено ${t.used} · сэкономлено ${t.saved}`;
+}
+
+// Строки таблицы Сессий: idShort = slice(0,8), tokens = "used/saved", profileTokens =
+// profile.padEnd(12)+" "+tokens — точное воспроизведение строки SessionsPanel при gap=2.
+export function sessionRows(data: WorkspaceData): Array<{ sessionId: string; idShort: string; profile: string; tokens: string; profileTokens: string }> {
+  return sessionsWithTokens(data).map((s) => {
+    const tokens = `${s.used}/${s.saved}`;
+    return {
+      sessionId: s.sessionId,
+      idShort: s.sessionId.slice(0, 8),
+      profile: s.profile,
+      tokens,
+      profileTokens: `${s.profile.padEnd(12)} ${tokens}`,
+    };
+  });
+}
+
+// Строки таблицы Токенов: idShort = slice(0,8); used/saved — числа (padStart в колонках).
+export function tokenRows(data: WorkspaceData): Array<{ sessionId: string; idShort: string; used: number; saved: number }> {
+  return data.tokens.map((t) => ({
+    sessionId: t.sessionId,
+    idShort: t.sessionId.slice(0, 8),
+    used: t.used,
+    saved: t.saved,
+  }));
+}
+
+// Строки таблицы Задач: title усечён до 60 (как в TasksPanel), status для маркера ✓/○.
+export function taskRows(data: WorkspaceData): Array<{ id: string; title: string; status: string }> {
+  return data.tasks.map((t) => ({ id: t.id, title: t.title.slice(0, 60), status: t.status }));
+}
+
+// Секции событий задачи как {text}-айтемы (cleaned + slice(0,100) — как section() в TaskDetail).
+function eventLines(events: { event_id: string; text: string }[]): Array<{ event_id: string; text: string }> {
+  return events.map((e) => ({ event_id: e.event_id, text: e.text.replace(/\s+/g, " ").slice(0, 100) }));
+}
+export function taskDecisions(data: WorkspaceData, taskId: string) {
+  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).decisions);
+}
+export function taskFindings(data: WorkspaceData, taskId: string) {
+  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).findings);
+}
+export function taskRejections(data: WorkspaceData, taskId: string) {
+  return eventLines(taskDetailFromEvents(data.taskEvents, taskId).rejections);
+}
+
+// «Вероятно связанные сессии» — {text:"id8 · profile||— · used/saved"} (как в TaskDetail).
+export function relatedSessionLines(data: WorkspaceData, taskId: string): Array<{ sessionId: string; text: string }> {
+  return relatedSessions(data.taskEvents, taskId, data.sessions, data.tokens).map((r) => ({
+    sessionId: r.sessionId,
+    text: `${r.sessionId.slice(0, 8)} · ${r.profile || "—"} · ${r.used}/${r.saved}`,
+  }));
+}
+
+// Итоговая строка токенов задачи: "потрачено X · сэкономлено Y" (как в TaskDetail).
+export function taskTokensSummary(data: WorkspaceData, taskId: string): string {
+  const t = tokensForTask(data.taskEvents, taskId, data.tokenEvents);
+  return `потрачено ${t.used} · сэкономлено ${t.saved}`;
+}
+
+// Разбивка токенов по сессиям: {text:"profile · id8 — used/saved"} (как в TaskDetail).
+export function taskTokenBreakdownLines(data: WorkspaceData, taskId: string): Array<{ sessionId: string; text: string }> {
+  return tokensBySessionForTask(data.taskEvents, taskId, data.tokenEvents, data.sessions).map((r) => ({
+    sessionId: r.sessionId,
+    text: `${r.profile} · ${r.sessionId.slice(0, 8)} — ${r.used}/${r.saved}`,
+  }));
+}
+
+// Последняя записанная метрика: "в журнале записано: потрачено X · сэкономлено Y" или "".
+export function taskRecordedMetricLine(data: WorkspaceData, taskId: string): string {
+  const recorded = tokenMetricsFromEvents(data.taskEvents, taskId);
+  const last = recorded.length ? recorded[recorded.length - 1] : null;
+  return last ? `в журнале записано: потрачено ${last.used} · сэкономлено ${last.saved}` : "";
+}
+
 // Ключи реестра — имена, на которые ViewSpec ссылается через {fn,args}.
 // Имена соответствуют спеке view-schema.md (раздел «Реестр деривлаций v1»).
 export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) => unknown> = {
@@ -73,4 +159,16 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   relatedSessions: relatedSessionsD,
   tokenMetrics,
   tokenMetricsFromEvents: tokenMetrics,
+  // display-деривации (7.4)
+  tokenTotalsLine,
+  sessionRows,
+  tokenRows,
+  taskRows,
+  taskDecisions,
+  taskFindings,
+  taskRejections,
+  relatedSessionLines,
+  taskTokensSummary,
+  taskTokenBreakdownLines,
+  taskRecordedMetricLine,
 };

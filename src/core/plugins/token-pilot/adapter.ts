@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SettingsSchema, LoomPlugin } from "../types.js";
+import type { SettingsSchema, LoomPlugin, ViewSpec } from "../types.js";
 
 export interface TokenUsageRow {
   sessionId: string;
@@ -161,4 +161,26 @@ export const plugin: LoomPlugin<{
     write: (ctx, updates) => writeSettings(ctx.projectRoot, updates),
   },
   actions: [],
+  // TokensPanel = составной экран: итоговая строка + таблица. when:"tokens.length"
+  // прячет итог при пустых токенах — тогда видна только пустышка таблицы (как в панели).
+  views: {
+    tokens: [
+      {
+        kind: "summary",
+        lines: [{ label: "Всего", value: { fn: "tokenTotalsLine" }, when: "tokens.length" }],
+      },
+      {
+        kind: "table",
+        source: { fn: "tokenRows" },
+        rowKey: "sessionId",
+        gap: 2,
+        empty: "Нет данных о токенах",
+        columns: [
+          { value: "idShort" },
+          { value: "used", width: 8, align: "right" },
+          { value: "saved", width: 8, align: "right" },
+        ],
+      },
+    ] satisfies ViewSpec[],
+  },
 };

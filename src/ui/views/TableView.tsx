@@ -6,7 +6,8 @@ import { resolveBind, getDotted, type BindContext } from "../../core/views/resol
 function cellText(col: Column, row: Record<string, unknown>): string {
   let text = "";
   if (col.marker) {
-    const on = Boolean(getDotted(row, col.marker.when));
+    const raw = getDotted(row, col.marker.when);
+    const on = col.marker.equals !== undefined ? raw === col.marker.equals : Boolean(raw);
     text += (on ? col.marker.truthy : (col.marker.falsy ?? " ")) + " ";
   }
   const raw = getDotted(row, col.value);
@@ -28,6 +29,7 @@ export function TableView({
 }) {
   const rows = (resolveBind(spec.source, ctx) as Record<string, unknown>[]) ?? [];
   const hasHeader = spec.columns.some((c) => c.header);
+  const sep = " ".repeat(spec.gap ?? 2);
 
   if (rows.length === 0) {
     return <Text dimColor>{spec.empty ?? "Нет данных"}</Text>;
@@ -44,12 +46,12 @@ export function TableView({
               if (!c.width) return h;
               return c.align === "right" ? h.padStart(c.width) : h.padEnd(c.width);
             })
-            .join("  ")}
+            .join(sep)}
         </Text>
       )}
       {rows.map((row, i) => {
         const key = String(getDotted(row, spec.rowKey) ?? i);
-        const line = spec.columns.map((c) => cellText(c, row)).join("  ");
+        const line = spec.columns.map((c) => cellText(c, row)).join(sep);
         return (
           <Text key={key} inverse={spec.selectable && i === cursor}>
             {line}

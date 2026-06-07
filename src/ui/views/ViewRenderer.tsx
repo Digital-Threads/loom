@@ -22,7 +22,7 @@ import { DetailView } from "./DetailView.js";
 import { FormView } from "./FormView.js";
 
 interface ViewRendererProps {
-  plugin: LoomPlugin;
+  plugin?: LoomPlugin;                  // host-виды (Обзор/Настройки) не имеют плагина
   spec: ViewSpec | ViewSpec[];
   data: WorkspaceData;
 }
@@ -42,16 +42,30 @@ function findInteractive(specs: ViewSpec[]): ViewSpec | undefined {
   );
 }
 
+// Резолвит detail-spec открытого подвида из plugin.views[viewKey] (напр. "taskDetail"),
+// падая обратно на detail-вид среди specs текущей вкладки (на случай составной вкладки).
+function resolveDetailSpec(
+  viewKey: string,
+  specs: ViewSpec[],
+  plugin: LoomPlugin | undefined,
+): DetailViewSpec | undefined {
+  const fromViews = plugin?.views?.[viewKey];
+  if (fromViews && !Array.isArray(fromViews) && fromViews.kind === "detail") {
+    return fromViews;
+  }
+  return specs.find((s) => s.kind === "detail") as DetailViewSpec | undefined;
+}
+
 function buildOpts(
   specs: ViewSpec[],
   state: ViewState,
-  plugin: LoomPlugin,
+  plugin: LoomPlugin | undefined,
   data: WorkspaceData,
 ): { opts: ViewReducerOpts; current: ViewSpec | undefined } {
   const frame = state.stack[state.stack.length - 1];
-  // Если в стеке detail-кадр, ищем detail-вид; иначе интерактивный вид вкладки.
+  // Если в стеке detail-кадр, берём его detail-вид; иначе интерактивный вид вкладки.
   const detailSpec =
-    state.stack.length > 1 ? specs.find((s) => s.kind === "detail") : undefined;
+    state.stack.length > 1 ? resolveDetailSpec(frame.viewKey, specs, plugin) : undefined;
   const current = detailSpec ?? findInteractive(specs);
 
   if (!current) return { opts: { listLength: 0 }, current };
@@ -90,19 +104,19 @@ function buildOpts(
 
 function confirmKeysFor(
   actions: ActionBinding[] | undefined,
-  plugin: LoomPlugin,
+  plugin: LoomPlugin | undefined,
 ): Record<string, boolean> {
   const map: Record<string, boolean> = {};
   for (const a of actions ?? []) {
-    const action = plugin.actions?.find((x) => x.id === a.actionId);
+    const action = plugin?.actions?.find((x) => x.id === a.actionId);
     map[a.key] = Boolean(action?.confirm);
   }
   return map;
 }
 
 // Резолвит и исполняет ActionBinding. result.ok → статус-строка.
-function runAction(binding: ActionBinding, ctx: BindContext, plugin: LoomPlugin): string {
-  const action = plugin.actions?.find((x) => x.id === binding.actionId);
+function runAction(binding: ActionBinding, ctx: BindContext, plugin: LoomPlugin | undefined): string {
+  const action = plugin?.actions?.find((x) => x.id === binding.actionId);
   if (!action) return `действие не найдено: ${binding.actionId}`;
   const args: Record<string, unknown> = {};
   for (const [k, bind] of Object.entries(binding.args ?? {})) {
@@ -156,7 +170,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
         (a) => a.key === input,
       );
       if (binding) {
-        const action = plugin.actions?.find((x) => x.id === binding.actionId);
+        const action = plugin?.actions?.find((x) => x.id === binding.actionId);
         if (action?.confirm) {
           dispatch({ type: "actionKey", key: input });
         } else {
@@ -169,7 +183,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
 
   // detail-режим: показываем detail-вид с idParam из стека.
   if (inDetail) {
-    const detailSpec = specs.find((s) => s.kind === "detail") as DetailViewSpec | undefined;
+    const detailSpec = resolveDetailSpec(frame.viewKey, specs, plugin);
     if (detailSpec) {
       const ctx: BindContext = { data, idParam: frame.idParam };
       return (

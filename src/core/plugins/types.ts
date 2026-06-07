@@ -63,7 +63,9 @@ export interface Column {
   value: FieldRef;                      // путь в строке
   width?: number;
   align?: "left" | "right";
-  marker?: { when: FieldRef; truthy: string; falsy?: string }; // ★ / ✓○
+  marker?: { when: FieldRef; truthy: string; falsy?: string; equals?: string | number | boolean }; // ★ / ✓○
+  // equals задан → маркер truthy при value === equals (статус задач: "closed" → "✓").
+  // equals не задан → старое truthy-поведение Boolean(value) (для isSource подписок).
 }
 
 export interface ActionBinding {
@@ -71,7 +73,8 @@ export interface ActionBinding {
   actionId: string;                     // resolves loomRegistry.get(pluginId).actions
   args?: Record<string, Bind>;          // static path ИЛИ computed
   label?: string;                       // легенда хоткеев
-}                                        // confirm читается из PluginAction.confirm
+  confirmPrompt?: string;               // текст y/n-подтверждения (для паритета с панелями)
+}                                        // нужно ли подтверждение — читается из PluginAction.confirm
 
 export interface SummaryView {
   kind: "summary";
@@ -80,10 +83,11 @@ export interface SummaryView {
 
 export interface TableView {
   kind: "table";
-  source: FieldRef;                     // путь к массиву, напр "sessions"
+  source: Bind;                         // путь к массиву ("sessions") ИЛИ деривация ({fn:"sessionsWithTokens"})
   rowKey: FieldRef;                     // напр "sessionId"
   columns: Column[];
   empty?: string;
+  gap?: number;                         // число пробелов-разделителей между колонками (по умолчанию 2)
   selectable?: boolean;                 // включает ↑/↓ + Enter
   onSelect?: { openView: string; passId: FieldRef };  // list→detail
   actions?: ActionBinding[];
@@ -94,6 +98,10 @@ export interface DetailSection {
   items: Bind;                          // массив (путь или {fn})
   itemText: FieldRef;                   // путь внутри item, напр "text"
   empty?: string;
+  note?: string;                        // dim-суффикс у заголовка (напр. «(эвристика по времени)»)
+  hideCount?: boolean;                  // не показывать «(N)» у заголовка (блок «Токены задачи»)
+  lead?: Bind;                          // строка под заголовком без буллета (итог токенов)
+  trailer?: Bind;                       // dim-строка после списка (рендерится только если непустая)
 }
 
 export interface DetailView {

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { SettingsSchema, LoomPlugin } from "../types.js";
+import type { SettingsSchema, LoomPlugin, ViewSpec } from "../types.js";
 
 export interface TjEvent {
   event_id: string;
@@ -246,4 +246,65 @@ export const plugin: LoomPlugin<{
       },
     },
   ],
+  // Декларативные виды (Task 7.4) — воспроизводят TasksPanel (список) и TaskDetail (деталь).
+  views: {
+    // TasksPanel: "{✓|○} {title.slice(0,60)}  {id}" — gap=2 даёт 2 пробела до id.
+    // ОТЛИЧИЕ: id не dimColor (TableView красит строку целиком/инверсией) — косметика.
+    tasks: {
+      kind: "table",
+      source: { fn: "taskRows" },
+      rowKey: "id",
+      gap: 2,
+      selectable: true,
+      empty: "Нет задач",
+      onSelect: { openView: "taskDetail", passId: "id" },
+      columns: [
+        { value: "title", marker: { when: "status", equals: "closed", truthy: "✓", falsy: "○" } },
+        { value: "id" },
+      ],
+    } satisfies ViewSpec,
+    // TaskDetail: заголовок + id, секции событий, связанные сессии, блок «Токены задачи»,
+    // легенда c/t/Esc. Секции/итоги собираются display-деривациями (см. derivations.ts).
+    taskDetail: {
+      kind: "detail",
+      idParam: "taskId",
+      title: { fn: "taskTitle", args: ["taskId"] },
+      sections: [
+        { label: "Решения", items: { fn: "taskDecisions", args: ["taskId"] }, itemText: "text" },
+        { label: "Находки", items: { fn: "taskFindings", args: ["taskId"] }, itemText: "text" },
+        { label: "Отвергнутое", items: { fn: "taskRejections", args: ["taskId"] }, itemText: "text" },
+        {
+          label: "Вероятно связанные сессии",
+          note: "(эвристика по времени)",
+          items: { fn: "relatedSessionLines", args: ["taskId"] },
+          itemText: "text",
+        },
+        {
+          label: "Токены задачи",
+          hideCount: true,
+          lead: { fn: "taskTokensSummary", args: ["taskId"] },
+          items: { fn: "taskTokenBreakdownLines", args: ["taskId"] },
+          itemText: "text",
+          empty: "нет данных по токенам в окне задачи",
+          trailer: { fn: "taskRecordedMetricLine", args: ["taskId"] },
+        },
+      ],
+      actions: [
+        {
+          key: "c",
+          actionId: "closeTask",
+          label: "закрыть",
+          confirmPrompt: "Закрыть задачу? (y/n)",
+          args: { taskId: "taskId" },
+        },
+        {
+          key: "t",
+          actionId: "writeTokenMetric",
+          label: "записать токены",
+          confirmPrompt: "Записать метрику токенов в журнал? (y/n)",
+          args: { taskId: "taskId", tokens: { fn: "tokensForTask", args: ["taskId"] } },
+        },
+      ],
+    } satisfies ViewSpec,
+  },
 };
