@@ -1,5 +1,7 @@
 import type { PackInput } from "./pack-input.js";
 import { taskDetailFromEvents } from "@digital-threads/loom-plugin-task-journal";
+import { tokensForTask } from "../metrics/tokens-per-task.js";
+import { tokenTotals } from "../views/derivations.js";
 
 const UNAVAILABLE = (why: string) => `_недоступно: ${why}_`;
 const RECENT = 5;
@@ -62,9 +64,33 @@ function sectionRejections(input: PackInput): string {
   return "## Rejected approaches\n\n" + rejections.map((e) => `- ${e.text}`).join("\n");
 }
 function sectionTouchedFiles(_input: PackInput): string { return `## Touched files\n\n${UNAVAILABLE("ни один слой не отдаёт список файлов")}`; }
-function sectionTokenUsage(_input: PackInput): string { return `## Token usage\n\n${UNAVAILABLE("заполняется в следующей задаче")}`; }
+function sectionTokenUsage(input: PackInput): string {
+  if (input.data.tokens.length === 0)
+    return `## Token usage\n\n${UNAVAILABLE("нет данных о токенах")}`;
+  const total = tokenTotals(input.data);
+  const lines = [`Project total: потрачено ${total.used} · сэкономлено ${total.saved}`];
+  const r = resolveActiveTaskId(input);
+  if (r) {
+    const t = tokensForTask(input.data.taskEvents, r.id, input.data.tokenEvents);
+    lines.push(`Active task: потрачено ${t.used} · сэкономлено ${t.saved} (оценка по времени)`);
+  }
+  return "## Token usage\n\n" + lines.join("\n");
+}
 function sectionWorkflowBudget(_input: PackInput): string { return `## Workflow budget\n\n${UNAVAILABLE("нет источника бюджета workflow")}`; }
-function sectionMcpHealth(_input: PackInput): string { return `## MCP / environment health\n\n${UNAVAILABLE("заполняется в следующей задаче")}`; }
+function sectionMcpHealth(input: PackInput): string {
+  const lines: string[] = [];
+  for (const h of input.data.health) {
+    const bad = h.broken.length + h.missing.length + h.conflicts.length;
+    lines.push(bad === 0 ? `- ${h.profile}: ok`
+      : `- ${h.profile}: проблемы — broken ${h.broken.length}, missing ${h.missing.length}, conflicts ${h.conflicts.length}`);
+  }
+  if (input.data.errors.length) {
+    lines.push("", "Ошибки загрузки слоёв:");
+    for (const e of input.data.errors) lines.push(`- ${e}`);
+  }
+  const body = lines.length ? lines.join("\n") : "все слои отдали данные без ошибок";
+  return "## MCP / environment health\n\n" + body;
+}
 function sectionFooter(_input: PackInput): string {
   return "---\n_Токены на задачу — оценка по временно́му окну событий задачи (LP4); возможен double-count при параллельных задачах._";
 }

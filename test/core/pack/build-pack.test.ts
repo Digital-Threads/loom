@@ -98,3 +98,48 @@ describe("sectionDecisions/Rejections", () => {
     expect(md).toMatch(/## Recent decisions\n\n_нет записанных решений_/);
   });
 });
+
+describe("sectionTokenUsage", () => {
+  it("недоступно когда нет токенов", () => {
+    const md = buildPack({ data: emptyData(), config: {} });
+    expect(md).toContain("## Token usage\n\n_недоступно: нет данных о токенах_");
+  });
+  it("project total + active task (оценка по времени)", () => {
+    const data = {
+      ...emptyData(),
+      tokens: [{ sessionId: "s", used: 100, saved: 20 }],
+      tokenEvents: [{ sessionId: "s", used: 100, saved: 20, ts: Date.parse("2026-06-01T10:30:00Z") }],
+      taskEvents: [
+        { event_id:"e1", task_id: "tj-1", type:"open", text:"", timestamp: "2026-06-01T10:00:00Z" },
+        { event_id:"e2", task_id: "tj-1", type:"decision", text:"d", timestamp: "2026-06-01T11:00:00Z" },
+      ],
+      tasks: [{ id: "tj-1", title: "Alpha", status: "open" }],
+    } as any;
+    const md = buildPack({ data, config: { activeTaskId: "tj-1" } });
+    expect(md).toMatch(/Project total: потрачено 100 · сэкономлено 20/);
+    expect(md).toMatch(/Active task: потрачено 100 · сэкономлено 20 \(оценка по времени\)/);
+  });
+});
+
+describe("sectionMcpHealth", () => {
+  it("ok когда нет проблем и ошибок", () => {
+    const data = { ...emptyData(), health: [{ profile: "work", valid: ["a"], broken: [], missing: [], orphaned: [], conflicts: [] }] } as any;
+    const md = buildPack({ data, config: {} });
+    expect(md).toContain("- work: ok");
+  });
+  it("проблемы когда broken/missing/conflicts не пусты", () => {
+    const data = { ...emptyData(), health: [{ profile: "work", valid: [], broken: ["x"], missing: ["y"], orphaned: [], conflicts: ["z"] }] } as any;
+    const md = buildPack({ data, config: {} });
+    expect(md).toMatch(/- work: проблемы — broken 1, missing 1, conflicts 1/);
+  });
+  it("показывает ошибки загрузки слоёв", () => {
+    const data = { ...emptyData(), errors: ["aimux: boom"] } as any;
+    const md = buildPack({ data, config: {} });
+    expect(md).toContain("Ошибки загрузки слоёв:");
+    expect(md).toContain("- aimux: boom");
+  });
+  it("всё чисто → все слои отдали данные без ошибок", () => {
+    const md = buildPack({ data: emptyData(), config: {} });
+    expect(md).toContain("все слои отдали данные без ошибок");
+  });
+});
