@@ -69,6 +69,40 @@ export function detect(spec: DetectSpec, deps: InstallDeps, platform: NodeJS.Pla
   return { installed: true, version };
 }
 
+export interface UpdateResult extends DetectResult {
+  latest?: string;
+  updateAvailable?: boolean; // undefined = unknown
+}
+
+// Числовое semver-сравнение по сегментам (без pre-release). Чистая.
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+export function detectUpdate(
+  spec: DetectSpec, deps: InstallDeps, platform: NodeJS.Platform = process.platform,
+): UpdateResult {
+  const base = detect(spec, deps, platform);
+  if (!base.installed) return { ...base, updateAvailable: false };
+  if (!spec.latest || !base.version) return { ...base, updateAvailable: undefined };
+
+  const res = deps.run(resolveProbeCmd(spec.latest.probe.cmd, platform), spec.latest.probe.args);
+  if (!res.ok) return { ...base, updateAvailable: undefined };
+  const latest = spec.latest.versionRegex
+    ? new RegExp(spec.latest.versionRegex).exec(res.stdout)?.[1]
+    : res.stdout.trim() || undefined;
+  if (!latest) return { ...base, updateAvailable: undefined };
+
+  return { ...base, latest, updateAvailable: compareVersions(latest, base.version) > 0 };
+}
+
 // Backward-compat: нет manifest.install → синтезируем рецепт из claudePlugin.
 export function synthesizeRecipeFromClaudePlugin(
   cp: { name: string; marketplace: string; source?: string },

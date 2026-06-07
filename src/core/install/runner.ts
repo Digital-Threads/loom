@@ -6,7 +6,7 @@ import type { CmdResult, CmdRunner, InstallDeps } from "./types.js";
 // Обёртка execFileSync. Defensive: любая ошибка → {ok:false}, НЕ бросает.
 export const defaultRun: CmdRunner = (cmd, args): CmdResult => {
   try {
-    const stdout = execFileSync(cmd, args, { encoding: "utf8" });
+    const stdout = execFileSync(cmd, args, { encoding: "utf8", timeout: 5000 });
     return { ok: true, stdout: stdout ?? "", stderr: "" };
   } catch (err) {
     const e = err as { stdout?: unknown; stderr?: unknown; message?: string };

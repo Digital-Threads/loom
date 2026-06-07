@@ -6,7 +6,7 @@ import { isAbsolute } from "node:path";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { installPlugin, planInstall, removePlugin } from "../core/install/install.js";
-import { detect, isValidScope, type RecipeCtx } from "../core/install/recipe.js";
+import { detectUpdate, isValidScope, type RecipeCtx } from "../core/install/recipe.js";
 import { readInstalled } from "../core/install/registry-file.js";
 import type { InstallDeps, InstallSource } from "../core/install/types.js";
 
@@ -163,7 +163,14 @@ function detectCmd(rest: string[], deps: InstallDeps): CliResult {
     return { code: 1, lines: [`Ошибка: плагин не установлен: ${name}`] };
   }
 
-  let detectSpec: { probe: { cmd: string; args: string[] }; presenceMatch?: string; versionRegex?: string } | undefined;
+  let detectSpec:
+    | {
+        probe: { cmd: string; args: string[] };
+        presenceMatch?: string;
+        versionRegex?: string;
+        latest?: { probe: { cmd: string; args: string[] }; versionRegex?: string };
+      }
+    | undefined;
   try {
     const raw = JSON.parse(readFileSync(join(entry.installPath, "plugin.json"), "utf8")) as {
       install?: { detect?: typeof detectSpec };
@@ -177,12 +184,14 @@ function detectCmd(rest: string[], deps: InstallDeps): CliResult {
     return { code: 0, lines: [`не установлен ${name}`] };
   }
 
-  const result = detect(detectSpec, deps);
+  const result = detectUpdate(detectSpec, deps);
   if (!result.installed) {
     return { code: 0, lines: [`не установлен ${name}`] };
   }
   const ver = result.version ? ` (версия ${result.version})` : "";
-  return { code: 0, lines: [`установлен ${name}${ver}`] };
+  const upd =
+    result.updateAvailable === true ? ` ↻ доступно ${result.latest ?? ""}`.trimEnd() : "";
+  return { code: 0, lines: [`установлен ${name}${ver}${upd}`] };
 }
 
 // args = всё после "loom plugin": ["add","./x","--yes"] / ["list"] / ["remove","name"].

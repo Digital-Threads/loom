@@ -288,4 +288,28 @@ describe("runPluginCli detect", () => {
     const r = runPluginCli(["detect", "nope"], deps);
     expect(r.code).toBe(1);
   });
+
+  // Мягкий кейс: общий fakeRun всегда возвращает пустой stdout и не настраивается
+  // по-командно, поэтому реально проверить "↻" в выводе нельзя без переписывания
+  // makeDeps. Проверяем, что detect с detect.latest-спекой не падает (code 0).
+  it("detect с detect.latest-спекой не падает (code 0)", () => {
+    const { deps } = makeDeps();
+    const src = makeLocalPlugin(
+      baseManifest({
+        install: {
+          install: [],
+          detect: {
+            probe: { cmd: "which", args: ["x"] },
+            versionRegex: "v([0-9.]+)",
+            latest: { probe: { cmd: "npm", args: ["view", "x", "version"] } },
+          },
+          remove: [],
+        },
+      }),
+    );
+    runPluginCli(["add", src, "--yes"], deps);
+    const r = runPluginCli(["detect", "demo"], deps);
+    expect(r.code).toBe(0);
+    expect(r.lines.join("\n")).toContain("установлен demo");
+  });
 });

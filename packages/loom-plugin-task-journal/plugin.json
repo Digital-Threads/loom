@@ -22,7 +22,8 @@
       { "cmd": "claude", "args": ["plugin","install","--scope","{scope}","task-journal@task-journal"], "scoped": true }
     ],
     "detect": { "probe": { "cmd": "claude", "args": ["plugin","list"] },
-                "presenceMatch": "task-journal@task-journal" },
+                "presenceMatch": "task-journal@task-journal",
+                "latest": { "probe": { "cmd": "cargo", "args": ["search","task-journal-cli","--limit","1"] }, "versionRegex": "task-journal-cli = \"([0-9.]+)\"" } },
     "remove": [
       { "cmd": "claude", "args": ["plugin","uninstall","task-journal@task-journal"] },
       { "cmd": "cargo", "args": ["uninstall","task-journal-cli","task-journal-mcp"], "optional": true }

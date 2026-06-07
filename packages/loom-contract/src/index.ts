@@ -214,6 +214,8 @@ export interface DetectSpec {
   // presenceMatch: для команд вроде `claude plugin list`, где probe.ok НЕ значит «нужный плагин стоит».
   //   Если задан — installed требует ещё и совпадения имени в stdout. (Используется в Task 6.)
   presenceMatch?: string;
+  // как узнать последнюю доступную версию (LP2). Отсутствует → update-статус "unknown".
+  latest?: { probe: RecipeStep; versionRegex?: string };
 }
 
 // Полный рецепт плагина: установка / детект / удаление.
