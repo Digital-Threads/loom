@@ -8,7 +8,7 @@ describe("OnboardingPanel render smoke", () => {
     const { lastFrame } = render(<OnboardingPanel />);
     const f = lastFrame()!;
     expect(f).toContain("Loom");
-    expect(f).toContain("Плагины");
+    expect(f).toContain("Каталог");
     expect(f).toContain("loom plugin add");
   });
 });

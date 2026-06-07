@@ -19,7 +19,7 @@ export function OnboardingPanel() {
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text bold>С чего начать</Text>
-        <Text>· Открой вкладку «Плагины» (→) и нажми a, чтобы добавить плагин.</Text>
+        <Text>· ← Открой вкладку «Каталог»: выбери плагин, Enter — поставить.</Text>
         <Text>· Или из терминала: loom plugin add &lt;npm-пакет|путь&gt;</Text>
       </Box>
       <Box marginTop={1}>

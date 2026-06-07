@@ -5,6 +5,7 @@ import { loadWorkspaceData, isWorkspaceEmpty, type WorkspaceData } from "../core
 import { loomRegistry } from "../core/plugins/index.js";
 import { ViewRenderer } from "./views/ViewRenderer.js";
 import { PluginsPanel } from "./panels/PluginsPanel.js";
+import { CatalogPanel } from "./panels/CatalogPanel.js";
 import { OnboardingPanel } from "./panels/OnboardingPanel.js";
 import { overviewView, settingsView } from "./views/host-views.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
@@ -17,10 +18,12 @@ const pluginTabs: { pluginId: string; tabId: string; title: string }[] = loomReg
   .list()
   .flatMap((p) => p.tabs.map((t) => ({ pluginId: p.id, tabId: t.id, title: t.title })));
 
-// Порядок: Обзор, [плагинные вкладки], Настройки, Плагины.
-// "Плагины" — host-экран управления (НЕ ViewSpec), рендерится отдельной панелью.
-const TABS = ["Обзор", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
+// Порядок: Обзор, Каталог, [плагинные вкладки], Настройки, Плагины.
+// "Каталог" и "Плагины" — host-экраны (НЕ ViewSpec), рендерятся отдельными панелями.
+const TABS = ["Обзор", "Каталог", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
 
+// Индекс host-вкладки каталога (сразу после «Обзора»).
+const CATALOG_TAB = 1;
 // Индекс host-вкладки управления плагинами (последняя).
 const PLUGINS_TAB = TABS.length - 1;
 // Индекс host-вкладки настроек (предпоследняя).
@@ -32,7 +35,8 @@ const SETTINGS_TAB = TABS.length - 2;
 function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSpec[] } | null {
   if (active === 0) return { spec: overviewView };
   if (active === SETTINGS_TAB) return { spec: settingsView };
-  const entry = pluginTabs[active - 1];
+  // Обзор=0, Каталог=1 — плагинные вкладки начинаются с индекса 2.
+  const entry = pluginTabs[active - 2];
   if (!entry) return null;
   const plugin = loomRegistry.get(entry.pluginId);
   const spec = plugin?.views?.[entry.tabId];
@@ -45,7 +49,11 @@ export function App() {
   const [data, setData] = useState<WorkspaceData | null>(null);
 
   useEffect(() => {
-    loadWorkspaceData().then(setData);
+    loadWorkspaceData().then((d) => {
+      setData(d);
+      // Пустой старт: уводим пользователя сразу в Каталог — оттуда ставят плагины.
+      if (isWorkspaceEmpty(d)) setActive(CATALOG_TAB);
+    });
   }, []);
 
   useInput((input, key) => {
@@ -66,6 +74,9 @@ export function App() {
           // Пустой старт: на «Обзоре» вместо нулей показываем онбординг.
           // Прочие вкладки (Плагины/Настройки) работают как обычно — туда можно уйти.
           <OnboardingPanel key={active} />
+        ) : active === CATALOG_TAB ? (
+          // Host-экран каталога плагинов — не ViewSpec. key={active} перемонтирует панель.
+          <CatalogPanel key={active} />
         ) : active === PLUGINS_TAB ? (
           // Host-экран управления плагинами — не ViewSpec. key={active} перемонтирует панель.
           <PluginsPanel key={active} />
