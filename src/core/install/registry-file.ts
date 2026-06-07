@@ -33,3 +33,18 @@ export function writeInstalled(deps: InstallDeps, reg: InstalledRegistry): void 
   mkdirSync(deps.dataDir, { recursive: true });
   writeFileSync(registryPath(deps), JSON.stringify(reg, null, 2), "utf8");
 }
+
+// Переключает флаг enabled установленного плагина. Defensive:
+// нет такого name → {ok:false}; иначе пишет реестр и {ok:true}.
+export function setEnabled(
+  deps: InstallDeps,
+  name: string,
+  enabled: boolean,
+): { ok: boolean; error?: string } {
+  const reg = readInstalled(deps);
+  const entry = reg.plugins[name];
+  if (!entry) return { ok: false, error: `plugin not installed: ${name}` };
+  entry.enabled = enabled;
+  writeInstalled(deps, reg);
+  return { ok: true };
+}

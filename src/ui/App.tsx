@@ -4,6 +4,7 @@ import { Tabs } from "./Tabs.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { ViewRenderer } from "./views/ViewRenderer.js";
+import { PluginsPanel } from "./panels/PluginsPanel.js";
 import { overviewView, settingsView } from "./views/host-views.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 
@@ -15,13 +16,21 @@ const pluginTabs: { pluginId: string; tabId: string; title: string }[] = loomReg
   .list()
   .flatMap((p) => p.tabs.map((t) => ({ pluginId: p.id, tabId: t.id, title: t.title })));
 
-const TABS = ["Обзор", ...pluginTabs.map((t) => t.title), "Настройки"];
+// Порядок: Обзор, [плагинные вкладки], Настройки, Плагины.
+// "Плагины" — host-экран управления (НЕ ViewSpec), рендерится отдельной панелью.
+const TABS = ["Обзор", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
 
-// Маппинг таб → (плагин?, view-spec). 0 → host overview; последняя → host settings;
+// Индекс host-вкладки управления плагинами (последняя).
+const PLUGINS_TAB = TABS.length - 1;
+// Индекс host-вкладки настроек (предпоследняя).
+const SETTINGS_TAB = TABS.length - 2;
+
+// Маппинг таб → (плагин?, view-spec). 0 → host overview; SETTINGS_TAB → host settings;
 // между — соответствующая плагинная вкладка (plugin.views[tabId]).
+// PLUGINS_TAB сюда НЕ попадает — он рендерится <PluginsPanel/> напрямую в App.
 function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSpec[] } | null {
   if (active === 0) return { spec: overviewView };
-  if (active === TABS.length - 1) return { spec: settingsView };
+  if (active === SETTINGS_TAB) return { spec: settingsView };
   const entry = pluginTabs[active - 1];
   if (!entry) return null;
   const plugin = loomRegistry.get(entry.pluginId);
@@ -52,6 +61,9 @@ export function App() {
       <Box marginTop={1} flexDirection="column">
         {data === null ? (
           <Text dimColor>Загрузка…</Text>
+        ) : active === PLUGINS_TAB ? (
+          // Host-экран управления плагинами — не ViewSpec. key={active} перемонтирует панель.
+          <PluginsPanel key={active} />
         ) : view ? (
           // key={active} → смена вкладки перемонтирует ViewRenderer (сброс стека/курсора).
           <ViewRenderer key={active} plugin={view.plugin} spec={view.spec} data={data} />
