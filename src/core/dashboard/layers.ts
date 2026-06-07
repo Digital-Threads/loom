@@ -32,3 +32,20 @@ export function layerLabel(layer: Layer): string {
   };
   return map[layer];
 }
+
+export interface LayerTab { pluginId: string; tabId: string; title: string }
+export interface LayerGroup { layer: Layer; label: string; tabs: LayerTab[] }
+
+export function groupTabsByLayer(
+  plugins: Array<Pick<LoomPlugin, "id" | "tabs"> & { category?: string }>,
+): LayerGroup[] {
+  const byLayer = new Map<Layer, LayerTab[]>();
+  for (const p of plugins) {
+    const layer = layerOf(p);
+    const tabs = p.tabs.map((t) => ({ pluginId: p.id, tabId: t.id, title: t.title }));
+    byLayer.set(layer, [...(byLayer.get(layer) ?? []), ...tabs]);
+  }
+  return LAYER_ORDER
+    .filter((l) => byLayer.has(l) && byLayer.get(l)!.length > 0)
+    .map((l) => ({ layer: l, label: layerLabel(l), tabs: byLayer.get(l)! }));
+}
