@@ -29,6 +29,7 @@ export function TasksPanel({ data }: { data: WorkspaceData }) {
         title={t?.title ?? ""}
         sessions={data.sessions}
         tokens={data.tokens}
+        tokenEvents={data.tokenEvents}
       />
     );
   }
