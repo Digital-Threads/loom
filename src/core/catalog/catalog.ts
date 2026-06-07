@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { loomRegistry } from "../plugins/index.js";
 import { validateManifest } from "../plugins/manifest.js";
 import { CATALOG_ENTRIES } from "./catalog-data.js";
-import type { CatalogEntry, ResolvedEntry } from "./types.js";
+import type { CatalogEntry, ResolvedEntry, CatalogItem, CatalogStatus } from "./types.js";
+import type { InstallDeps } from "../install/types.js";
+import { detect } from "../install/recipe.js";
+import { readInstalled } from "../install/registry-file.js";
 
 // ESM-safe аналог __dirname: проект — "type":"module" (module: ESNext),
 // хост запускается как `node dist/cli.js`, где __dirname не определён.
@@ -23,5 +26,24 @@ export function resolveEntries(entries: CatalogEntry[] = CATALOG_ENTRIES): Resol
     const reg = loomRegistry.get(e.id);
     if (!reg?.category) throw new Error(`нет category в реестре у ${e.id}`);
     return { ...e, category: reg.category, recipe: manifestRecipe(e.id) };
+  });
+}
+
+// fast-путь: installed + version (без latest/сети). entries инъектируются в тестах.
+export function buildCatalog(
+  deps: InstallDeps,
+  entries: ResolvedEntry[] = resolveEntries(),
+): CatalogItem[] {
+  const reg = readInstalled(deps).plugins;
+  return entries.map((e) => {
+    const det = detect(e.recipe.detect, deps);
+    const regEntry = reg[e.id];
+    const status: CatalogStatus = det.installed || regEntry ? "installed" : "not-installed";
+    return {
+      ...e,
+      status,
+      installedVersion: det.version ?? regEntry?.version,
+      enabled: regEntry?.enabled,
+    };
   });
 }
