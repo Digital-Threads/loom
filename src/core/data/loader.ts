@@ -1,4 +1,5 @@
 import { loomRegistry } from "../plugins/index.js";
+import { resolveProjectRoot, deriveProjectId } from "../workspace/project-id.js";
 import type { LoomContext } from "../plugins/types.js";
 import type { TokenUsageRow, TokenEvent } from "@digital-threads/loom-plugin-token-pilot";
 import type { TjEvent, TaskSummary } from "@digital-threads/loom-plugin-task-journal";
@@ -13,6 +14,7 @@ export interface WorkspaceData {
   taskEvents: TjEvent[];
   tasks: TaskSummary[];
   errors: string[];
+  projectId: string;
 }
 
 // Пустой старт: ни один плагин не отдал полезных данных.
@@ -39,7 +41,9 @@ async function safe<T>(fn: () => T | Promise<T>, fallback: T, errors: string[], 
 
 export async function loadWorkspaceData(): Promise<WorkspaceData> {
   const errors: string[] = [];
-  const ctx: LoomContext = { projectRoot: process.cwd() };
+  const projectRoot = resolveProjectRoot(process.cwd());
+  const projectId = deriveProjectId(projectRoot);
+  const ctx: LoomContext = { projectRoot };
   const slices = await Promise.all(
     loomRegistry.list().map((p) =>
       safe(() => p.load(ctx), {} as Record<string, unknown>, errors, p.id),
@@ -55,5 +59,6 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
     taskEvents: merged.taskEvents ?? [],
     tasks: merged.tasks ?? [],
     errors,
+    projectId,
   };
 }

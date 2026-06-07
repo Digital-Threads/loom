@@ -15,6 +15,7 @@ function emptyData(): WorkspaceData {
     taskEvents: [],
     tasks: [],
     errors: [],
+    projectId: "",
   };
 }
 
@@ -26,6 +27,12 @@ describe("loader", () => {
     expect(data).toHaveProperty("health");
     expect(data).toHaveProperty("errors");
     expect(Array.isArray(data.errors)).toBe(true);
+  });
+
+  it("отдаёт projectId (16 hex) от резолвнутого корня", async () => {
+    const data = await loadWorkspaceData();
+    expect(data).toHaveProperty("projectId");
+    expect(data.projectId).toMatch(/^[0-9a-f]{16}$/);
   });
 });
 
