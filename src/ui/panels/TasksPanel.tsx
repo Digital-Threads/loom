@@ -22,7 +22,15 @@ export function TasksPanel({ data }: { data: WorkspaceData }) {
 
   if (openId) {
     const t = tasks.find((x) => x.id === openId);
-    return <TaskDetail events={data.taskEvents} id={openId} title={t?.title ?? ""} />;
+    return (
+      <TaskDetail
+        events={data.taskEvents}
+        id={openId}
+        title={t?.title ?? ""}
+        sessions={data.sessions}
+        tokens={data.tokens}
+      />
+    );
   }
 
   return (
