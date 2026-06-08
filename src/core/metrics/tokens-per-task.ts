@@ -135,13 +135,42 @@ export function tokensForTaskBySession(
   return { used, saved };
 }
 
+export interface BestTokens {
+  tokens: TaskTokens;
+  mode: "exact" | "estimate";
+}
+
+/**
+ * Селектор exact vs estimate (LP13). Если у задачи есть сессии (meta.session_id),
+ * берём точную атрибуцию по session-join (tokensForTaskBySession) → mode="exact".
+ * Иначе fallback на окно времени LP4 (tokensForTask) → mode="estimate".
+ * Нет данных → нули. Чистая.
+ *
+ * NOTE (следующий шаг): resolveCollisionByCurrentTask (T5) уже протестирован и
+ * подключается, когда сессия задачи делится ≥2 задачами. Пока используем прямой
+ * session-join как exact-значение — для одной задачи на сессию это и есть верная
+ * сумма; коллизия-резолвер интегрируется без смены mode (всё равно exact).
+ */
+export function tokensForTaskBest(
+  allEvents: TjEvent[],
+  taskId: string,
+  tokenEvents: TokenEvent[],
+): BestTokens {
+  const sessions = sessionsForTask(allEvents, taskId);
+  if (sessions.size > 0) {
+    return { tokens: tokensForTaskBySession(allEvents, taskId, tokenEvents), mode: "exact" };
+  }
+  return { tokens: tokensForTask(allEvents, taskId, tokenEvents), mode: "estimate" };
+}
+
 export interface TaskWithTokens {
   id: string;
   title: string;
   status: string;
   used: number;
   saved: number;
-  estimate: true;
+  estimate: boolean;
+  mode: "exact" | "estimate";
   overlap: boolean;
 }
 
@@ -183,7 +212,8 @@ export function tasksWithTokens(
   for (const t of tasks) windows.set(t.id, taskWindow(allEvents, t.id));
 
   return tasks.map((t) => {
-    const { used, saved } = tokensForTask(allEvents, t.id, tokenEvents);
+    const best = tokensForTaskBest(allEvents, t.id, tokenEvents);
+    const { used, saved } = best.tokens;
     const win = windows.get(t.id) ?? null;
     const overlap = win
       ? tasks.some((o) => {
@@ -192,7 +222,16 @@ export function tasksWithTokens(
           return ow ? taskWindowsOverlap(win, ow) : false;
         })
       : false;
-    return { id: t.id, title: t.title, status: t.status, used, saved, estimate: true, overlap };
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      used,
+      saved,
+      estimate: best.mode !== "exact",
+      mode: best.mode,
+      overlap,
+    };
   });
 }
 
