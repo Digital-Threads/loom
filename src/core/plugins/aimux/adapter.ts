@@ -5,6 +5,8 @@ import {
   checkAllProfiles,
   unifyAllSessions,
   launchProfile,
+  getProfile,
+  saveActiveProfile,
   type HealthReport,
 } from "@digital-threads/aimux/core";
 import type { SettingsSchema, LoomPlugin, ViewSpec } from "../contract.js";
@@ -125,6 +127,26 @@ export const plugin: LoomPlugin<{
         };
       },
     },
+    {
+      id: "switchProfile",
+      label: "Переключить активный профиль",
+      prompt: [{ key: "profile", label: "Активный профиль" }],
+      run: (_ctx, args) => {
+        const profile = String(args?.profile ?? "").trim();
+        if (!profile) return { ok: false, error: "профиль не указан" };
+        try {
+          const cfg = loadConfig();
+          if (!cfg) return { ok: false, error: "нет конфига aimux" };
+          // getProfile бросает, если профиля нет → проверяем явно, чтобы вернуть понятную ошибку.
+          if (!cfg.profiles[profile]) return { ok: false, error: `профиль не найден: ${profile}` };
+          getProfile(cfg, profile);
+          saveActiveProfile(profile);
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: (e as Error).message };
+        }
+      },
+    },
   ],
   // Декларативные виды вкладок (Task 7.4) — точное воспроизведение Subscriptions/SessionsPanel.
   views: {
@@ -138,6 +160,7 @@ export const plugin: LoomPlugin<{
       actions: [
         { key: "a", actionId: "addSubscription" },
         { key: "l", actionId: "login" },
+        { key: "s", actionId: "switchProfile" },
       ],
       columns: [
         { value: "name", width: 14, marker: { when: "isSource", truthy: "★", falsy: " " } },
