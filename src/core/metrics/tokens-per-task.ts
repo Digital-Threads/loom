@@ -195,3 +195,76 @@ export function tasksWithTokens(
     return { id: t.id, title: t.title, status: t.status, used, saved, estimate: true, overlap };
   });
 }
+
+/**
+ * Разрешение коллизии «несколько задач в одной сессии» (LP13).
+ *
+ * Одну session_id могут делить ≥2 задачи во времени (переключение между задачами).
+ * Тогда нельзя отнести всю сессию одной задаче. Строим временну́ю шкалу «какая задача
+ * была ТЕКУЩЕЙ в каждый момент» по событиям task-journal этой сессии и относим каждый
+ * токен по его ts к задаче, текущей в этот момент.
+ *
+ * Модель текущей задачи — стек открытых задач (most-recently-touched среди открытых):
+ *   - open<task>  → task становится текущей (поднимается на вершину стека);
+ *   - close<task> → task удаляется; текущей становится новая вершина (или null);
+ *   - прочие события → most-recently-touched: task поднимается на вершину (если открыта).
+ * Токен относится к задаче, текущей в момент его ts (по последнему событию с
+ * timestamp <= ts). Токен раньше первого open → ничей (не приписываем силой).
+ *
+ * ЧЕСТНОСТЬ: timestamp событий task-journal = ingest-time (не точное event-time),
+ * поэтому границы интервалов приблизительны — документированный предел метода.
+ * Чистая, детерминированная функция.
+ */
+export function resolveCollisionByCurrentTask(
+  allEvents: TjEvent[],
+  sessionId: string,
+  tokenEvents: TokenEvent[],
+): Map<string, TaskTokens> {
+  // События этой сессии, отсортированные по времени (стабильно по event_id при равенстве).
+  const events = allEvents
+    .filter((e) => (e.meta as { session_id?: unknown } | undefined)?.session_id === sessionId)
+    .map((e) => ({ e, ms: Date.parse(e.timestamp) }))
+    .filter((x) => !Number.isNaN(x.ms))
+    .sort((a, b) => (a.ms !== b.ms ? a.ms - b.ms : a.e.event_id < b.e.event_id ? -1 : a.e.event_id > b.e.event_id ? 1 : 0));
+
+  // Временна́я шкала: после обработки каждого события — кто текущая задача (или null).
+  // Сегмент действует от ms события (включительно) до ms следующего события.
+  const segments: { fromMs: number; task: string | null }[] = [];
+  const stack: string[] = []; // открытые задачи, вершина = текущая
+  for (const { e, ms } of events) {
+    if (e.type === "open") {
+      const idx = stack.indexOf(e.task_id);
+      if (idx !== -1) stack.splice(idx, 1);
+      stack.push(e.task_id);
+    } else if (e.type === "close") {
+      const idx = stack.indexOf(e.task_id);
+      if (idx !== -1) stack.splice(idx, 1);
+    } else {
+      // прочее событие задачи: most-recently-touched среди открытых → поднять на вершину
+      const idx = stack.indexOf(e.task_id);
+      if (idx !== -1) {
+        stack.splice(idx, 1);
+        stack.push(e.task_id);
+      }
+    }
+    const current = stack.length > 0 ? stack[stack.length - 1] : null;
+    segments.push({ fromMs: ms, task: current });
+  }
+
+  const byTask = new Map<string, TaskTokens>();
+  for (const t of tokenEvents) {
+    if (t.sessionId !== sessionId) continue;
+    // Найти последний сегмент с fromMs <= t.ts. Токен раньше первого события → ничей.
+    let task: string | null = null;
+    for (const seg of segments) {
+      if (seg.fromMs <= t.ts) task = seg.task;
+      else break;
+    }
+    if (task === null) continue;
+    const agg = byTask.get(task) ?? { used: 0, saved: 0 };
+    agg.used += t.used;
+    agg.saved += t.saved;
+    byTask.set(task, agg);
+  }
+  return byTask;
+}
