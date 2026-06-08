@@ -8,7 +8,7 @@ import {
   closeTask,
   loadTaskEvents,
   tasksFromEvents,
-} from "@digital-threads/loom-plugin-task-journal";
+} from "../../../../src/core/plugins/task-journal/adapter.js";
 
 // Integration: real round-trip through the task-journal CLI in a throwaway git dir.
 // Guarded so it skips cleanly if the CLI is unavailable — never red/flaky.

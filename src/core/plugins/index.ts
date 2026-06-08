@@ -1,7 +1,7 @@
 import { createRegistry } from "./registry.js";
-import { plugin as aimux } from "@digital-threads/loom-plugin-aimux";
-import { plugin as tokenPilot } from "@digital-threads/loom-plugin-token-pilot";
-import { plugin as taskJournal } from "@digital-threads/loom-plugin-task-journal";
+import { plugin as aimux } from "./aimux/adapter.js";
+import { plugin as tokenPilot } from "./token-pilot/adapter.js";
+import { plugin as taskJournal } from "./task-journal/adapter.js";
 import { discoverPlugins } from "./discover.js";
 import { loadPlugins } from "./load.js";
 import { loomPluginsDir } from "../paths.js";

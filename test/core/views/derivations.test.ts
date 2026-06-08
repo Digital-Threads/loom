@@ -8,7 +8,7 @@ import {
 import { allDerivations } from "../../../src/core/views/all-derivations.js";
 import { tokensForTask } from "../../../src/core/metrics/tokens-per-task.js";
 import type { WorkspaceData } from "../../../src/core/data/loader.js";
-import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
+import type { TjEvent } from "../../../src/core/plugins/task-journal/adapter.js";
 
 function makeData(over: Partial<WorkspaceData> = {}): WorkspaceData {
   return {

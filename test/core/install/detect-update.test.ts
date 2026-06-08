@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { detectUpdate, compareVersions } from "../../../src/core/install/recipe.js";
 import type { CmdRunner, InstallDeps } from "../../../src/core/install/types.js";
-import type { DetectSpec } from "@digital-threads/loom-contract";
+import type { DetectSpec } from "../../../src/core/plugins/contract.js";
 
 function fake(results: Record<string, { ok: boolean; stdout?: string }> ) {
   const run: CmdRunner = (cmd, args) => {

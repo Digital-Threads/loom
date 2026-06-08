@@ -6,7 +6,7 @@ import {
   readSettings,
   settingValue,
   writeSettings,
-} from "@digital-threads/loom-plugin-token-pilot";
+} from "../../../../src/core/plugins/token-pilot/adapter.js";
 
 let dir: string | undefined;
 afterEach(() => {

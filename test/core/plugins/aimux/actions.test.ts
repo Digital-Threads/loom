@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setAimuxDir, saveConfig, createDefaultConfig, loadConfig } from "@digital-threads/aimux/core";
-import { addSubscription } from "@digital-threads/loom-plugin-aimux";
+import { addSubscription } from "../../../../src/core/plugins/aimux/adapter.js";
 
 // Изолируем aimuxDir во временную папку на каждый тест — реальный ~/.aimux НЕ трогаем.
 let dir: string;
