@@ -5,8 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 // Изолируем источник данных: на этой машине реальные плагины читают живые данные
 // (aimux ~/.aimux, token-pilot, task-journal), поэтому workspace никогда не пуст.
 // Мокаем loader → пустой workspace, чтобы детерминированно проверить пустой старт
-// (empty → активная вкладка Каталог) на любой машине. CatalogPanel рендерится с
-// дефолтными deps и сам определяет статусы (defensive, в худшем случае not-installed).
+// (empty → активная вкладка Каталог) на любой машине.
 vi.mock("../../src/core/data/loader.js", () => {
   const empty = {
     subscriptions: [],
@@ -24,28 +23,58 @@ vi.mock("../../src/core/data/loader.js", () => {
   };
 });
 
+// CatalogPanel в useEffect зовёт detectLatest(item, deps) по дефолтным deps, чей
+// run = execFileSync (СИНХРОННЫЙ спавн npm/claude/which, timeout 5000мс на вызов).
+// В юнит-тесте это: (а) лишний реальный I/O, (б) под параллельной нагрузкой сьюта
+// синхронные спавны затыкают event loop → таймер ожидания голодает → тест ловит
+// 5-сек таймаут vitest (это и был флейк ~1/6). Мокаем runner → мгновенный no-op
+// run, ноль спавнов. buildCatalog всё равно отдаёт элементы из loomRegistry
+// («Token Pilot» рендерится синхронно, независимо от detect).
+vi.mock("../../src/core/install/runner.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../src/core/install/runner.js")>();
+  const instant = () => ({ ok: false, stdout: "", stderr: "" });
+  return {
+    ...actual,
+    defaultRun: instant,
+    defaultDeps: () => ({ dataDir: "/tmp/loom-catalog-test", run: instant }),
+  };
+});
+
 import { App } from "../../src/ui/App.js";
 
-const flush = async () => {
-  // Ink коммитит кадр на таймере, не на микрозадаче — ждём макротакт.
-  await new Promise((r) => setTimeout(r, 250));
-};
+// Ink коммитит кадры на таймере, а активная вкладка приезжает async
+// (loadWorkspaceData → setActive(Каталог) → ре-рендер → коммит). Поэтому ждём
+// УСЛОВИЕ, а не фиксированное время: поллим lastFrame() пока не появится нужный
+// фрагмент, с запасом по таймауту. Это убирает зависимость от тайминга под нагрузкой.
+async function waitForFrame(
+  lastFrame: () => string | undefined,
+  needle: string,
+  timeoutMs = 4000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let frame = lastFrame() ?? "";
+  while (!frame.includes(needle) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 20));
+    frame = lastFrame() ?? "";
+  }
+  return frame;
+}
 
 describe("App: вкладка Каталог", () => {
   it("в TABS есть «Каталог» и «Config»", async () => {
     const { lastFrame, unmount } = render(<App />);
-    await Promise.resolve(); await Promise.resolve();
     // Таб-бар при 100 колонках (ширина ink-testing) переносит длинные кириллические
-    // подписи: «Каталог» рвётся на «Катал»/«ог» после добавления вкладки «Config»
-    // (LP5). Проверяем по неразрывному фрагменту подписи + наличие новой вкладки.
-    expect(lastFrame()!).toContain("Катал");
-    expect(lastFrame()!).toContain("Config");
+    // подписи: «Каталог» рвётся на «Катал»/«ог» после добавления вкладки «Config» (LP5).
+    // Проверяем по неразрывному фрагменту подписи + наличие новой вкладки.
+    const frame = await waitForFrame(lastFrame, "Катал");
+    expect(frame).toContain("Катал");
+    expect(frame).toContain("Config");
     unmount(); // снимаем App, чтобы фоновый detect не мешал следующему тесту
   });
   it("пустой старт → активна вкладка Каталог (виден список плагинов)", async () => {
     const { lastFrame, unmount } = render(<App />);
-    await flush();
-    expect(lastFrame()!).toContain("Token Pilot");
+    const frame = await waitForFrame(lastFrame, "Token Pilot");
+    expect(frame).toContain("Token Pilot");
     unmount();
   });
 });
