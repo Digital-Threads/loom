@@ -100,6 +100,7 @@ export const plugin: LoomPlugin<{
     {
       id: "addSubscription",
       label: "Добавить подписку",
+      prompt: [{ key: "name", label: "Имя профиля" }],
       run: (_ctx, args) =>
         addSubscription(
           String(args?.name ?? ""),
@@ -116,6 +117,7 @@ export const plugin: LoomPlugin<{
       rowKey: "name",
       gap: 1,
       empty: "Нет подписок",
+      actions: [{ key: "a", actionId: "addSubscription" }],
       columns: [
         { value: "name", width: 14, marker: { when: "isSource", truthy: "★", falsy: " " } },
         { value: "cli" },

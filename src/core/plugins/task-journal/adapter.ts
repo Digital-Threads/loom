@@ -228,6 +228,10 @@ export const plugin: LoomPlugin<{
     {
       id: "openTask",
       label: "Открыть задачу",
+      prompt: [
+        { key: "title", label: "Заголовок задачи" },
+        { key: "goal", label: "Цель (необязательно)" },
+      ],
       run: (ctx, args) => {
         const id = openTask(ctx.projectRoot, String(args?.title ?? ""), args?.goal as string | undefined);
         return id ? { ok: true } : { ok: false, error: "не удалось создать" };
@@ -272,6 +276,7 @@ export const plugin: LoomPlugin<{
       selectable: true,
       empty: "Нет задач",
       onSelect: { openView: "taskDetail", passId: "id" },
+      actions: [{ key: "o", actionId: "openTask" }],
       columns: [
         { value: "title", marker: { when: "status", equals: "closed", truthy: "✓", falsy: "○" } },
         { value: "id" },

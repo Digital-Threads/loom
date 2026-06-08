@@ -1,5 +1,5 @@
-import React, { useReducer } from "react";
-import { Box, useInput } from "ink";
+import React, { useReducer, useState } from "react";
+import { Box, Text, useInput } from "ink";
 import type {
   ActionBinding,
   LoomPlugin,
@@ -21,6 +21,7 @@ import { SummaryView } from "./SummaryView.js";
 import { TableView } from "./TableView.js";
 import { DetailView } from "./DetailView.js";
 import { FormView } from "./FormView.js";
+import { TextInput } from "../input/TextInput.js";
 
 interface ViewRendererProps {
   plugin?: LoomPlugin;                  // host-виды (Обзор/Настройки) не имеют плагина
@@ -116,13 +117,19 @@ function confirmKeysFor(
 }
 
 // Резолвит и исполняет ActionBinding. result.ok → статус-строка.
-function runAction(binding: ActionBinding, ctx: BindContext, plugin: LoomPlugin | undefined): string {
+function runAction(
+  binding: ActionBinding,
+  ctx: BindContext,
+  plugin: LoomPlugin | undefined,
+  extra: Record<string, unknown> = {},
+): string {
   const action = plugin?.actions?.find((x) => x.id === binding.actionId);
   if (!action) return `действие не найдено: ${binding.actionId}`;
   const args: Record<string, unknown> = {};
   for (const [k, bind] of Object.entries(binding.args ?? {})) {
     args[k] = resolveBind(bind, ctx);
   }
+  Object.assign(args, extra); // typed prompt-значения дополняют/перекрывают статические
   const res = action.run({ projectRoot: process.cwd() }, args);
   return res.ok ? "готово (обновится при перезапуске)" : `ошибка: ${res.error ?? ""}`;
 }
@@ -142,7 +149,15 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
   const frame = state.stack[state.stack.length - 1];
   const inDetail = state.stack.length > 1;
 
+  const [prompt, setPrompt] = useState<{
+    binding: ActionBinding;
+    fields: { key: string; label: string }[];
+    idx: number;
+    values: Record<string, string>;
+  } | null>(null);
+
   useInput((input, key) => {
+    if (prompt) return; // TextInput владеет вводом, пока собираем prompt-поля
     // confirm-режим: y исполняет action, n/esc отменяет.
     if (state.mode === "confirm" && state.confirmKey) {
       if (input === "y") {
@@ -172,7 +187,9 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
       );
       if (binding) {
         const action = plugin?.actions?.find((x) => x.id === binding.actionId);
-        if (action?.confirm) {
+        if (action?.prompt && action.prompt.length > 0) {
+          setPrompt({ binding, fields: action.prompt, idx: 0, values: {} });
+        } else if (action?.confirm) {
           dispatch({ type: "actionKey", key: input });
         } else {
           const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
@@ -181,6 +198,37 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
       }
     }
   });
+
+  if (prompt) {
+    const field = prompt.fields[prompt.idx];
+    return (
+      <Box flexDirection="column">
+        <Box>
+          <Text>{field.label}: </Text>
+          <TextInput
+            key={prompt.idx}
+            placeholder={field.label}
+            onSubmit={(val) => {
+              const values = { ...prompt.values, [field.key]: val };
+              if (prompt.idx + 1 < prompt.fields.length) {
+                setPrompt({ ...prompt, idx: prompt.idx + 1, values });
+              } else {
+                const ctx: BindContext = {
+                  data,
+                  idParam: frame.idParam,
+                  derivations: allDerivations(),
+                };
+                const status = runAction(prompt.binding, ctx, plugin, values);
+                dispatch({ type: "setStatus", text: status });
+                setPrompt(null);
+              }
+            }}
+            onCancel={() => setPrompt(null)}
+          />
+        </Box>
+      </Box>
+    );
+  }
 
   // detail-режим: показываем detail-вид с idParam из стека.
   if (inDetail) {

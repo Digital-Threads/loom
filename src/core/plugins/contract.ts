@@ -32,6 +32,9 @@ export interface PluginAction {
   id: string;
   label: string;
   confirm?: boolean; // необратимое действие → требует подтверждения в UI
+  // Свободный текст-ввод перед запуском: каждое поле собирается через TextInput,
+  // значения попадают в args по ключу. Пусто/нет — поведение как раньше.
+  prompt?: { key: string; label: string }[];
   run(ctx: LoomContext, args?: Record<string, unknown>): ActionResult;
 }
 
