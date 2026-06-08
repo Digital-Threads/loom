@@ -1,5 +1,5 @@
 import React, { useReducer, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useApp } from "ink";
 import type {
   ActionBinding,
   LoomPlugin,
@@ -22,6 +22,7 @@ import { TableView } from "./TableView.js";
 import { DetailView } from "./DetailView.js";
 import { FormView } from "./FormView.js";
 import { TextInput } from "../input/TextInput.js";
+import { requestHandover } from "../../core/handover.js";
 
 interface ViewRendererProps {
   plugin?: LoomPlugin;                  // host-виды (Обзор/Настройки) не имеют плагина
@@ -116,22 +117,25 @@ function confirmKeysFor(
   return map;
 }
 
-// Резолвит и исполняет ActionBinding. result.ok → статус-строка.
+// Резолвит и исполняет ActionBinding. result.ok → статус-строка + опц. handover-thunk.
 function runAction(
   binding: ActionBinding,
   ctx: BindContext,
   plugin: LoomPlugin | undefined,
   extra: Record<string, unknown> = {},
-): string {
+): { status: string; handover?: () => unknown | Promise<unknown> } {
   const action = plugin?.actions?.find((x) => x.id === binding.actionId);
-  if (!action) return `действие не найдено: ${binding.actionId}`;
+  if (!action) return { status: `действие не найдено: ${binding.actionId}` };
   const args: Record<string, unknown> = {};
   for (const [k, bind] of Object.entries(binding.args ?? {})) {
     args[k] = resolveBind(bind, ctx);
   }
   Object.assign(args, extra); // typed prompt-значения дополняют/перекрывают статические
   const res = action.run({ projectRoot: process.cwd() }, args);
-  return res.ok ? "готово (обновится при перезапуске)" : `ошибка: ${res.error ?? ""}`;
+  return {
+    status: res.ok ? "готово (обновится при перезапуске)" : `ошибка: ${res.error ?? ""}`,
+    handover: res.handover,
+  };
 }
 
 export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
@@ -148,6 +152,15 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
   const { current } = buildOpts(specs, state, plugin, data);
   const frame = state.stack[state.stack.length - 1];
   const inDetail = state.stack.length > 1;
+  const { exit } = useApp();
+
+  const applyAction = (r: { status: string; handover?: () => unknown | Promise<unknown> }) => {
+    dispatch({ type: "setStatus", text: r.status });
+    if (r.handover) {
+      requestHandover(r.handover);
+      exit(); // гасим Ink → cli.tsx исполнит handover после waitUntilExit
+    }
+  };
 
   const [prompt, setPrompt] = useState<{
     binding: ActionBinding;
@@ -164,12 +177,12 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
         const binding = (current as TableViewSpec | DetailViewSpec)?.actions?.find(
           (a) => a.key === state.confirmKey,
         );
-        let status = "отмена";
         if (binding) {
           const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
-          status = runAction(binding, ctx, plugin);
+          applyAction(runAction(binding, ctx, plugin));
+        } else {
+          dispatch({ type: "setStatus", text: "отмена" });
         }
-        dispatch({ type: "setStatus", text: status });
       } else if (input === "n" || key.escape) {
         dispatch({ type: "confirmNo" });
       }
@@ -193,7 +206,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
           dispatch({ type: "actionKey", key: input });
         } else {
           const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
-          dispatch({ type: "setStatus", text: runAction(binding, ctx, plugin) });
+          applyAction(runAction(binding, ctx, plugin));
         }
       }
     }
@@ -218,8 +231,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
                   idParam: frame.idParam,
                   derivations: allDerivations(),
                 };
-                const status = runAction(prompt.binding, ctx, plugin, values);
-                dispatch({ type: "setStatus", text: status });
+                applyAction(runAction(prompt.binding, ctx, plugin, values));
                 setPrompt(null);
               }
             }}

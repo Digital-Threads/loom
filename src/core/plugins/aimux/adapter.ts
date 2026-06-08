@@ -4,6 +4,7 @@ import {
   addProfile,
   checkAllProfiles,
   unifyAllSessions,
+  launchProfile,
   type HealthReport,
 } from "@digital-threads/aimux/core";
 import type { SettingsSchema, LoomPlugin, ViewSpec } from "../contract.js";
@@ -107,6 +108,23 @@ export const plugin: LoomPlugin<{
           (args?.opts as { cli?: string; model?: string; fallbackModel?: string }) ?? {},
         ),
     },
+    {
+      id: "login",
+      label: "Логин (launchProfile)",
+      prompt: [{ key: "profile", label: "Профиль для логина" }],
+      run: (_ctx, args) => {
+        const profile = String(args?.profile ?? "").trim();
+        if (!profile) return { ok: false, error: "профиль не выбран" };
+        return {
+          ok: true,
+          handover: () => {
+            const cfg = loadConfig();
+            if (!cfg) throw new Error("нет конфига aimux");
+            return launchProfile(cfg, profile);
+          },
+        };
+      },
+    },
   ],
   // Декларативные виды вкладок (Task 7.4) — точное воспроизведение Subscriptions/SessionsPanel.
   views: {
@@ -117,7 +135,10 @@ export const plugin: LoomPlugin<{
       rowKey: "name",
       gap: 1,
       empty: "Нет подписок",
-      actions: [{ key: "a", actionId: "addSubscription" }],
+      actions: [
+        { key: "a", actionId: "addSubscription" },
+        { key: "l", actionId: "login" },
+      ],
       columns: [
         { value: "name", width: 14, marker: { when: "isSource", truthy: "★", falsy: " " } },
         { value: "cli" },

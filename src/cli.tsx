@@ -7,6 +7,7 @@ import { runPluginCli } from "./cli/plugin-cli.js";
 import { runPackCli } from "./cli/pack-cli.js";
 import { runConfigCli } from "./cli/config-cli.js";
 import { defaultDeps } from "./core/install/runner.js";
+import { takeHandover } from "./core/handover.js";
 
 async function main(): Promise<void> {
   // `loom plugin <add|remove|list>` → headless CLI без рендера TUI.
@@ -37,7 +38,12 @@ async function main(): Promise<void> {
     console.error("Loom: проблемы загрузки плагинов:\n" + errs.join("\n"));
   }
 
-  render(<App />);
+  const app = render(<App />);
+  await app.waitUntilExit();
+  const handover = takeHandover();
+  if (handover) {
+    await handover();
+  }
 }
 
 await main();

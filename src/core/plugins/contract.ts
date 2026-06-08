@@ -26,6 +26,9 @@ export interface LoomContext {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  // exit-and-handover: thunk, исполняемый ПОСЛЕ выхода из Ink (для интерактивных
+  // дочерних процессов, которым нужен терминал). См. core/handover.ts.
+  handover?: () => unknown | Promise<unknown>;
 }
 
 export interface PluginAction {

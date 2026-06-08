@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setAimuxDir, saveConfig, createDefaultConfig, loadConfig } from "@digital-threads/aimux/core";
-import { addSubscription } from "../../../../src/core/plugins/aimux/adapter.js";
+import { addSubscription, plugin } from "../../../../src/core/plugins/aimux/adapter.js";
 
 // Изолируем aimuxDir во временную папку на каждый тест — реальный ~/.aimux НЕ трогаем.
 let dir: string;
@@ -31,5 +31,21 @@ describe("aimux actions — addSubscription", () => {
     const second = addSubscription("mytest");
     expect(second.ok).toBe(false);
     expect(second.error).toBeTruthy();
+  });
+});
+
+describe("aimux actions — login (exit-and-handover)", () => {
+  const login = () => plugin.actions!.find((a) => a.id === "login")!;
+
+  it("с профилем возвращает ok + handover-thunk (не вызываем — спавнит)", () => {
+    const res = login().run({ projectRoot: "" }, { profile: "x" });
+    expect(res.ok).toBe(true);
+    expect(typeof res.handover).toBe("function");
+  });
+
+  it("без профиля возвращает ошибку без handover", () => {
+    const res = login().run({ projectRoot: "" }, { profile: "" });
+    expect(res.ok).toBe(false);
+    expect(res.handover).toBeUndefined();
   });
 });
