@@ -35,6 +35,23 @@ describe("dashboard derivations", () => {
     expect(a.tokens).not.toBe(`${a.used}/${a.saved}`);
   });
 
+  it("exact-строка (есть meta.session_id) несёт badge 'точно' и точное число", () => {
+    const exact = {
+      subscriptions: [], sessions: [], health: [], tokens: [],
+      tokenEvents: [{ ts: Date.parse("2026-06-01T10:30:00Z"), used: 10, saved: 2, sessionId: "s", agentType: null }],
+      taskEvents: [
+        { event_id: "e1", task_id: "A", type: "open", timestamp: "2026-06-01T10:00:00Z", text: "", meta: { session_id: "s" } },
+        { event_id: "e2", task_id: "A", type: "finding", timestamp: "2026-06-01T11:00:00Z", text: "d", meta: { session_id: "s" } },
+      ],
+      tasks: [{ id: "A", title: "Alpha", status: "open" }], projectId: "x", errors: [],
+    } as any;
+    const rows = derivations.tasksWithTokensRows(exact) as any[];
+    const a = rows.find((r) => r.id === "A");
+    expect(a.mode).toBe("exact");
+    expect(a.badge).toMatch(/точно/);
+    expect(a.tokens).toBe("10/2"); // exact → точное число, без ≈
+  });
+
   it("layerSummaryLines returns one line per present layer in LAYER_ORDER", () => {
     const lines = derivations.layerSummaryLines(data) as Array<{ text: string }>;
     expect(lines[0].text).toMatch(/Доступ/);

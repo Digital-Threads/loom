@@ -49,6 +49,7 @@ export const tasksTokensView: ViewSpec = {
   onSelect: { openView: "taskDetail", passId: "id" },
   columns: [
     { value: "title", width: 50, marker: { when: "status", equals: "closed", truthy: "✓", falsy: "○" } },
+    { header: "Точность", value: "badge", width: 10 },
     { header: "Токены (оценка)", value: "tokens", align: "right" },
   ],
 };

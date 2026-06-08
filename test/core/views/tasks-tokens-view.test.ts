@@ -8,6 +8,10 @@ describe("tasksTokensView", () => {
     const cols = (tasksTokensView as any).columns.map((c: any) => c.value);
     expect(cols).toContain("tokens");
   });
+  it("в колонках есть бейдж точности (badge)", () => {
+    const cols = (tasksTokensView as any).columns.map((c: any) => c.value);
+    expect(cols).toContain("badge");
+  });
   it("opens taskDetail on select (reuses existing detail view)", () => {
     expect((tasksTokensView as any).onSelect).toEqual({ openView: "taskDetail", passId: "id" });
   });

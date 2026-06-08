@@ -136,7 +136,14 @@ export function tasksWithTokensRows(data: WorkspaceData) {
     used: r.used,
     saved: r.saved,
     overlap: r.overlap,
-    tokens: r.overlap ? `≈ ${r.used}/${r.saved} (перекрытие)` : `${r.used}/${r.saved}`,
+    mode: r.mode,
+    badge: r.mode === "exact" ? "точно" : "≈ оценка",
+    tokens:
+      r.mode === "exact"
+        ? `${r.used}/${r.saved}`
+        : r.overlap
+          ? `≈ ${r.used}/${r.saved} (перекрытие)`
+          : `${r.used}/${r.saved}`,
   }));
 }
 
