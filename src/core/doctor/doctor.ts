@@ -1,6 +1,8 @@
+import { existsSync, readFileSync } from "node:fs";
 import { collectExpected } from "./collect.js";
 import { diffSettings, mergeHooks, type HooksConfig } from "../merge/config-merge.js";
-import type { DoctorReport, PluginContribution, ScopeName } from "./types.js";
+import { SCOPES, settingsPathForScope } from "./scope.js";
+import type { DoctorReport, PluginContribution, ScopeDirs, ScopeName } from "./types.js";
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
@@ -58,4 +60,24 @@ export function diagnoseScope(
     mcpCollisions,
     hookCollisions: hookCollisions(contributions),
   };
+}
+
+function readJson(path: string): Record<string, unknown> {
+  try {
+    if (!existsSync(path)) return {};
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function diagnoseAll(
+  contributions: PluginContribution[],
+  dirs: ScopeDirs,
+): DoctorReport[] {
+  return SCOPES.map((scope) => {
+    const current = readJson(settingsPathForScope(scope, dirs));
+    return diagnoseScope(scope, contributions, current);
+  });
 }

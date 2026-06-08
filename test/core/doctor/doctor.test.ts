@@ -40,3 +40,16 @@ describe("diagnoseScope", () => {
     expect(rep.hookCollisions).toContainEqual(expect.objectContaining({ event: "PreToolUse", plugins: ["a", "b"] }));
   });
 });
+
+import { diagnoseAll } from "../../../src/core/doctor/doctor.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+it("diagnoseAll: missing scope file → treated as empty, no throw", () => {
+  const home = mkdtempSync(join(tmpdir(), "loom-doc-home-"));
+  const proj = mkdtempSync(join(tmpdir(), "loom-doc-proj-"));
+  const reports = diagnoseAll(contributions, { homeDir: home, projectDir: proj });
+  expect(reports.map((r) => r.scope)).toEqual(["user", "project", "local"]);
+  expect(reports.every((r) => r.missingMcp.length > 0)).toBe(true);
+});
