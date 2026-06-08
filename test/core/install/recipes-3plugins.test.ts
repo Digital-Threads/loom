@@ -1,13 +1,17 @@
 import { expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { runRecipe, detect } from "../../../src/core/install/recipe.js";
 import { validateManifest } from "../../../src/core/plugins/manifest.js";
+import aimuxManifest from "../../../src/core/plugins/aimux/plugin.json" with { type: "json" };
+import tokenPilotManifest from "../../../src/core/plugins/token-pilot/plugin.json" with { type: "json" };
+import taskJournalManifest from "../../../src/core/plugins/task-journal/plugin.json" with { type: "json" };
 
-const PKGS = join(__dirname, "../../../packages");
+const MANIFESTS: Record<string, unknown> = {
+  aimux: aimuxManifest,
+  "token-pilot": tokenPilotManifest,
+  "task-journal": taskJournalManifest,
+};
 function recipe(name: string) {
-  const m = JSON.parse(readFileSync(join(PKGS, `loom-plugin-${name}`, "plugin.json"), "utf8"));
-  const v = validateManifest(m);
+  const v = validateManifest(MANIFESTS[name]);
   if (!v.ok) throw new Error(v.error);
   return v.manifest.install!;
 }

@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { runRecipe, detect } from "../../src/core/install/recipe.js";
 import { defaultDeps } from "../../src/core/install/runner.js";
 import { validateManifest } from "../../src/core/plugins/manifest.js";
+import tokenPilotManifest from "../../src/core/plugins/token-pilot/plugin.json" with { type: "json" };
 
 const RUN = process.env.LOOM_E2E === "1";
 (RUN ? describe : describe.skip)("e2e: token-pilot", () => {
-  const m = JSON.parse(readFileSync(join(__dirname,"../../packages/loom-plugin-token-pilot/plugin.json"),"utf8"));
-  const recipe = (validateManifest(m) as any).manifest.install;
+  const recipe = (validateManifest(tokenPilotManifest) as any).manifest.install;
 
   it("dryRun install = 2 шага: marketplace add ПЕРЕД install, со scope=project", () => {
     const r = runRecipe(recipe.install, { scope: "project", dryRun: true }, defaultDeps());

@@ -12,26 +12,21 @@
   "publishConfig": {
     "access": "public"
   },
-  "workspaces": ["packages/*"],
   "bin": {
     "loom": "dist/cli.js"
   },
   "files": ["dist", "README.md"],
   "scripts": {
     "dev": "bun run src/cli.tsx",
-    "build:packages": "bun run --filter '@digital-threads/loom-contract' build && bun run --filter '@digital-threads/loom-plugin-*' build",
     "build:host": "tsc -p tsconfig.json",
-    "build": "bun run build:packages && bun run build:host",
+    "copy:manifests": "node scripts/copy-manifests.mjs",
+    "build": "tsc -p tsconfig.json && bun run copy:manifests",
     "start": "node dist/cli.js",
     "test": "vitest run",
-    "prepublishOnly": "bun run build:host"
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@digital-threads/aimux": "file:../aimux",
-    "@digital-threads/loom-contract": "workspace:*",
-    "@digital-threads/loom-plugin-aimux": "workspace:*",
-    "@digital-threads/loom-plugin-token-pilot": "workspace:*",
-    "@digital-threads/loom-plugin-task-journal": "workspace:*",
+    "@digital-threads/aimux": "^0.11.0",
     "ink": "^7.0.1",
     "react": "^19.2.5",
     "yaml": "^2.8.3"

@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { loomRegistry } from "../plugins/index.js";
 import { validateManifest } from "../plugins/manifest.js";
 import { CATALOG_ENTRIES } from "./catalog-data.js";
@@ -8,14 +5,21 @@ import type { CatalogEntry, ResolvedEntry, CatalogItem, CatalogStatus } from "./
 import type { InstallDeps } from "../install/types.js";
 import { detect, detectUpdate, compareVersions } from "../install/recipe.js";
 import { readInstalled } from "../install/registry-file.js";
+import aimuxManifest from "../plugins/aimux/plugin.json" with { type: "json" };
+import tokenPilotManifest from "../plugins/token-pilot/plugin.json" with { type: "json" };
+import taskJournalManifest from "../plugins/task-journal/plugin.json" with { type: "json" };
 
-// ESM-safe аналог __dirname: проект — "type":"module" (module: ESNext),
-// хост запускается как `node dist/cli.js`, где __dirname не определён.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PKGS = join(__dirname, "../../../packages");
+// Манифесты builtin-плагинов живут рядом с адаптерами и бандлятся в dist через
+// JSON-импорт (tsc инлайнит JSON в .js) — никакой зависимости от ФС в рантайме.
+const BUILTIN_MANIFESTS: Record<string, unknown> = {
+  aimux: aimuxManifest,
+  "token-pilot": tokenPilotManifest,
+  "task-journal": taskJournalManifest,
+};
 
 function manifestRecipe(id: string) {
-  const m = JSON.parse(readFileSync(join(PKGS, `loom-plugin-${id}`, "plugin.json"), "utf8"));
+  const m = BUILTIN_MANIFESTS[id];
+  if (!m) throw new Error(`нет манифеста у ${id}`);
   const v = validateManifest(m);
   if (!v.ok || !v.manifest.install) throw new Error(`нет install-рецепта у ${id}`);
   return v.manifest.install;
