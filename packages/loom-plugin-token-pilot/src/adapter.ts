@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SettingsSchema, LoomPlugin, ViewSpec } from "@digital-threads/loom-contract";
 
@@ -8,26 +8,98 @@ export interface TokenUsageRow {
   saved: number;
 }
 
-export function tokenUsageBySession(projectRoot: string): TokenUsageRow[] {
-  let raw: string;
-  try {
-    raw = readFileSync(join(projectRoot, ".token-pilot", "hook-events.jsonl"), "utf8");
-  } catch {
-    return [];
+// текущий hook-events.jsonl + ротированные архивы hook-events.<digits>.jsonl
+const ARCHIVE_RE = /^hook-events\.\d+\.jsonl$/;
+// тяжёлые каталоги, в которые рекурсивный обход не заходит
+const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "target"]);
+const MAX_DEPTH = 6;
+
+// рекурсивно собирает абсолютные пути всех hook-events*.jsonl во всех
+// каталогах .token-pilot ниже projectRoot (включая сам projectRoot/.token-pilot),
+// пропуская тяжёлые каталоги и ограничивая глубину. Defensive: ошибки I/O → skip.
+function collectHookEventFiles(projectRoot: string): string[] {
+  const files: string[] = [];
+
+  function walk(dir: string, depth: number): void {
+    if (depth > MAX_DEPTH) return;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (SKIP_DIRS.has(entry.name)) continue;
+      const full = join(dir, entry.name);
+      if (entry.name === ".token-pilot") {
+        addJsonlFiles(full);
+        continue;
+      }
+      walk(full, depth + 1);
+    }
   }
 
-  const bySession = new Map<string, TokenUsageRow>();
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let ev: { session_id?: unknown; estTokens?: unknown; savedTokens?: unknown };
+  function addJsonlFiles(tpDir: string): void {
+    let entries: import("node:fs").Dirent[];
     try {
-      ev = JSON.parse(trimmed);
+      entries = readdirSync(tpDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (entry.name === "hook-events.jsonl" || ARCHIVE_RE.test(entry.name)) {
+        files.push(join(tpDir, entry.name));
+      }
+    }
+  }
+
+  walk(projectRoot, 0);
+  return files;
+}
+
+interface RawHookEvent {
+  session_id?: unknown;
+  agent_type?: unknown;
+  estTokens?: unknown;
+  savedTokens?: unknown;
+  ts?: unknown;
+}
+
+// читает и построчно парсит все hook-events*.jsonl из всех .token-pilot
+// поддеревьев. Defensive: битые строки/файлы пропускаются. diagnostic-сессии
+// отфильтрованы здесь. Возвращает уже отфильтрованные сырые события.
+function readHookEvents(projectRoot: string): RawHookEvent[] {
+  const out: RawHookEvent[] = [];
+  for (const file of collectHookEventFiles(projectRoot)) {
+    let raw: string;
+    try {
+      raw = readFileSync(file, "utf8");
     } catch {
       continue;
     }
-    const sessionId = ev.session_id;
-    if (typeof sessionId !== "string" || sessionId === "diagnostic") continue;
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let ev: RawHookEvent;
+      try {
+        ev = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      const sessionId = ev.session_id;
+      if (typeof sessionId !== "string" || sessionId === "diagnostic") continue;
+      out.push(ev);
+    }
+  }
+  return out;
+}
+
+export function tokenUsageBySession(projectRoot: string): TokenUsageRow[] {
+  const bySession = new Map<string, TokenUsageRow>();
+  for (const ev of readHookEvents(projectRoot)) {
+    const sessionId = ev.session_id as string;
     const used = typeof ev.estTokens === "number" ? ev.estTokens : 0;
     const saved = typeof ev.savedTokens === "number" ? ev.savedTokens : 0;
     const row = bySession.get(sessionId) ?? { sessionId, used: 0, saved: 0 };
@@ -44,36 +116,22 @@ export interface TokenEvent {
   used: number;
   saved: number;
   ts: number;
+  agentType: string | null;
 }
 
 export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
-  let raw: string;
-  try {
-    raw = readFileSync(join(projectRoot, ".token-pilot", "hook-events.jsonl"), "utf8");
-  } catch {
-    return [];
-  }
-
   const events: TokenEvent[] = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let ev: { session_id?: unknown; estTokens?: unknown; savedTokens?: unknown; ts?: unknown };
-    try {
-      ev = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    const sessionId = ev.session_id;
-    if (typeof sessionId !== "string" || sessionId === "diagnostic") continue;
+  for (const ev of readHookEvents(projectRoot)) {
     const ts = ev.ts;
     if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+    const sessionId = ev.session_id as string;
     const used = typeof ev.estTokens === "number" ? ev.estTokens : 0;
     const saved = typeof ev.savedTokens === "number" ? ev.savedTokens : 0;
-    events.push({ sessionId, used, saved, ts });
+    const agentType = typeof ev.agent_type === "string" ? ev.agent_type : null;
+    events.push({ sessionId, used, saved, ts, agentType });
   }
 
-  return events;
+  return events.sort((a, b) => a.ts - b.ts);
 }
 
 export function settingsSchema(): SettingsSchema {

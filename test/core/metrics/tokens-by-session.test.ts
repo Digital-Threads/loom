@@ -30,7 +30,7 @@ const events: TjEvent[] = [
 ];
 
 function tk(sessionId: string, ts: number, used: number, saved: number): TokenEvent {
-  return { sessionId, used, saved, ts };
+  return { sessionId, used, saved, ts, agentType: null };
 }
 
 function sess(sessionId: string, profile: string): SessionRow {

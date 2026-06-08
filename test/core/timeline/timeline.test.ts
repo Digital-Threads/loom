@@ -12,7 +12,7 @@ function ws(partial: Partial<WorkspaceData>): WorkspaceData {
 
 describe("LP10 buildTimeline — нормализация слоёв", () => {
   it("token-pilot: TokenEvent.ts(ms) → entry {ts, source:'token-pilot', type:'tokens'}", () => {
-    const out = buildTimeline(ws({ tokenEvents: [{ sessionId: "sess-abcdef12", used: 100, saved: 40, ts: 2000 }] }));
+    const out = buildTimeline(ws({ tokenEvents: [{ sessionId: "sess-abcdef12", used: 100, saved: 40, ts: 2000, agentType: null }] }));
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ ts: 2000, source: "token-pilot", type: "tokens" });
     expect(out[0].text).toContain("100");
@@ -34,7 +34,7 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
   });
   it("merge + сортировка по ts убыв. (новые сверху) поверх трёх слоёв", () => {
     const out = buildTimeline(ws({
-      tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000 }],
+      tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000, agentType: null }],
       taskEvents: [{ event_id: "e", task_id: "t", type: "open", timestamp: new Date(1000).toISOString(), text: "старт" }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 2000 }],
     }));
@@ -50,7 +50,7 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
   });
   it("tsAccuracy: token-pilot/aimux → 'exact', task-journal живые → 'ingest'", () => {
     const out = buildTimeline(ws({
-      tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000 }],
+      tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000, agentType: null }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 2000 }],
       taskEvents: [{ event_id: "e", task_id: "t", type: "finding", timestamp: new Date(1000).toISOString(), text: "x" }],
     }));
@@ -60,19 +60,19 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
     expect(bySource["task-journal"]).toBe("ingest");
   });
   it("дефолтное окно: обрезает до DEFAULT_TIMELINE_LIMIT, новые сверху", () => {
-    const many = Array.from({ length: DEFAULT_TIMELINE_LIMIT + 50 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1 }));
+    const many = Array.from({ length: DEFAULT_TIMELINE_LIMIT + 50 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1, agentType: null }));
     const out = buildTimeline(ws({ tokenEvents: many }));
     expect(out).toHaveLength(DEFAULT_TIMELINE_LIMIT);
     expect(out[0].ts).toBe(DEFAULT_TIMELINE_LIMIT + 50);
   });
   it("opts.limit перекрывает дефолт; Infinity → без обрезки", () => {
-    const many = Array.from({ length: 10 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1 }));
+    const many = Array.from({ length: 10 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1, agentType: null }));
     expect(buildTimeline(ws({ tokenEvents: many }), { limit: 3 })).toHaveLength(3);
     expect(buildTimeline(ws({ tokenEvents: many }), { limit: Infinity })).toHaveLength(10);
   });
   it("стабильный tie-break при равном ts", () => {
     const mk = () => buildTimeline(ws({
-      tokenEvents: [{ sessionId: "s1", used: 0, saved: 0, ts: 5000 }],
+      tokenEvents: [{ sessionId: "s1", used: 0, saved: 0, ts: 5000, agentType: null }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 5000 }],
     }));
     const out = mk();
