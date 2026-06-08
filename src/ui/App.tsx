@@ -16,6 +16,7 @@ import { runMerge } from "../core/doctor/apply.js";
 import { checkPrerequisites } from "../core/doctor/prereqs.js";
 import type { ScopeDirs, PluginContribution } from "../core/doctor/types.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
+import { InputModeContext } from "./input/InputModeContext.js";
 
 // Плагинные вкладки, сгруппированные по слою (порядок LAYER_ORDER), а не по реестру (LP4).
 // Порядок слоёв: accounts → efficiency → memory → … (см. LAYER_ORDER в layers.ts).
@@ -66,6 +67,7 @@ export function App() {
   const { exit } = useApp();
   const [active, setActive] = useState(0);
   const [data, setData] = useState<WorkspaceData | null>(null);
+  const [capturing, setCapturing] = useState(false);
 
   useEffect(() => {
     loadWorkspaceData().then((d) => {
@@ -76,14 +78,23 @@ export function App() {
   }, []);
 
   useInput((input, key) => {
+    // В режиме свободного текст-ввода глобальные хоткеи молчат (иначе буквы/'q'
+    // уходят сюда вместо поля ввода).
+    if (capturing) return;
     if (input === "q") exit();
     if (key.rightArrow) setActive((a) => (a + 1) % TABS.length);
     if (key.leftArrow) setActive((a) => (a - 1 + TABS.length) % TABS.length);
+    // loom-sns: прямой выбор вкладки цифрами 1-9.
+    if (/^[1-9]$/.test(input)) {
+      const i = Number(input) - 1;
+      if (i < TABS.length) setActive(i);
+    }
   });
 
   const view = data === null ? null : tabView(active);
 
   return (
+    <InputModeContext.Provider value={{ capturing, setCapturing }}>
     <Box flexDirection="column">
       <Tabs tabs={TABS} active={active} />
       <Box marginTop={1} flexDirection="column">
@@ -118,8 +129,9 @@ export function App() {
         )}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>←/→ вкладки · q выход</Text>
+        <Text dimColor>←/→ или 1-9 вкладки · q выход</Text>
       </Box>
     </Box>
+    </InputModeContext.Provider>
   );
 }

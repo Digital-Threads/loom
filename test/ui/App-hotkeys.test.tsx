@@ -1,0 +1,72 @@
+import React from "react";
+import { render } from "ink-testing-library";
+import { describe, it, expect, vi } from "vitest";
+
+// Изолируем источник данных: на этой машине реальные плагины читают живые данные
+// (aimux ~/.aimux, token-pilot, task-journal), поэтому workspace никогда не пуст.
+// Мокаем loader → пустой workspace, чтобы детерминированно проверить пустой старт
+// (empty → активная вкладка Каталог) на любой машине.
+vi.mock("../../src/core/data/loader.js", () => {
+  const empty = {
+    subscriptions: [],
+    sessions: [],
+    health: [],
+    tokens: [],
+    tokenEvents: [],
+    taskEvents: [],
+    tasks: [],
+    errors: [],
+  };
+  return {
+    loadWorkspaceData: () => Promise.resolve(empty),
+    isWorkspaceEmpty: () => true,
+  };
+});
+
+// CatalogPanel в useEffect зовёт detectLatest(item, deps) по дефолтным deps, чей
+// run = execFileSync (СИНХРОННЫЙ спавн npm/claude/which, timeout 5000мс на вызов).
+// В юнит-тесте это: (а) лишний реальный I/O, (б) под параллельной нагрузкой сьюта
+// синхронные спавны затыкают event loop → таймер ожидания голодает → тест ловит
+// 5-сек таймаут vitest (это и был флейк ~1/6). Мокаем runner → мгновенный no-op
+// run, ноль спавнов. buildCatalog всё равно отдаёт элементы из loomRegistry
+// («Token Pilot» рендерится синхронно, независимо от detect).
+vi.mock("../../src/core/install/runner.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../src/core/install/runner.js")>();
+  const instant = () => ({ ok: false, stdout: "", stderr: "" });
+  return {
+    ...actual,
+    defaultRun: instant,
+    defaultDeps: () => ({ dataDir: "/tmp/loom-catalog-test", run: instant }),
+  };
+});
+
+import { App } from "../../src/ui/App.js";
+
+// Ink коммитит кадры на таймере, а активная вкладка приезжает async
+// (loadWorkspaceData → setActive(Каталог) → ре-рендер → коммит). Поэтому ждём
+// УСЛОВИЕ, а не фиксированное время: поллим lastFrame() пока не появится нужный
+// фрагмент, с запасом по таймауту. Это убирает зависимость от тайминга под нагрузкой.
+async function waitForFrame(
+  lastFrame: () => string | undefined,
+  needle: string,
+  timeoutMs = 4000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let frame = lastFrame() ?? "";
+  while (!frame.includes(needle) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 20));
+    frame = lastFrame() ?? "";
+  }
+  return frame;
+}
+
+describe("App: цифровые хоткеи вкладок", () => {
+  it("цифра 1 переключает на вкладку Обзор", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await waitForFrame(lastFrame, "Token Pilot"); // дождались каталога (пустой старт)
+    stdin.write("1");
+    const frame = await waitForFrame(lastFrame, "Добро пожаловать в Loom");
+    expect(frame).toContain("Добро пожаловать в Loom");
+    unmount();
+  });
+});
