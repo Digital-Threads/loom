@@ -108,7 +108,7 @@ describe("sectionTokenUsage", () => {
     const data = {
       ...emptyData(),
       tokens: [{ sessionId: "s", used: 100, saved: 20 }],
-      tokenEvents: [{ sessionId: "s", used: 100, saved: 20, ts: Date.parse("2026-06-01T10:30:00Z") }],
+      tokenEvents: [{ sessionId: "s", used: 100, saved: 20, ts: Date.parse("2026-06-01T10:30:00Z"), agentType: null }],
       taskEvents: [
         { event_id:"e1", task_id: "tj-1", type:"open", text:"", timestamp: "2026-06-01T10:00:00Z" },
         { event_id:"e2", task_id: "tj-1", type:"decision", text:"d", timestamp: "2026-06-01T11:00:00Z" },

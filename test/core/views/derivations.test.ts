@@ -85,7 +85,7 @@ describe("derivation wrappers call the real metric functions", () => {
       ev({ task_id: "tj-x", type: "close", timestamp: "2026-06-07T12:00:00.000Z" }),
     ];
     const tokenEvents = [
-      { sessionId: "s1", used: 100, saved: 10, ts: Date.parse("2026-06-07T11:00:00.000Z") },
+      { sessionId: "s1", used: 100, saved: 10, ts: Date.parse("2026-06-07T11:00:00.000Z"), agentType: null },
     ];
     const data = makeData({ taskEvents, tokenEvents });
     const viaDerivation = derivations.tokensForTask(data, "tj-x");
