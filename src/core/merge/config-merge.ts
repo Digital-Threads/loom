@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,29 @@ export function diffSettings(
 
 // ── File orchestrator ─────────────────────────────────────────────────────────
 
+// Single write/backup path shared by both merge entry points.
+// apply:false → no disk writes, applied:false, backupPath:null.
+// apply:true → mkdir parent, back up existing target (if any) to <target>.bak
+//   (or opts.backupPath), then write merged as 2-space JSON + trailing newline.
+function writeMerged(
+  targetPath: string,
+  merged: Record<string, unknown>,
+  opts: MergeOptions,
+): { applied: boolean; backupPath: string | null } {
+  if (!opts.apply) {
+    return { applied: false, backupPath: null };
+  }
+  let backupPath: string | null = null;
+  mkdirSync(dirname(targetPath), { recursive: true });
+  if (existsSync(targetPath)) {
+    const bak = opts.backupPath ?? `${targetPath}.bak`;
+    copyFileSync(targetPath, bak);
+    backupPath = bak;
+  }
+  writeFileSync(targetPath, JSON.stringify(merged, null, 2) + "\n", "utf8");
+  return { applied: true, backupPath };
+}
+
 function readJsonDefensive(path: string): Record<string, unknown> {
   try {
     if (!existsSync(path)) return {};
@@ -230,20 +254,61 @@ export function mergeConfigs(
 
   const diff = diffSettings(target, merged);
 
-  let backupPath: string | null = null;
-  if (opts.apply) {
-    const targetExists = existsSync(targetPath);
-    const bak = opts.backupPath ?? `${targetPath}.bak`;
-    if (targetExists) {
-      copyFileSync(targetPath, bak);
-      backupPath = bak;
-    }
-    writeFileSync(targetPath, JSON.stringify(merged, null, 2) + "\n", "utf8");
-  }
+  const { applied, backupPath } = writeMerged(targetPath, merged, opts);
 
   return {
     diff,
-    applied: opts.apply,
+    applied,
+    backupPath,
+    collisions: mcp.collisions,
+  };
+}
+
+// Object-input overload: same merge semantics as mergeConfigs but sources are
+// already-parsed objects (no disk reads of sources). sources[0] = current
+// (target content / foreign keys preserved); sources[1..] = expected
+// contributions. Shares the single writeMerged write/backup path.
+export function mergeConfigsFromObjects(
+  targetPath: string,
+  sources: Record<string, unknown>[],
+  opts: MergeOptions,
+): MergeRunResult {
+  const target = asRecord(sources[0]);
+  const rest = sources.slice(1).map((s) => asRecord(s));
+
+  const mcp = mergeMcpServers([
+    asRecord(target.mcpServers),
+    ...rest.map((s) => asRecord(s.mcpServers)),
+  ]);
+
+  const hooks = mergeHooks([
+    target.hooks as HooksConfig,
+    ...rest.map((s) => s.hooks as HooksConfig),
+  ]);
+
+  const statusLine = pickStatusline([
+    target.statusLine,
+    ...rest.map((s) => s.statusLine),
+  ]);
+
+  const merged: Record<string, unknown> = {
+    ...target,
+    mcpServers: mcp.merged,
+    hooks,
+  };
+  if (statusLine !== undefined) {
+    merged.statusLine = statusLine;
+  } else {
+    delete merged.statusLine;
+  }
+
+  const diff = diffSettings(target, merged);
+
+  const { applied, backupPath } = writeMerged(targetPath, merged, opts);
+
+  return {
+    diff,
+    applied,
     backupPath,
     collisions: mcp.collisions,
   };
