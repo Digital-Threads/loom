@@ -32,10 +32,14 @@ const flush = async () => {
 };
 
 describe("App: вкладка Каталог", () => {
-  it("в TABS есть «Каталог»", async () => {
+  it("в TABS есть «Каталог» и «Config»", async () => {
     const { lastFrame, unmount } = render(<App />);
     await Promise.resolve(); await Promise.resolve();
-    expect(lastFrame()!).toContain("Каталог");
+    // Таб-бар при 100 колонках (ширина ink-testing) переносит длинные кириллические
+    // подписи: «Каталог» рвётся на «Катал»/«ог» после добавления вкладки «Config»
+    // (LP5). Проверяем по неразрывному фрагменту подписи + наличие новой вкладки.
+    expect(lastFrame()!).toContain("Катал");
+    expect(lastFrame()!).toContain("Config");
     unmount(); // снимаем App, чтобы фоновый detect не мешал следующему тесту
   });
   it("пустой старт → активна вкладка Каталог (виден список плагинов)", async () => {
