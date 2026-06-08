@@ -1,5 +1,5 @@
 import type { PackInput } from "./pack-input.js";
-import { taskDetailFromEvents } from "@digital-threads/loom-plugin-task-journal";
+import { taskDetailFromEvents } from "../plugins/task-journal/adapter.js";
 import { tokensForTask } from "../metrics/tokens-per-task.js";
 import { tokenTotals } from "../views/derivations.js";
 

@@ -1,12 +1,12 @@
 // Манифест Loom-плагина (plugin.json в корне пакета) + структурный валидатор.
 // Решения зафиксированы в .docs/loom/plugin-manifest.md (Task 8.1). Это имплементация 8.2.
 //
-// Phase 9.1: тип LoomPluginManifest переехал в @digital-threads/loom-contract.
+// Phase 9.1: тип LoomPluginManifest переехал в contract.ts (контракт плагина).
 // LOOM_CONTRACT_VERSION и validateManifest — рантайм-логика хоста, остаются здесь.
-import type { LoomPluginManifest } from "@digital-threads/loom-contract";
+import type { LoomPluginManifest } from "./contract.js";
 
 // Re-export типа для обратной совместимости существующих импортёров manifest.ts.
-export type { LoomPluginManifest } from "@digital-threads/loom-contract";
+export type { LoomPluginManifest } from "./contract.js";
 
 // Версия контракта LoomPlugin, под который собран хост.
 // 8.3 будет сверять apiVersion манифеста с этой константой (semver). Тут НЕ используется.

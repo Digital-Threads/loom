@@ -1,4 +1,4 @@
-import type { InstallRecipe, RecipeStep, DetectSpec } from "@digital-threads/loom-contract";
+import type { InstallRecipe, RecipeStep, DetectSpec } from "../plugins/contract.js";
 import type { InstallDeps } from "./types.js";
 
 export type Scope = "user" | "project";

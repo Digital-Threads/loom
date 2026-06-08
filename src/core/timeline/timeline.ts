@@ -1,6 +1,6 @@
-import type { TokenEvent } from "@digital-threads/loom-plugin-token-pilot";
-import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
-import type { SessionRow } from "@digital-threads/loom-plugin-aimux";
+import type { TokenEvent } from "../plugins/token-pilot/adapter.js";
+import type { TjEvent } from "../plugins/task-journal/adapter.js";
+import type { SessionRow } from "../plugins/aimux/adapter.js";
 import type { WorkspaceData } from "../data/loader.js";
 
 export type TimelineSource = "token-pilot" | "task-journal" | "aimux";

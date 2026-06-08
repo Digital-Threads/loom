@@ -1,7 +1,7 @@
 // Типы пайплайна установки/удаления Loom-плагинов (Task 10.2).
 // Всё инъектируется (dataDir + CmdRunner), чтобы тесты не имели реальных сайд-эффектов.
-import type { InstallRecipe, LoomPluginManifest } from "@digital-threads/loom-contract";
-export type { InstallRecipe } from "@digital-threads/loom-contract";
+import type { InstallRecipe, LoomPluginManifest } from "../plugins/contract.js";
+export type { InstallRecipe } from "../plugins/contract.js";
 export type { RecipeCtx, DetectResult, Scope } from "./recipe.js";
 
 // Откуда берём плагин.

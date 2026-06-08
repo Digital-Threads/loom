@@ -1,5 +1,5 @@
 import type { InstallRecipe } from "../install/types.js";
-import type { LoomCategory } from "@digital-threads/loom-contract";
+import type { LoomCategory } from "../plugins/contract.js";
 
 export type CatalogStatus = "installed" | "not-installed" | "update-available";
 

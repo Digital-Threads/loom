@@ -1,6 +1,6 @@
-import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
-import type { TokenEvent } from "@digital-threads/loom-plugin-token-pilot";
-import type { SessionRow } from "@digital-threads/loom-plugin-aimux";
+import type { TjEvent } from "../plugins/task-journal/adapter.js";
+import type { TokenEvent } from "../plugins/token-pilot/adapter.js";
+import type { SessionRow } from "../plugins/aimux/adapter.js";
 
 export interface TaskTokens {
   used: number;

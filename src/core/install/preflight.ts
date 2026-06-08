@@ -1,4 +1,4 @@
-import type { InstallRecipe } from "@digital-threads/loom-contract";
+import type { InstallRecipe } from "../plugins/contract.js";
 import { checkPrerequisites } from "../doctor/prereqs.js";
 
 // step.cmd → пререк-инструменты. probe-утилиты (which/where/true) пререками НЕ считаются.

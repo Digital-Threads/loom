@@ -82,7 +82,7 @@ function describeSource(source: InstallSource): string {
 
 // Приводим claudePlugin.source (string | {source:"github";repo} | undefined) к строке.
 function normalizeClaudePlugin(
-  cp: NonNullable<import("@digital-threads/loom-contract").LoomPluginManifest["claudePlugin"]>,
+  cp: NonNullable<import("../plugins/contract.js").LoomPluginManifest["claudePlugin"]>,
 ): ClaudePluginRef {
   let source: string | undefined;
   if (typeof cp.source === "string") {
@@ -97,8 +97,8 @@ function normalizeClaudePlugin(
 // `claude plugin marketplace add -- <src>`, если source flag-shaped/невалидный
 // (argument-injection hardening — раньше делала прошитая claude-ветка finalize).
 function sanitizeSynthRecipe(
-  recipe: import("@digital-threads/loom-contract").InstallRecipe,
-): import("@digital-threads/loom-contract").InstallRecipe {
+  recipe: import("../plugins/contract.js").InstallRecipe,
+): import("../plugins/contract.js").InstallRecipe {
   const install = recipe.install.filter((step) => {
     const isMarketplaceAdd =
       step.cmd === "claude" &&

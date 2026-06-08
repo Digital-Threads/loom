@@ -1,6 +1,6 @@
-import type { TjEvent } from "@digital-threads/loom-plugin-task-journal";
-import type { SessionRow } from "@digital-threads/loom-plugin-aimux";
-import type { TokenUsageRow } from "@digital-threads/loom-plugin-token-pilot";
+import type { TjEvent } from "../plugins/task-journal/adapter.js";
+import type { SessionRow } from "../plugins/aimux/adapter.js";
+import type { TokenUsageRow } from "../plugins/token-pilot/adapter.js";
 
 export interface RelatedSession {
   sessionId: string;

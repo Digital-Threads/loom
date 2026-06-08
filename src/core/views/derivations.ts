@@ -1,5 +1,5 @@
 import type { WorkspaceData } from "../data/loader.js";
-import { tokenMetricsFromEvents } from "@digital-threads/loom-plugin-task-journal";
+import { tokenMetricsFromEvents } from "../plugins/task-journal/adapter.js";
 import { tokensForTask, tokensBySessionForTask, tasksWithTokens } from "../metrics/tokens-per-task.js";
 import { relatedSessions } from "../metrics/related-sessions.js";
 import { layerSummary } from "../dashboard/layers.js";
