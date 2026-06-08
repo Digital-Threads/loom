@@ -7,10 +7,13 @@ import { setEnabled } from "../../core/install/registry-file.js";
 import { loomRegistry } from "../../core/plugins/index.js";
 import type { InstallDeps } from "../../core/install/types.js";
 import type { CatalogItem } from "../../core/catalog/types.js";
+import { TextInput } from "../input/TextInput.js";
+import { parseSource } from "../../cli/plugin-cli.js";
+import { installPlugin } from "../../core/install/install.js";
 
 const MARK = { installed: "✓", "not-installed": "○", "update-available": "↻" } as const;
 
-type Mode = "list" | "confirmInstall" | "confirmRemove";
+type Mode = "list" | "confirmInstall" | "confirmRemove" | "search" | "addSource";
 
 // Порядок слоёв = порядок ключей реестра (порядок регистрации, LP1).
 // Явный потребитель groupByCategory(), чтобы метод LP1 не был мёртвым кодом.
@@ -33,6 +36,15 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
   const [mode, setMode] = useState<Mode>("list");
   const [status, setStatus] = useState("");
   const [checking, setChecking] = useState(true);
+  const [query, setQuery] = useState("");
+
+  const visible = query
+    ? items.filter((it) =>
+        [it.title, it.case, it.category].some((s) =>
+          s.toLowerCase().includes(query.toLowerCase()),
+        ),
+      )
+    : items;
 
   const reload = () => {
     const next = orderByLayer(buildCatalog(deps));
@@ -62,7 +74,8 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
   }, [checking]);
 
   useInput((ch, key) => {
-    const item = items[cursor];
+    if (mode === "search" || mode === "addSource") return;
+    const item = visible[cursor];
     if (!item) return;
 
     if (mode === "confirmInstall") {
@@ -101,7 +114,7 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
       return;
     }
     if (key.downArrow) {
-      setCursor((c) => Math.min(items.length - 1, c + 1));
+      setCursor((c) => Math.min(visible.length - 1, c + 1));
       return;
     }
     if (key.return || ch === "i") {
@@ -123,13 +136,22 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
       }
       return;
     }
+    if (ch === "/") {
+      setMode("search");
+      return;
+    }
+    if (ch === "a") {
+      setStatus("");
+      setMode("addSource");
+      return;
+    }
   });
 
-  const current = items[cursor];
+  const current = visible[cursor];
 
   return (
     <Box flexDirection="column">
-      {items.map((it, i) => {
+      {visible.map((it, i) => {
         const loading = checking && it.status !== "not-installed" && !it.latestVersion;
         const tail =
           it.status === "update-available"
@@ -138,7 +160,7 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
               ? "  ↻… проверка обновлений"
               : "";
         // Заголовок слоя — отдельной строкой перед сменой category (визуальная секция).
-        const isFirstOfLayer = i === 0 || items[i - 1].category !== it.category;
+        const isFirstOfLayer = i === 0 || visible[i - 1].category !== it.category;
         return (
           <React.Fragment key={it.id}>
             {isFirstOfLayer ? (
@@ -153,6 +175,48 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
           </React.Fragment>
         );
       })}
+
+      {mode === "search" ? (
+        <Box marginTop={1}>
+          <Text>/ </Text>
+          <TextInput
+            initial={query}
+            placeholder="поиск по каталогу…"
+            onChange={(v) => {
+              setQuery(v);
+              setCursor(0);
+            }}
+            onSubmit={() => setMode("list")}
+            onCancel={() => {
+              setQuery("");
+              setCursor(0);
+              setMode("list");
+            }}
+          />
+        </Box>
+      ) : null}
+      {mode === "addSource" ? (
+        <Box marginTop={1}>
+          <Text>source: </Text>
+          <TextInput
+            placeholder="npm-имя / github:owner/repo / путь"
+            onSubmit={(src) => {
+              const s = src.trim();
+              if (s) {
+                const res = installPlugin(parseSource(s), deps);
+                setStatus(
+                  res.ok
+                    ? `✓ установлен ${res.plan?.name ?? s}`
+                    : `Ошибка: ${res.error ?? "не удалось"}`,
+                );
+                reload();
+              }
+              setMode("list");
+            }}
+            onCancel={() => setMode("list")}
+          />
+        </Box>
+      ) : null}
 
       {mode === "confirmInstall" && current ? (
         <Box marginTop={1}>
@@ -177,7 +241,7 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
         <Text dimColor>✓ установлен · ○ нет · ↻ обновление</Text>
       </Box>
       <Box>
-        <Text dimColor>↑/↓ выбор · Enter — установить · u обновить · d удалить · e вкл/выкл</Text>
+        <Text dimColor>↑/↓ выбор · Enter — установить · u обновить · d удалить · e вкл/выкл · / поиск · a source</Text>
       </Box>
     </Box>
   );

@@ -10,11 +10,13 @@ export function TextInput({
   placeholder = "",
   onSubmit,
   onCancel,
+  onChange,
 }: {
   initial?: string;
   placeholder?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  onChange?: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
   const { setCapturing } = useContext(InputModeContext);
@@ -34,12 +36,20 @@ export function TextInput({
       return;
     }
     if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
+      setValue((v) => {
+        const next = v.slice(0, -1);
+        onChange?.(next);
+        return next;
+      });
       return;
     }
     // Печатные символы. Игнорируем управляющие комбинации.
     if (input && !key.ctrl && !key.meta) {
-      setValue((v) => v + input);
+      setValue((v) => {
+        const next = v + input;
+        onChange?.(next);
+        return next;
+      });
     }
   });
 
