@@ -1,6 +1,6 @@
 {
   "name": "@digital-threads/loom",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Loom — a TUI host that unifies aimux, Token Pilot and Task Journal behind a single plugin-based interface.",
   "license": "MIT",

@@ -1,111 +1,82 @@
 # Loom
 
-One terminal screen for three tools that normally live apart: your AI-CLI profiles and sessions (`aimux`), token usage (`token-pilot`), and a task journal with the reasoning behind each decision (`task-journal`). Loom doesn't replace them — it connects to each through its public interface and shows everything side by side, in tabs.
+One terminal screen for the AI-development tools that normally live apart. Loom is a local control center: install plugins from a single catalog, see every layer on one dashboard, and manage them in place. Each plugin is self-contained and works without Loom — the dependency is one-way: Loom reads and orchestrates the plugins, the plugins know nothing about Loom.
 
-Version `0.0.1` — a working MVP. It's past read-only now: Loom can change settings, run actions, and merge Claude Code config files, not just display data.
+Today Loom ships with three layers: **aimux** (AI-CLI accounts and sessions), **Token Pilot** (token savings on code reading), and **Task Journal** (the reasoning behind your work — hypotheses, decisions, findings). The platform is built to grow: new layers slot in as new adapters.
 
-## Why
-
-If you run several AI CLIs through `aimux`, track tokens with `token-pilot`, and keep tasks in `task-journal`, that used to mean three separate commands and three different output formats. Loom pulls them into a single panel: at a glance you see which subscriptions are active, how many sessions there are, where the tokens went, and what's happening across your tasks.
-
-Each source is wired in as its own adapter. If a tool isn't installed, its tab is simply empty — the rest keep working.
-
-## What it shows
-
-Six tabs, switch with `←` / `→`, quit with `q`:
-
-- **Overview** — a summary across all plugins at once.
-- **Subscriptions** — your `aimux` profiles (which CLI, which model, which source).
-- **Sessions** — profile sessions, when they were last used, how many tokens they spent.
-- **Tasks** — tasks from `task-journal`: open a task (`Enter`) to see its decisions, findings, and rejected options. From here you can close a task (`c`) or write a token metric into it (`t`) — both ask for confirmation first.
-- **Tokens** — usage per session (spent / saved).
-- **Settings** — edit plugin settings. Right now `token-pilot` is configurable (hook mode, thresholds, and so on): `↑` / `↓` to pick a field, `Enter` to toggle or enter a value.
-
-## Install and run
-
-From source (works today):
-
-```bash
-bun install
-bun run build
-bun run start      # or: node dist/cli.js
-```
-
-For development, without a build step:
-
-```bash
-bun run dev
-```
-
-As a global `loom` command — once the dependencies are published to npm (`@digital-threads/aimux` is currently a local `file:` dependency; the exact publish order is in [`.docs/loom/publishing.md`](../.docs/loom/publishing.md)):
+## Install
 
 ```bash
 npm install -g @digital-threads/loom
 loom
-loom plugin add @digital-threads/loom-plugin-aimux   # add plugins from npm
 ```
 
-The repo is a Bun workspace. The host lives at the root; the shared types contract and the three bundled plugins live under `packages/`:
+`loom` with no arguments starts the TUI. Move between tabs with `←` / `→`, quit with `q`. On a clean start the **Catalog** tab is active so you can install plugins right away.
 
-- `@digital-threads/loom-contract` — types-only plugin contract.
-- `@digital-threads/loom-plugin-aimux`, `@digital-threads/loom-plugin-token-pilot`, `@digital-threads/loom-plugin-task-journal` — the bundled adapters.
+From source (development) — clone the repo, then:
 
-## What you need for the full picture
+```bash
+bun install
+bun run build
+bun run start
+```
 
-Loom reads data wherever each tool already stores it. None of this is required — without any one of them Loom still starts, the matching tab is just empty.
+## What it shows
 
-- **aimux** — its profile config (the Subscriptions and Sessions tabs). Loom uses the public `@digital-threads/aimux/core` module.
-- **token-pilot** — the `.token-pilot/hook-events.jsonl` file in your project root (the Tokens tab) and `.token-pilot.json` for settings.
-- **task-journal** — the `task-journal` binary on your `PATH` (the Tasks tab); data comes from `task-journal export`.
+- **Overview** — a summary across every active layer.
+- **Catalog** — install / remove / update plugins from one place.
+- **Tasks & Tokens** — how many tokens a given task cost. Where Loom can tie spend to a task exactly (by a shared session id) it marks it `exact`; where it can only estimate by time, `≈ estimate`.
+- **Timeline** — a unified chronology of events across all layers.
+- **Config** — `loom config doctor` surfaced in the UI: what's installed, whether external tools are present, config conflicts.
+- **Settings** — edit plugin settings (e.g. Token Pilot hook mode and thresholds).
+- **Plugins** — manage installed plugins.
 
-Loom works in the context of the current directory (`cwd`) — run it from the root of the project whose data you want to see.
+Each installed tool (aimux / Token Pilot / Task Journal) also contributes its own tab. If a tool isn't installed, its tab is simply empty and the rest keep working.
 
-## How Loom writes data
+## Command line
 
-A core principle: Loom never touches a plugin's private files. Every write goes through the tool's public interface only:
+```bash
+loom                                  # start the TUI
+loom plugin list                      # what's installed
+loom plugin add <source> --yes        # install (npm package, git ref, or local path)
+loom plugin remove <name>             # remove
+loom plugin detect <name>             # check for an available update
+loom pack [--out <file>] [--copy]     # compact workspace context for a fresh AI session
+loom config doctor                    # check installs, external tools, config conflicts
+loom config merge                     # merge Claude Code config files
+```
 
-- `token-pilot` settings — into its own public `.token-pilot.json`;
-- task actions — through the `task-journal` CLI (`close`, `event`, `create`);
-- adding a subscription — through the public `aimux/core` API.
+`loom plugin add` without `--yes` only prints the install plan (what gets copied, which permissions) and changes nothing. `--scope user|project` chooses where to install.
 
-Irreversible actions (closing a task, writing a metric) always ask for confirmation.
+## Workspace pack
 
-## Architecture: the plugin contract
+`loom pack` builds a compact summary of the whole workspace — the state of every layer — to hand to a new AI session so it doesn't start from zero. Print it, write it to a file (`--out`), or copy it to the clipboard (`--copy`).
 
-Under the hood everything rests on a single contract — `LoomPlugin`. Each tool plugs in through an adapter that implements this contract, and a registry (`loomRegistry`) ties them together. The host talks to plugins only through the contract, without knowing where a given plugin gets its data — an npm module, a file, or a CLI.
+## How it works
+
+Everything rests on one contract — `LoomPlugin`. Each tool plugs in through an adapter that implements it; a registry ties them together. The host talks to plugins only through the contract and never touches a plugin's private files — every write goes through the tool's public interface, and irreversible actions ask for confirmation first.
 
 ```ts
-interface LoomPlugin<TData> {
+interface LoomPlugin {
   id: string;
   title: string;
-  tabs: PluginTab[];                                  // tabs this plugin contributes
-  load(ctx: LoomContext): TData | Promise<TData>;     // where the data comes from — hidden inside
-  settings?: PluginSettings;                          // settings schema + read/write
-  actions?: PluginAction[];                           // actions (irreversible ones flagged)
+  category: LoomCategory;                          // accounts | efficiency | memory | ...
+  tabs: PluginTab[];
+  load(ctx: LoomContext): Data | Promise<Data>;    // where the data comes from — hidden inside
+  settings?: PluginSettings;
+  actions?: PluginAction[];
 }
 ```
 
-The three plugins map onto it like this:
+The three bundled adapters live in `src/core/plugins/{aimux,token-pilot,task-journal}/` and ship inside `dist/`. aimux is pulled from the registry as a normal dependency; Token Pilot and Task Journal are read where they already store their data, in the context of the current directory.
 
-| Plugin | Data (`load`) | Settings | Actions |
-|--------|---------------|----------|---------|
-| `aimux` | subscriptions, sessions, profile health | — | add subscription |
-| `token-pilot` | token usage | 6 fields (hook mode, etc.) | — |
-| `task-journal` | tasks and their events | — | open / close / write metric |
-
-### Adding your own plugin
-
-1. Write an adapter in `src/core/plugins/<name>/adapter.ts` — thin wrappers over your tool's public API or CLI — and export a `plugin: LoomPlugin` object from it.
-2. Add it to `createRegistry([...])` in `src/core/plugins/index.ts`. Data and settings are picked up automatically after that.
-3. If the plugin returns new data fields, add them to the `WorkspaceData` type (`src/core/data/loader.ts`).
-4. Draw the tab: a React component in `src/ui/panels/`, an entry in the tab list in `App.tsx`, and the branch that renders it.
-
-Data, settings, and actions plug in declaratively through the contract — only the tab rendering itself is wired by hand.
+The one-way rule is the core invariant: plugins have zero dependency on Loom and keep working standalone. Loom is just one consumer of their public interfaces. Exact task↔token correlation works by a shared Claude Code session id that the plugins already emit — Loom joins on it, it does not push any identifier into the tools.
 
 ## Stack
 
-TypeScript, [Ink](https://github.com/vadimdemedes/ink) (React in the terminal), Bun for build and run, Vitest for tests.
+TypeScript, [Ink](https://github.com/vadimdemedes/ink) 7 (React in the terminal), Bun for build and run, Vitest for tests. Node ≥ 22.
 
 ```bash
-bun test    # or: bunx vitest run
+bun run build      # tsc + copy plugin manifests into dist/
+bunx vitest run    # tests
 ```
