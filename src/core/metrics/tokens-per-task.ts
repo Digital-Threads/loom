@@ -102,6 +102,39 @@ export function tokensBySessionForTask(
   return rows;
 }
 
+/**
+ * Сессии задачи: множество meta.session_id по всем событиям задачи. Чистая.
+ */
+export function sessionsForTask(allEvents: TjEvent[], taskId: string): Set<string> {
+  const out = new Set<string>();
+  for (const e of allEvents) {
+    if (e.task_id !== taskId) continue;
+    const sid = (e.meta as { session_id?: unknown } | undefined)?.session_id;
+    if (typeof sid === "string" && sid) out.add(sid);
+  }
+  return out;
+}
+
+/**
+ * Точная атрибуция (exact): токены, чей sessionId ∈ сессии задачи. Сабагенты той же
+ * сессии включены (работают на ту же задачу). Несколько сессий — суммируются. Чистая.
+ */
+export function tokensForTaskBySession(
+  allEvents: TjEvent[],
+  taskId: string,
+  tokenEvents: TokenEvent[],
+): TaskTokens {
+  const sessions = sessionsForTask(allEvents, taskId);
+  let used = 0;
+  let saved = 0;
+  for (const t of tokenEvents) {
+    if (!sessions.has(t.sessionId)) continue;
+    used += t.used;
+    saved += t.saved;
+  }
+  return { used, saved };
+}
+
 export interface TaskWithTokens {
   id: string;
   title: string;
