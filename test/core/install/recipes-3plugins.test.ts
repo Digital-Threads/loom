@@ -21,13 +21,13 @@ function fake() {
 }
 const deps = (run: any) => ({ dataDir: "/tmp", run });
 
-it("aimux: install = npm -g, scope не нужен", () => {
+it("aimux: install = npm -g, no scope needed", () => {
   const { run, calls } = fake();
   expect(runRecipe(recipe("aimux").install, { scope: "user" }, deps(run)).ok).toBe(true);
   expect(calls).toContainEqual(["npm","install","-g","@digital-threads/aimux"]);
 });
 
-it("token-pilot: install = marketplace add + claude install со scope", () => {
+it("token-pilot: install = marketplace add + claude install with scope", () => {
   const { run, calls } = fake();
   runRecipe(recipe("token-pilot").install, { scope: "project" }, deps(run));
   expect(calls).toContainEqual(["claude","plugin","install","--scope","project","token-pilot@token-pilot"]);
@@ -40,12 +40,12 @@ it("task-journal: install = cargo + claude install", () => {
   expect(calls).toContainEqual(["claude","plugin","install","--scope","user","task-journal@task-journal"]);
 });
 
-it("detect возвращает installed=true когда probe.ok", () => {
+it("detect returns installed=true when probe.ok", () => {
   const run = () => ({ ok: true, stdout: "@digital-threads/aimux@1.2.3", stderr: "" });
   expect(detect(recipe("aimux").detect, deps(run)).installed).toBe(true);
 });
 
-it("remove гоняет команды снятия", () => {
+it("remove runs the uninstall commands", () => {
   for (const name of ["aimux","token-pilot","task-journal"]) {
     const { run, calls } = fake();
     runRecipe(recipe(name).remove, { scope: "user" }, deps(run));

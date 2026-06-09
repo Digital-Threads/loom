@@ -18,7 +18,7 @@ function mk(): { homeDir: string; projectDir: string } {
 }
 
 describe("runMerge", () => {
-  it("dry-run: не пишет target, возвращает diff", () => {
+  it("dry-run: does not write the target, returns a diff", () => {
     const d = mk();
     const userSettings = join(d.homeDir, ".claude", "settings.json");
     mkdirSync(join(d.homeDir, ".claude"), { recursive: true });
@@ -30,7 +30,7 @@ describe("runMerge", () => {
     expect(readFileSync(userSettings, "utf8")).toBe(before);
     expect(r.diff.addedMcp.length).toBeGreaterThan(0);
   });
-  it("apply: пишет scope-файл, делает backup, сохраняет foreign keys", () => {
+  it("apply: writes the scope file, makes a backup, preserves foreign keys", () => {
     const d = mk();
     const userSettings = join(d.homeDir, ".claude", "settings.json");
     mkdirSync(join(d.homeDir, ".claude"), { recursive: true });
@@ -42,7 +42,7 @@ describe("runMerge", () => {
     expect(written.foreignKey).toBe(1);
     expect(written.mcpServers["token-pilot"]).toBeDefined();
   });
-  it("apply: создаёт <proj>/.claude если нет (project scope)", () => {
+  it("apply: creates <proj>/.claude if missing (project scope)", () => {
     const d = mk();
     const r = runMerge({ scope: "project", contributions, dirs: d, apply: true });
     expect(r.applied).toBe(true);

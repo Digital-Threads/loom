@@ -10,34 +10,34 @@ import type {
   SettingField,
 } from "../../../src/core/plugins/types.js";
 
-describe("view-схема (Task 7.2): типы ViewSpec типизируются и поля доступны", () => {
-  it("SummaryView литерал типизируется", () => {
+describe("view schema (Task 7.2): ViewSpec types type-check and fields are accessible", () => {
+  it("SummaryView literal type-checks", () => {
     const x: ViewSpec = {
       kind: "summary",
       lines: [
-        { label: "Подписки", value: "subscriptions.length" },
-        { label: "Сессии", value: { fn: "count", args: ["sessions"] }, color: "green", when: "ready" },
+        { label: "Subscriptions", value: "subscriptions.length" },
+        { label: "Sessions", value: { fn: "count", args: ["sessions"] }, color: "green", when: "ready" },
       ],
     } satisfies SummaryView;
 
     expect(x.kind).toBe("summary");
     const s = x as SummaryView;
     expect(s.lines.length).toBe(2);
-    expect(s.lines[0].label).toBe("Подписки");
+    expect(s.lines[0].label).toBe("Subscriptions");
     expect(s.lines[1].color).toBe("green");
   });
 
-  it("TableView литерал с onSelect + actions + marker типизируется", () => {
+  it("TableView literal with onSelect + actions + marker type-checks", () => {
     const x: ViewSpec = {
       kind: "table",
       source: "tasks",
       rowKey: "id",
       columns: [
         { value: "status", marker: { when: "done", truthy: "✓", falsy: "○" } },
-        { header: "Заголовок", value: "title", width: 40, align: "left" },
+        { header: "Title", value: "title", width: 40, align: "left" },
         { header: "ID", value: "id", align: "right" },
       ],
-      empty: "нет задач",
+      empty: "no tasks",
       selectable: true,
       onSelect: { openView: "taskDetail", passId: "id" },
       actions: [{ key: "c", actionId: "closeTask", args: { taskId: "id" }, label: "close" }],
@@ -55,16 +55,16 @@ describe("view-схема (Task 7.2): типы ViewSpec типизируются
     expect(t.actions?.[0].actionId).toBe("closeTask");
   });
 
-  it("DetailView литерал с sections + scalars + actions (items как {fn}) типизируется", () => {
+  it("DetailView literal with sections + scalars + actions (items as {fn}) type-checks", () => {
     const x: ViewSpec = {
       kind: "detail",
       idParam: "taskId",
       title: { fn: "taskTitle", args: ["taskId"] },
       sections: [
-        { label: "Решения", items: { fn: "taskDetailFromEvents", args: ["taskId"] }, itemText: "text", empty: "—" },
-        { label: "Находки", items: "findings", itemText: "text" },
+        { label: "Decisions", items: { fn: "taskDetailFromEvents", args: ["taskId"] }, itemText: "text", empty: "—" },
+        { label: "Findings", items: "findings", itemText: "text" },
       ],
-      scalars: [{ label: "Токены задачи", value: { fn: "tokensForTask", args: ["taskId"] } }],
+      scalars: [{ label: "Task tokens", value: { fn: "tokensForTask", args: ["taskId"] } }],
       actions: [
         { key: "c", actionId: "closeTask", args: { taskId: "taskId" } },
         { key: "t", actionId: "writeTokenMetric", args: { taskId: "taskId", tokens: { fn: "tokensForTask", args: ["taskId"] } } },
@@ -76,19 +76,19 @@ describe("view-схема (Task 7.2): типы ViewSpec типизируются
     expect(d.idParam).toBe("taskId");
     expect(d.sections.length).toBe(2);
     expect(d.sections[0].itemText).toBe("text");
-    expect(d.scalars?.[0].label).toBe("Токены задачи");
+    expect(d.scalars?.[0].label).toBe("Task tokens");
     expect(d.actions?.[0].key).toBe("c");
     expect(d.actions?.[1].key).toBe("t");
   });
 
-  it("FormView литерал типизируется", () => {
+  it("FormView literal type-checks", () => {
     const x: ViewSpec = { kind: "form", source: "registry-settings" } satisfies FormView;
     expect(x.kind).toBe("form");
     const f = x as FormView;
     expect(f.source).toBe("registry-settings");
   });
 
-  it("Bind escape-hatch {fn,args} типизируется", () => {
+  it("Bind escape-hatch {fn,args} type-checks", () => {
     const b: Bind = { fn: "tokensForTask", args: ["taskId"] };
     expect(typeof b).toBe("object");
     const fnBind = b as { fn: string; args?: unknown[] };
@@ -99,7 +99,7 @@ describe("view-схема (Task 7.2): типы ViewSpec типизируются
     expect(plain).toBe("subscriptions.length");
   });
 
-  it("LoomPlugin с views: {tasks: tableSpec} типизируется", () => {
+  it("LoomPlugin with views: {tasks: tableSpec} type-checks", () => {
     const tableSpec: TableView = {
       kind: "table",
       source: "tasks",
@@ -119,9 +119,9 @@ describe("view-схема (Task 7.2): типы ViewSpec типизируются
     expect((plugin.views?.tasks as TableView).kind).toBe("table");
   });
 
-  it("LoomPlugin с views как массивом ViewSpec[] (составная вкладка) типизируется", () => {
+  it("LoomPlugin with views as a ViewSpec[] array (composite tab) type-checks", () => {
     const views: ViewSpec[] = [
-      { kind: "summary", lines: [{ label: "Итого", value: { fn: "tokenTotals" } }] },
+      { kind: "summary", lines: [{ label: "Total", value: { fn: "tokenTotals" } }] },
       { kind: "table", source: "tokens", rowKey: "sessionId", columns: [{ value: "used" }] },
     ];
 
@@ -137,7 +137,7 @@ describe("view-схема (Task 7.2): типы ViewSpec типизируются
     expect((plugin.views?.tokens as ViewSpec[]).length).toBe(2);
   });
 
-  it("SettingField с readonly:true типизируется", () => {
+  it("SettingField with readonly:true type-checks", () => {
     const field: SettingField = {
       key: "config.path",
       label: "Config path",

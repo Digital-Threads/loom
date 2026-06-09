@@ -15,7 +15,7 @@ const failRun = () => () => ({ ok: false, stdout: "", stderr: "" });
 const spec = (versionRegex?: string) => ({ probe: { cmd: "which", args: ["x"] }, versionRegex });
 
 describe("catalog-data", () => {
-  it("статичная запись = только id/title/case (category/recipe НЕ дублируются)", () => {
+  it("static entry = only id/title/case (category/recipe are NOT duplicated)", () => {
     const ids = CATALOG_ENTRIES.map((e) => e.id).sort();
     expect(ids).toEqual(["aimux", "task-journal", "token-pilot"]);
     for (const e of CATALOG_ENTRIES) {
@@ -24,14 +24,14 @@ describe("catalog-data", () => {
       expect("recipe" in e).toBe(false);
     }
   });
-  it("resolveEntries подмешивает category (реестр LP1) + recipe (манифест LP2)", () => {
+  it("resolveEntries mixes in category (LP1 registry) + recipe (LP2 manifest)", () => {
     const resolved = resolveEntries();
     for (const e of resolved) {
       expect(e.category).toBeTruthy();
       expect(e.recipe).toBeDefined();
     }
   });
-  it("категории соответствуют слоям vision §5 (через реестр, не хардкод)", () => {
+  it("categories match the layers of vision §5 (via the registry, not hardcoded)", () => {
     const byId = Object.fromEntries(resolveEntries().map((e) => [e.id, e.category]));
     expect(byId["aimux"]).toBe("accounts");
     expect(byId["token-pilot"]).toBe("efficiency");
@@ -40,13 +40,13 @@ describe("catalog-data", () => {
 });
 
 describe("buildCatalog", () => {
-  it("○ not-installed: probe.ok=false и нет в реестре", () => {
+  it("○ not-installed: probe.ok=false and not in the registry", () => {
     const entries = [{ id:"x", title:"X", case:"c", category:"memory",
       recipe: { install:[], remove:[], detect: spec() } }];
     const items = buildCatalog(depsWith(tmpEmpty, failRun()), entries as any);
     expect(items[0].status).toBe("not-installed");
   });
-  it("✓ installed: probe.ok=true, версия из stdout", () => {
+  it("✓ installed: probe.ok=true, version from stdout", () => {
     const entries = [{ id:"x", title:"X", case:"c", category:"memory",
       recipe:{ install:[], remove:[], detect: spec("x@([0-9.]+)") } }];
     const items = buildCatalog(depsWith(tmpEmpty, okRun("x@1.0.0")), entries as any);
@@ -64,11 +64,11 @@ describe("applyLatest", () => {
     expect(up.status).toBe("update-available");
     expect(up.latestVersion).toBe("1.2.0");
   });
-  it("latest === version → остаётся installed", () => {
+  it("latest === version → stays installed", () => {
     const item = { status:"installed" as const, installedVersion:"1.2.0" } as any;
     expect(applyLatest(item, "1.2.0").status).toBe("installed");
   });
-  it("not-installed игнорирует latest", () => {
+  it("not-installed ignores latest", () => {
     expect(applyLatest({ status:"not-installed" as const } as any, "9.9.9").status).toBe("not-installed");
   });
 });

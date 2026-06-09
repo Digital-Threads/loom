@@ -10,7 +10,7 @@ function ws(partial: Partial<WorkspaceData>): WorkspaceData {
   } as WorkspaceData;
 }
 
-describe("LP10 buildTimeline — нормализация слоёв", () => {
+describe("LP10 buildTimeline — layer normalization", () => {
   it("token-pilot: TokenEvent.ts(ms) → entry {ts, source:'token-pilot', type:'tokens'}", () => {
     const out = buildTimeline(ws({ tokenEvents: [{ sessionId: "sess-abcdef12", used: 100, saved: 40, ts: 2000, agentType: null }] }));
     expect(out).toHaveLength(1);
@@ -18,13 +18,13 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
     expect(out[0].text).toContain("100");
     expect(out[0].text).toContain("40");
   });
-  it("task-journal: TjEvent.timestamp(RFC3339) → entry с ts=Date.parse, source:'task-journal'", () => {
-    const out = buildTimeline(ws({ taskEvents: [{ event_id: "e1", task_id: "tj-1", type: "finding", timestamp: "2026-06-06T00:00:01.000Z", text: "нашёл баг" }] }));
+  it("task-journal: TjEvent.timestamp(RFC3339) → entry with ts=Date.parse, source:'task-journal'", () => {
+    const out = buildTimeline(ws({ taskEvents: [{ event_id: "e1", task_id: "tj-1", type: "finding", timestamp: "2026-06-06T00:00:01.000Z", text: "found a bug" }] }));
     expect(out).toHaveLength(1);
     expect(out[0].ts).toBe(Date.parse("2026-06-06T00:00:01.000Z"));
     expect(out[0].source).toBe("task-journal");
     expect(out[0].type).toBe("finding");
-    expect(out[0].text).toContain("нашёл баг");
+    expect(out[0].text).toContain("found a bug");
   });
   it("aimux: SessionRow.lastUsedAtMs → entry {source:'aimux', type:'session'}", () => {
     const out = buildTimeline(ws({ sessions: [{ sessionId: "sess-aimux01", profile: "work", lastUsedAtMs: 1500 }] }));
@@ -32,23 +32,23 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
     expect(out[0]).toMatchObject({ ts: 1500, source: "aimux", type: "session" });
     expect(out[0].text).toContain("work");
   });
-  it("merge + сортировка по ts убыв. (новые сверху) поверх трёх слоёв", () => {
+  it("merge + sort by ts desc (newest first) across three layers", () => {
     const out = buildTimeline(ws({
       tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000, agentType: null }],
-      taskEvents: [{ event_id: "e", task_id: "t", type: "open", timestamp: new Date(1000).toISOString(), text: "старт" }],
+      taskEvents: [{ event_id: "e", task_id: "t", type: "open", timestamp: new Date(1000).toISOString(), text: "start" }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 2000 }],
     }));
     expect(out.map((e) => e.ts)).toEqual([3000, 2000, 1000]);
     expect(out.map((e) => e.source)).toEqual(["token-pilot", "aimux", "task-journal"]);
   });
-  it("пустой WorkspaceData → []", () => { expect(buildTimeline(ws({}))).toEqual([]); });
-  it("сессия без lastUsedAtMs → не попадает в ленту", () => {
+  it("empty WorkspaceData → []", () => { expect(buildTimeline(ws({}))).toEqual([]); });
+  it("a session without lastUsedAtMs → does not appear in the timeline", () => {
     expect(buildTimeline(ws({ sessions: [{ sessionId: "s", profile: "p" }] }))).toEqual([]);
   });
-  it("TjEvent с непарсимым timestamp → пропускается", () => {
-    expect(buildTimeline(ws({ taskEvents: [{ event_id: "e", task_id: "t", type: "finding", timestamp: "не-дата", text: "x" }] }))).toEqual([]);
+  it("TjEvent with an unparseable timestamp → skipped", () => {
+    expect(buildTimeline(ws({ taskEvents: [{ event_id: "e", task_id: "t", type: "finding", timestamp: "not-a-date", text: "x" }] }))).toEqual([]);
   });
-  it("tsAccuracy: token-pilot/aimux → 'exact', task-journal живые → 'ingest'", () => {
+  it("tsAccuracy: token-pilot/aimux → 'exact', live task-journal → 'ingest'", () => {
     const out = buildTimeline(ws({
       tokenEvents: [{ sessionId: "s1", used: 1, saved: 1, ts: 3000, agentType: null }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 2000 }],
@@ -59,18 +59,18 @@ describe("LP10 buildTimeline — нормализация слоёв", () => {
     expect(bySource["aimux"]).toBe("exact");
     expect(bySource["task-journal"]).toBe("ingest");
   });
-  it("дефолтное окно: обрезает до DEFAULT_TIMELINE_LIMIT, новые сверху", () => {
+  it("default window: truncates to DEFAULT_TIMELINE_LIMIT, newest first", () => {
     const many = Array.from({ length: DEFAULT_TIMELINE_LIMIT + 50 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1, agentType: null }));
     const out = buildTimeline(ws({ tokenEvents: many }));
     expect(out).toHaveLength(DEFAULT_TIMELINE_LIMIT);
     expect(out[0].ts).toBe(DEFAULT_TIMELINE_LIMIT + 50);
   });
-  it("opts.limit перекрывает дефолт; Infinity → без обрезки", () => {
+  it("opts.limit overrides the default; Infinity → no truncation", () => {
     const many = Array.from({ length: 10 }, (_, i) => ({ sessionId: `s${i}`, used: 0, saved: 0, ts: i + 1, agentType: null }));
     expect(buildTimeline(ws({ tokenEvents: many }), { limit: 3 })).toHaveLength(3);
     expect(buildTimeline(ws({ tokenEvents: many }), { limit: Infinity })).toHaveLength(10);
   });
-  it("стабильный tie-break при равном ts", () => {
+  it("stable tie-break when ts is equal", () => {
     const mk = () => buildTimeline(ws({
       tokenEvents: [{ sessionId: "s1", used: 0, saved: 0, ts: 5000, agentType: null }],
       sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 5000 }],

@@ -15,7 +15,7 @@ import {
 import { readInstalled } from "../../../src/core/install/registry-file.js";
 import type { CmdRunner, InstallDeps, InstalledRegistry } from "../../../src/core/install/types.js";
 
-// ── фейк-раннер: пишет вызовы, ничего не делает ──────────────────────────────
+// ── fake runner: records calls, does nothing ────────────────────────────────
 function fakeRun(): { run: CmdRunner; calls: string[][] } {
   const calls: string[][] = [];
   const run: CmdRunner = (cmd, args) => {
@@ -35,7 +35,7 @@ afterEach(() => {
   for (const d of tmpDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-// Валидный манифест Loom-плагина + опциональные поля.
+// A valid Loom plugin manifest + optional fields.
 function baseManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schemaVersion: 1,
@@ -50,7 +50,7 @@ function baseManifest(overrides: Record<string, unknown> = {}): Record<string, u
   };
 }
 
-// Создаёт каталог локального плагина с plugin.json и фейковым адаптером.
+// Creates a local plugin directory with plugin.json and a fake adapter.
 function makeLocalPlugin(manifest: Record<string, unknown>): string {
   const dir = tmp("loom-src-");
   writeFileSync(join(dir, "plugin.json"), JSON.stringify(manifest), "utf8");
@@ -66,7 +66,7 @@ function makeDeps(): { deps: InstallDeps; calls: string[][] } {
 }
 
 describe("installPlugin — local", () => {
-  it("happy path: копирует файлы и пишет реестр", () => {
+  it("happy path: copies files and writes the registry", () => {
     const src = makeLocalPlugin(baseManifest({ permissions: ["read:~/.x"] }));
     const { deps } = makeDeps();
 
@@ -84,7 +84,7 @@ describe("installPlugin — local", () => {
     expect(reg.plugins.demo.installPath).toBe(installed);
   });
 
-  it("claudePlugin без install → синтез shim-рецепта (marketplace add + install --scope)", () => {
+  it("claudePlugin without install → synthesizes a shim recipe (marketplace add + install --scope)", () => {
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "./" } }),
     );
@@ -104,7 +104,7 @@ describe("installPlugin — local", () => {
     ]);
   });
 
-  it("manifest.install → finalize гоняет рецепт install со scope", () => {
+  it("manifest.install → finalize runs the install recipe with scope", () => {
     const src = makeLocalPlugin(
       baseManifest({
         install: {
@@ -122,7 +122,7 @@ describe("installPlugin — local", () => {
     expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "project", "x@x"]);
   });
 
-  it("onConfirm=false → ничего не копирует и не пишет реестр", () => {
+  it("onConfirm=false → copies nothing and does not write the registry", () => {
     const src = makeLocalPlugin(baseManifest());
     const { deps } = makeDeps();
 
@@ -134,7 +134,7 @@ describe("installPlugin — local", () => {
     expect(existsSync(join(deps.dataDir, "plugins.json"))).toBe(false);
   });
 
-  it("невалидный манифест → ok:false с error", () => {
+  it("invalid manifest → ok:false with an error", () => {
     const src = makeLocalPlugin(baseManifest({ type: "cc-plugin" }));
     const { deps } = makeDeps();
 
@@ -143,7 +143,7 @@ describe("installPlugin — local", () => {
     expect(res.error).toMatch(/type/);
   });
 
-  it("нет plugin.json в источнике → ok:false", () => {
+  it("no plugin.json in the source → ok:false", () => {
     const empty = tmp("loom-empty-");
     const { deps } = makeDeps();
     const res = installPlugin({ type: "local", path: empty }, deps);
@@ -151,7 +151,7 @@ describe("installPlugin — local", () => {
     expect(res.error).toMatch(/plugin\.json/);
   });
 
-  it("manifest.install с interactive-шагом → авто-часть встаёт, manual отдан, не падает", () => {
+  it("manifest.install with an interactive step → the auto part installs, manual is returned, no crash", () => {
     const src = makeLocalPlugin(baseManifest({ install: {
       install: [{ cmd: "npm", args: ["install","-g","aimux"] },
                 { cmd: "aimux", args: ["auth","login"], interactive: true }],
@@ -166,7 +166,7 @@ describe("installPlugin — local", () => {
 });
 
 describe("planInstall", () => {
-  it("прокидывает permissions из манифеста", () => {
+  it("passes through permissions from the manifest", () => {
     const src = makeLocalPlugin(baseManifest({ permissions: ["read:~/.x", "exec:y"] }));
     const { deps } = makeDeps();
     const res = planInstall({ type: "local", path: src }, deps);
@@ -177,7 +177,7 @@ describe("planInstall", () => {
 });
 
 describe("removePlugin", () => {
-  it("убирает installDir и запись из реестра", () => {
+  it("removes the installDir and the registry entry", () => {
     const src = makeLocalPlugin(baseManifest());
     const { deps } = makeDeps();
     installPlugin({ type: "local", path: src }, deps);
@@ -191,7 +191,7 @@ describe("removePlugin", () => {
     expect(readInstalled(deps).plugins.demo).toBeUndefined();
   });
 
-  it("claudePlugin → вызывает claude plugin uninstall", () => {
+  it("claudePlugin → calls claude plugin uninstall", () => {
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "./" } }),
     );
@@ -203,7 +203,7 @@ describe("removePlugin", () => {
     expect(calls).toContainEqual(["claude", "plugin", "uninstall", "--", "x@x"]);
   });
 
-  it("manifest.install → removePlugin гоняет рецепт remove", () => {
+  it("manifest.install → removePlugin runs the remove recipe", () => {
     const src = makeLocalPlugin(
       baseManifest({
         install: {
@@ -219,15 +219,15 @@ describe("removePlugin", () => {
     expect(calls).toContainEqual(["claude", "plugin", "uninstall", "x@x"]);
   });
 
-  it("не установлен → ok:false", () => {
+  it("not installed → ok:false", () => {
     const { deps } = makeDeps();
     expect(removePlugin("nope", deps).ok).toBe(false);
   });
 });
 
-describe("fetchToStaging — npm/git (покрыто только мок-вызовом run)", () => {
-  it("npm: зовёт npm pack + tar extract", () => {
-    // npm pack печатает имя tgz на stdout → flow доходит до tar (фейк tar ничего не делает).
+describe("fetchToStaging — npm/git (covered only by a mocked run call)", () => {
+  it("npm: calls npm pack + tar extract", () => {
+    // npm pack prints the tgz name on stdout → the flow reaches tar (the fake tar does nothing).
     const calls: string[][] = [];
     const run: CmdRunner = (cmd, args) => {
       calls.push([cmd, ...args]);
@@ -238,16 +238,16 @@ describe("fetchToStaging — npm/git (покрыто только мок-выз�
     fetchToStaging({ type: "npm", spec: "demo@1.0.0" }, deps);
     expect(calls[0][0]).toBe("npm");
     expect(calls[0].slice(0, 2)).toEqual(["npm", "pack"]);
-    // "--" end-of-options стоит прямо перед spec.
+    // "--" end-of-options sits right before the spec.
     expect(calls[0].slice(-2)).toEqual(["--", "demo@1.0.0"]);
     expect(calls.some((c) => c[0] === "tar")).toBe(true);
-    // tar: флаги/опции, затем "--", затем файл (имя tgz последним аргументом).
+    // tar: flags/options, then "--", then the file (the tgz name as the last argument).
     const tarCall = calls.find((c) => c[0] === "tar")!;
     expect(tarCall[tarCall.length - 2]).toBe("--");
     expect(tarCall[tarCall.length - 1]).toMatch(/demo-1\.0\.0\.tgz$/);
   });
 
-  it("git: зовёт git clone --depth 1", () => {
+  it("git: calls git clone --depth 1", () => {
     const { run, calls } = fakeRun();
     const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
     const res = fetchToStaging({ type: "git", url: "https://example/repo.git" }, deps);
@@ -258,8 +258,8 @@ describe("fetchToStaging — npm/git (покрыто только мок-выз�
 });
 
 // ── Argument-injection hardening ─────────────────────────────────────────────
-describe("валидаторы входа (argument injection)", () => {
-  it("isFlagShaped: flag-shaped и пробел-в-начале → true; нормальное → false", () => {
+describe("input validators (argument injection)", () => {
+  it("isFlagShaped: flag-shaped and leading-space → true; normal → false", () => {
     expect(isFlagShaped("-x")).toBe(true);
     expect(isFlagShaped("--upload-pack=y")).toBe(true);
     expect(isFlagShaped("  --evil")).toBe(true);
@@ -294,8 +294,8 @@ describe("валидаторы входа (argument injection)", () => {
   });
 });
 
-describe("fetchToStaging — отсекает злонамеренный вход без запуска команды", () => {
-  it("git url flag-shaped → ok:false, run НЕ позван", () => {
+describe("fetchToStaging — rejects malicious input without running a command", () => {
+  it("git url flag-shaped → ok:false, run NOT called", () => {
     const { run, calls } = fakeRun();
     const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
     const res = fetchToStaging({ type: "git", url: "--upload-pack=evil" }, deps);
@@ -303,7 +303,7 @@ describe("fetchToStaging — отсекает злонамеренный вхо�
     expect(calls).toEqual([]);
   });
 
-  it("npm spec flag-shaped → ok:false, run НЕ позван", () => {
+  it("npm spec flag-shaped → ok:false, run NOT called", () => {
     const { run, calls } = fakeRun();
     const deps: InstallDeps = { dataDir: tmp("loom-data-"), run };
     const res = fetchToStaging({ type: "npm", spec: "-x" }, deps);
@@ -312,8 +312,8 @@ describe("fetchToStaging — отсекает злонамеренный вхо�
   });
 });
 
-describe("синтез claudePlugin-рецепта отсекает злонамеренный source", () => {
-  it("cp.source='-evil' → marketplace add НЕ в calls, install Loom-части прошла", () => {
+describe("claudePlugin recipe synthesis rejects a malicious source", () => {
+  it("cp.source='-evil' → marketplace add NOT in calls, the Loom install part ran", () => {
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "x", marketplace: "x", source: "-evil" } }),
     );
@@ -321,16 +321,16 @@ describe("синтез claudePlugin-рецепта отсекает злонам
 
     const res = installPlugin({ type: "local", path: src }, deps);
     expect(res.ok).toBe(true);
-    // marketplace add с flag-shaped источником НЕ должен попасть в вызовы (отфильтрован в plan).
+    // marketplace add with a flag-shaped source must NOT reach the calls (filtered out in plan).
     expect(calls.some((c) => c[2] === "marketplace" && c[3] === "add")).toBe(false);
-    // install-шаг при этом синтезируется и выполняется.
+    // the install step is still synthesized and executed.
     expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "user", "--", "x@x"]);
   });
 });
 
-// Тип-санити: реестр имеет ожидаемую форму.
+// Type sanity: the registry has the expected shape.
 describe("registry-file", () => {
-  it("readInstalled на пустом dataDir → пустой реестр", () => {
+  it("readInstalled on an empty dataDir → empty registry", () => {
     const { deps } = makeDeps();
     const reg: InstalledRegistry = readInstalled(deps);
     expect(reg.schemaVersion).toBe(1);

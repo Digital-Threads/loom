@@ -24,32 +24,32 @@ const fakeDup: LoomPlugin = {
 };
 
 describe("registry", () => {
-  it("регистрирует и отдаёт плагины", () => {
+  it("registers and returns the plugins", () => {
     const r = createRegistry([fake]);
     expect(r.list().map((p) => p.id)).toEqual(["fake"]);
     expect(r.get("fake")?.title).toBe("Fake");
   });
 
-  it("register нового id → true и get его находит", () => {
+  it("register a new id → true and get finds it", () => {
     const r = createRegistry([fake]);
     expect(r.register(other)).toBe(true);
     expect(r.get("other")?.title).toBe("Other");
     expect(r.list().map((p) => p.id)).toEqual(["fake", "other"]);
   });
 
-  it("register дубля → false, прежний на месте", () => {
+  it("register a duplicate → false, the original stays", () => {
     const r = createRegistry([fake]);
     expect(r.register(fakeDup)).toBe(false);
-    expect(r.get("fake")?.title).toBe("Fake"); // builtin не перезаписан
+    expect(r.get("fake")?.title).toBe("Fake"); // the builtin was not overwritten
   });
 });
 
 describe("registry.groupByCategory", () => {
-  it("группирует плагины по category, без category → ключ \"undefined\"", () => {
+  it("groups plugins by category, no category → \"undefined\" key", () => {
     const a: LoomPlugin = { id: "a", title: "A", tabs: [{ id: "t", title: "T" }], load: () => ({}), category: "accounts" };
     const b: LoomPlugin = { id: "b", title: "B", tabs: [{ id: "t", title: "T" }], load: () => ({}), category: "efficiency" };
     const c: LoomPlugin = { id: "c", title: "C", tabs: [{ id: "t", title: "T" }], load: () => ({}), category: "accounts" };
-    const r = createRegistry([a, b, c, fake]); // fake — без category
+    const r = createRegistry([a, b, c, fake]); // fake — without a category
 
     const grouped = r.groupByCategory();
     expect(grouped.get("accounts")?.map((p) => p.id)).toEqual(["a", "c"]);
@@ -57,7 +57,7 @@ describe("registry.groupByCategory", () => {
     expect(grouped.get("undefined")?.map((p) => p.id)).toEqual(["fake"]);
   });
 
-  it("порядок внутри группы = порядок регистрации", () => {
+  it("order within a group = registration order", () => {
     const r = createRegistry([fake]);
     const x: LoomPlugin = { id: "x2", title: "X2", tabs: [{ id: "t", title: "T" }], load: () => ({}), category: "memory" };
     const y: LoomPlugin = { id: "y2", title: "Y2", tabs: [{ id: "t", title: "T" }], load: () => ({}), category: "memory" };

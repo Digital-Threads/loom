@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { render } from "ink-testing-library";
 import { PluginsPanel } from "../../../src/ui/panels/PluginsPanel.js";
 
-// PluginsPanel читает реестр через readInstalled(defaultDeps()) →
-// defaultDeps() берёт dataDir = $XDG_DATA_HOME/loom. Изолируем через временный XDG.
+// PluginsPanel reads the registry via readInstalled(defaultDeps()) →
+// defaultDeps() takes dataDir = $XDG_DATA_HOME/loom. We isolate it via a temporary XDG.
 
 describe("PluginsPanel render smoke", () => {
   let xdg: string;
@@ -25,13 +25,13 @@ describe("PluginsPanel render smoke", () => {
     rmSync(xdg, { recursive: true, force: true });
   });
 
-  it("пустой реестр → заглушка 'Плагинов нет'", () => {
+  it("empty registry → 'No plugins' placeholder", () => {
     const { lastFrame } = render(<PluginsPanel />);
     const f = lastFrame()!;
     expect(f).toContain("No plugins");
   });
 
-  it("непустой реестр → строки с именем, версией и состоянием", () => {
+  it("non-empty registry → rows with name, version and state", () => {
     const registry = {
       schemaVersion: 1,
       plugins: {
@@ -58,11 +58,11 @@ describe("PluginsPanel render smoke", () => {
     expect(f).toContain("[on]");
     expect(f).toContain("off-plugin");
     expect(f).toContain("[off]");
-    // футер списка
+    // list footer
     expect(f).toContain("e toggle");
   });
 
-  it("хоткей p вызывает packAction и показывает путь", async () => {
+  it("the p hotkey calls packAction and shows the path", async () => {
     let called = false;
     const packAction = async () => {
       called = true;
@@ -73,13 +73,13 @@ describe("PluginsPanel render smoke", () => {
     stdin.write("p");
     await Promise.resolve();
     await Promise.resolve();
-    // дать промису packAction разрешиться
+    // let the packAction promise resolve
     await new Promise((r) => setTimeout(r, 20));
     expect(called).toBe(true);
     expect(lastFrame()!).toMatch(/pack written|\/tmp\/workspace-pack\.md/);
   });
 
-  it("футер упоминает p — собрать pack", () => {
+  it("the footer mentions p — build pack", () => {
     const { lastFrame } = render(<PluginsPanel packAction={async () => "x"} />);
     expect(lastFrame()!.toLowerCase()).toContain("pack");
   });

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("e2e helpers", () => {
-  it("withTempHome ставит HOME/XDG внутрь временного корня и убирает за собой", () => {
+  it("withTempHome points HOME/XDG inside a temp root and cleans up after itself", () => {
     const t = withTempHome();
     cleanups.push(t.cleanup);
     expect(t.env.HOME.startsWith(t.root)).toBe(true);
@@ -17,14 +17,14 @@ describe("e2e helpers", () => {
     expect(existsSync(t.env.HOME)).toBe(true);
   });
 
-  it("recordingRun пишет вызовы и не исполняет ничего", () => {
+  it("recordingRun records calls and executes nothing", () => {
     const { run, calls } = recordingRun({
       npm: { ok: true, stdout: "demo-1.0.0.tgz", stderr: "" },
     });
     const r = run("npm", ["pack", "demo"]);
     expect(r.ok).toBe(true);
     expect(r.stdout).toContain("tgz");
-    // дефолтный успех для неизвестной команды — по фактической форме CmdResult.
+    // default success for an unknown command — matching the actual CmdResult shape.
     const d = run("git", ["clone", "x"]);
     expect(d).toEqual({ ok: true, stdout: "", stderr: "" });
     expect(calls).toEqual([

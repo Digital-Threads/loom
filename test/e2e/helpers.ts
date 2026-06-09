@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CmdRunner, CmdResult, InstallDeps } from "../../src/core/install/types.js";
 
-// Временный корень + подмена HOME/XDG на него. Возвращает cleanup.
+// A temporary root + HOME/XDG pointed at it. Returns a cleanup.
 export function withTempHome(): {
   root: string;
   env: Record<string, string>;
@@ -20,8 +20,8 @@ export function withTempHome(): {
   return { root, env, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-// Recording-раннер: пишет каждый вызов, НИЧЕГО не исполняет. Можно задать
-// детерминированные ответы по имени команды (мок npm pack / git clone и т.п.).
+// Recording runner: records every call, executes NOTHING. You can provide
+// deterministic responses keyed by command name (mock npm pack / git clone, etc.).
 export function recordingRun(
   responses: Partial<Record<string, CmdResult>> = {},
 ): { run: CmdRunner; calls: string[][] } {
@@ -33,15 +33,15 @@ export function recordingRun(
   return { run, calls };
 }
 
-// Собрать InstallDeps поверх временного корня и recording-раннера.
-// dataDir строго внутри root — никаких записей в реальный HOME.
+// Build InstallDeps on top of the temporary root and the recording runner.
+// dataDir is strictly inside root — no writes to the real HOME.
 export function e2eDeps(root: string, run: CmdRunner): InstallDeps {
   return { dataDir: join(root, "data"), run };
 }
 
-// Записать на диск фейковый локальный плагин с валидным манифестом Loom.
-// Форма манифеста и раскладка файлов скопированы из test/core/install/install.test.ts
-// (makeLocalPlugin/baseManifest): manifest = plugin.json, адаптер = src/adapter.js.
+// Write a fake local plugin to disk with a valid Loom manifest.
+// The manifest shape and file layout are copied from test/core/install/install.test.ts
+// (makeLocalPlugin/baseManifest): manifest = plugin.json, adapter = src/adapter.js.
 export function writeFakePlugin(dir: string, name = "demo"): string {
   mkdirSync(join(dir, "src"), { recursive: true });
   const manifest = {

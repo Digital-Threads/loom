@@ -4,8 +4,8 @@ import { settingsSchema as aimuxSettingsSchema } from "../../../src/core/plugins
 import { settingsSchema as tjSettingsSchema } from "../../../src/core/plugins/task-journal/adapter.js";
 import type { LoomPlugin } from "../../../src/core/plugins/types.js";
 
-describe("settingsSchema адаптеров", () => {
-  it("token-pilot отдаёт enum-поле hooks.mode с deny-enhanced", () => {
+describe("settingsSchema of adapters", () => {
+  it("token-pilot returns the enum field hooks.mode with deny-enhanced", () => {
     const schema = tpSettingsSchema();
     const mode = schema.fields.find((f) => f.key === "hooks.mode");
     expect(mode).toBeDefined();
@@ -13,7 +13,7 @@ describe("settingsSchema адаптеров", () => {
     expect(mode?.options).toContain("deny-enhanced");
   });
 
-  it("token-pilot: enum-поля имеют непустой options, не-enum — нет", () => {
+  it("token-pilot: enum fields have non-empty options, non-enum ones do not", () => {
     const schema = tpSettingsSchema();
     for (const f of schema.fields) {
       if (f.type === "enum") {
@@ -27,15 +27,15 @@ describe("settingsSchema адаптеров", () => {
     expect(threshold?.type).toBe("number");
   });
 
-  it("aimux отдаёт пустую схему", () => {
+  it("aimux returns an empty schema", () => {
     expect(aimuxSettingsSchema().fields.length).toBe(0);
   });
 
-  it("task-journal отдаёт пустую схему", () => {
+  it("task-journal returns an empty schema", () => {
     expect(tjSettingsSchema().fields.length).toBe(0);
   });
 
-  it("LoomPlugin принимает опциональный settings", () => {
+  it("LoomPlugin accepts optional settings", () => {
     const plugin: LoomPlugin = {
       id: "tp",
       title: "Token Pilot",

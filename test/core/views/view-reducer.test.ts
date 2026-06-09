@@ -133,9 +133,9 @@ describe("action key + confirm flow", () => {
   });
 
   it("setStatus during confirm closes confirm and sets status", () => {
-    const s = viewReducer(navState({ mode: "confirm", confirmKey: "c" }), { type: "setStatus", text: "готово" }, baseOpts);
+    const s = viewReducer(navState({ mode: "confirm", confirmKey: "c" }), { type: "setStatus", text: "done" }, baseOpts);
     expect(s.mode).toBe("nav");
-    expect(s.status).toBe("готово");
+    expect(s.status).toBe("done");
   });
 });
 

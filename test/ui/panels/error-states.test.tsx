@@ -9,7 +9,7 @@ import { isWorkspaceEmpty, loadWorkspaceData, type WorkspaceData } from "../../.
 import { readInstalled } from "../../../src/core/install/registry-file.js";
 import type { InstallDeps } from "../../../src/core/install/types.js";
 
-// Пустая фикстура: все слои-массивы пусты, ошибок нет.
+// Empty fixture: all layer arrays empty, no errors.
 const emptyData: WorkspaceData = {
   subscriptions: [],
   sessions: [],
@@ -27,8 +27,8 @@ afterEach(() => {
   for (const c of cleanups.splice(0)) c();
 });
 
-describe("краевые состояния экранов", () => {
-  it("пустое: isWorkspaceEmpty(empty) === true и Onboarding объясняет, что делать", () => {
+describe("edge-case screen states", () => {
+  it("empty: isWorkspaceEmpty(empty) === true and Onboarding explains what to do", () => {
     expect(isWorkspaceEmpty(emptyData)).toBe(true);
     const { lastFrame } = render(<OnboardingPanel />);
     const f = lastFrame()!;
@@ -36,18 +36,18 @@ describe("краевые состояния экранов", () => {
     expect(f).toContain("loom plugin add");
   });
 
-  it("частичное: данные есть у одного плагина → не считается пустым", () => {
+  it("partial: one plugin has data → not considered empty", () => {
     const partial: WorkspaceData = {
       ...emptyData,
-      tasks: [{ id: "t1", title: "Демо-задача", status: "open" }],
+      tasks: [{ id: "t1", title: "Demo task", status: "open" }],
     };
     expect(isWorkspaceEmpty(partial)).toBe(false);
   });
 
-  it("ошибка плагина: loadWorkspaceData не бросает, а отдаёт корректную форму с errors[]", async () => {
-    // safe() оборачивает каждый plugin.load() → ошибка плагина уходит в errors[],
-    // а не роняет сбор данных. Фиксируем контракт: вызов завершается объектом
-    // правильной формы (errors — массив, слои — массивы), без throw.
+  it("plugin error: loadWorkspaceData does not throw, returns a well-formed object with errors[]", async () => {
+    // safe() wraps each plugin.load() → a plugin error goes into errors[],
+    // rather than crashing the data collection. We pin the contract: the call resolves to an object
+    // of the correct shape (errors is an array, layers are arrays), without throwing.
     const data = await loadWorkspaceData();
     expect(Array.isArray(data.errors)).toBe(true);
     expect(Array.isArray(data.subscriptions)).toBe(true);
@@ -58,10 +58,10 @@ describe("краевые состояния экранов", () => {
     expect(typeof data.projectId).toBe("string");
   });
 
-  it("битый реестр: readInstalled на повреждённом файле не бросает, а даёт пустой реестр", () => {
+  it("broken registry: readInstalled on a corrupt file does not throw, returns an empty registry", () => {
     const dataDir = mkdtempSync(join(tmpdir(), "loom-registry-"));
     cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
-    writeFileSync(join(dataDir, "plugins.json"), "{ это не валидный JSON ", "utf8");
+    writeFileSync(join(dataDir, "plugins.json"), "{ this is not valid JSON ", "utf8");
     const deps: InstallDeps = {
       dataDir,
       run: () => ({ ok: true, stdout: "", stderr: "" }),

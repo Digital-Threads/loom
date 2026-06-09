@@ -17,31 +17,31 @@ const valid: LoomPluginManifest = {
 };
 
 describe("validateManifest", () => {
-  it("принимает валидный манифест", () => {
+  it("accepts a valid manifest", () => {
     const r = validateManifest(valid);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.manifest.name).toBe("token-pilot");
   });
 
-  it("игнорирует лишние/неизвестные поля (forward-compat)", () => {
+  it("ignores extra/unknown fields (forward-compat)", () => {
     const r = validateManifest({ ...valid, futureField: 42, extra: { a: 1 } });
     expect(r.ok).toBe(true);
   });
 
-  it("не-объект → ok:false", () => {
+  it("not an object → ok:false", () => {
     expect(validateManifest(null).ok).toBe(false);
     expect(validateManifest("x").ok).toBe(false);
     expect(validateManifest([valid]).ok).toBe(false);
   });
 
-  it("отсутствует type → ok:false", () => {
+  it("missing type → ok:false", () => {
     const { type, ...rest } = valid;
     const r = validateManifest(rest);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/type/);
   });
 
-  it("type не тот → ok:false", () => {
+  it("wrong type → ok:false", () => {
     const r = validateManifest({ ...valid, type: "cc-plugin" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/type/);
@@ -53,50 +53,50 @@ describe("validateManifest", () => {
     if (!r.ok) expect(r.error).toMatch(/schemaVersion/);
   });
 
-  it("нет name → ok:false", () => {
+  it("no name → ok:false", () => {
     const { name, ...rest } = valid;
     const r = validateManifest(rest);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/name/);
   });
 
-  it("пустая name → ok:false", () => {
+  it("empty name → ok:false", () => {
     const r = validateManifest({ ...valid, name: "" });
     expect(r.ok).toBe(false);
   });
 
-  it("нет title → ok:false", () => {
+  it("no title → ok:false", () => {
     const { title, ...rest } = valid;
     expect(validateManifest(rest).ok).toBe(false);
   });
 
-  it("нет version → ok:false", () => {
+  it("no version → ok:false", () => {
     const { version, ...rest } = valid;
     expect(validateManifest(rest).ok).toBe(false);
   });
 
-  it("нет apiVersion → ok:false", () => {
+  it("no apiVersion → ok:false", () => {
     const { apiVersion, ...rest } = valid;
     expect(validateManifest(rest).ok).toBe(false);
   });
 
-  it("нет entry → ok:false", () => {
+  it("no entry → ok:false", () => {
     const { entry, ...rest } = valid;
     expect(validateManifest(rest).ok).toBe(false);
   });
 
-  it("provides.tabs не массив → ok:false", () => {
+  it("provides.tabs not an array → ok:false", () => {
     const r = validateManifest({ ...valid, provides: { tabs: "nope" } });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/tabs/);
   });
 
-  it("provides отсутствует → ok:false", () => {
+  it("provides missing → ok:false", () => {
     const { provides, ...rest } = valid;
     expect(validateManifest(rest).ok).toBe(false);
   });
 
-  it("tab без id/title → ok:false", () => {
+  it("tab without id/title → ok:false", () => {
     const r = validateManifest({
       ...valid,
       provides: { tabs: [{ id: "x" }] },
@@ -105,11 +105,11 @@ describe("validateManifest", () => {
     if (!r.ok) expect(r.error).toMatch(/tabs/);
   });
 
-  it("экспортирует LOOM_CONTRACT_VERSION", () => {
+  it("exports LOOM_CONTRACT_VERSION", () => {
     expect(LOOM_CONTRACT_VERSION).toBe("1.0");
   });
 
-  it("валидный install-рецепт проходит", () => {
+  it("a valid install recipe passes", () => {
     const m = {
       ...valid,
       install: {
@@ -121,14 +121,14 @@ describe("validateManifest", () => {
     expect(validateManifest(m).ok).toBe(true);
   });
 
-  it("install без detect.probe → ошибка", () => {
+  it("install without detect.probe → error", () => {
     const m = { ...valid, install: { install: [], detect: {}, remove: [] } };
     const r = validateManifest(m);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/detect\.probe/);
   });
 
-  it("step без cmd → ошибка", () => {
+  it("step without cmd → error", () => {
     const m = {
       ...valid,
       install: {
@@ -140,7 +140,7 @@ describe("validateManifest", () => {
     expect(validateManifest(m).ok).toBe(false);
   });
 
-  it("отсутствие install (legacy claudePlugin) → ок", () => {
+  it("absence of install (legacy claudePlugin) → ok", () => {
     expect(validateManifest(valid).ok).toBe(true);
   });
 });

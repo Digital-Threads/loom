@@ -95,8 +95,8 @@ describe("derivation wrappers call the real metric functions", () => {
   });
 
   it("resolver-visible map exposes the spec-named derivations (host + plugin-contributed)", () => {
-    // После Phase 9 одно-плагинные деривации (taskDetail/tokenMetrics) контрибьютит
-    // плагин task-journal; резолвер видит их через объединённую карту allDerivations().
+    // After Phase 9 the single-plugin derivations (taskDetail/tokenMetrics) are contributed by
+    // the task-journal plugin; the resolver sees them via the merged allDerivations() map.
     const merged = allDerivations();
     for (const name of [
       "sessionsWithTokens",

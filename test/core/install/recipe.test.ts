@@ -14,17 +14,17 @@ function fake(results: Record<string, { ok: boolean; stdout?: string; stderr?: s
 const deps = (run: CmdRunner): InstallDeps => ({ dataDir: "/tmp/x", run });
 
 describe("substituteScope", () => {
-  it("заменяет {scope} на реальный scope", () => {
+  it("replaces {scope} with the real scope", () => {
     expect(substituteScope(["install","--scope","{scope}","x"], "project"))
       .toEqual(["install","--scope","project","x"]);
   });
-  it("без плейсхолдера — без изменений", () => {
+  it("no placeholder — no changes", () => {
     expect(substituteScope(["i","-g","x"], "user")).toEqual(["i","-g","x"]);
   });
 });
 
 describe("isValidScope", () => {
-  it("user/project — ок; прочее — нет", () => {
+  it("user/project — ok; anything else — no", () => {
     expect(isValidScope("user")).toBe(true);
     expect(isValidScope("project")).toBe(true);
     expect(isValidScope("--evil")).toBe(false);
@@ -32,7 +32,7 @@ describe("isValidScope", () => {
 });
 
 describe("runRecipe", () => {
-  it("прогоняет шаги по порядку, подставляет scope", () => {
+  it("runs the steps in order, substitutes scope", () => {
     const { run, calls } = fake();
     const r = runRecipe(
       [{ cmd: "npm", args: ["i","-g","x"] }, { cmd: "claude", args: ["plugin","install","--scope","{scope}","x@x"], scoped: true }],
@@ -40,21 +40,21 @@ describe("runRecipe", () => {
     expect(r.ok).toBe(true);
     expect(calls).toEqual([["npm","i","-g","x"], ["claude","plugin","install","--scope","project","x@x"]]);
   });
-  it("провал обязательного шага → ok:false, дальше не идёт", () => {
+  it("required step failure → ok:false, does not continue", () => {
     const { run, calls } = fake({ "npm i -g x": { ok: false, stderr: "boom" } });
     const r = runRecipe([{ cmd:"npm", args:["i","-g","x"] }, { cmd:"claude", args:["a"] }], { scope: "user" }, deps(run));
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/boom/);
     expect(calls).toEqual([["npm","i","-g","x"]]);
   });
-  it("провал optional-шага → ok:true + warning, идёт дальше", () => {
+  it("optional step failure → ok:true + warning, continues", () => {
     const { run, calls } = fake({ "cargo uninstall y": { ok: false, stderr: "no crate" } });
     const r = runRecipe([{ cmd:"cargo", args:["uninstall","y"], optional:true }, { cmd:"claude", args:["b"] }], { scope:"user" }, deps(run));
     expect(r.ok).toBe(true);
     expect(r.warning).toMatch(/no crate/);
     expect(calls.length).toBe(2);
   });
-  it("dryRun → ничего не запускает, перечисляет команды", () => {
+  it("dryRun → runs nothing, lists the commands", () => {
     const { run, calls } = fake();
     const r = runRecipe([{ cmd:"npm", args:["i","-g","x"] }], { scope:"user", dryRun: true }, deps(run));
     expect(r.ok).toBe(true);
@@ -64,7 +64,7 @@ describe("runRecipe", () => {
 });
 
 describe("runRecipe — interactive (semi-auto)", () => {
-  it("interactive-шаг НЕ выполняется, попадает в manual, рецепт не падает", () => {
+  it("interactive step is NOT executed, goes to manual, the recipe does not fail", () => {
     const { run, calls } = fake();
     const r = runRecipe(
       [{ cmd: "npm", args: ["i","-g","aimux"] },
@@ -74,7 +74,7 @@ describe("runRecipe — interactive (semi-auto)", () => {
     expect(calls).toEqual([["npm","i","-g","aimux"]]);
     expect(r.manual).toEqual([["aimux","auth","login"]]);
   });
-  it("interactive со scope: scope подставляется в manual", () => {
+  it("interactive with scope: the scope is substituted into manual", () => {
     const { run } = fake();
     const r = runRecipe(
       [{ cmd: "claude", args: ["auth","login","--scope","{scope}"], interactive: true, scoped: true }],
@@ -82,14 +82,14 @@ describe("runRecipe — interactive (semi-auto)", () => {
     expect(r.ok).toBe(true);
     expect(r.manual).toEqual([["claude","auth","login","--scope","project"]]);
   });
-  it("только interactive → ok:true, calls пустые, всё в manual", () => {
+  it("interactive only → ok:true, calls empty, everything in manual", () => {
     const { run, calls } = fake();
     const r = runRecipe([{ cmd: "claude", args: ["auth","login"], interactive: true }], { scope: "user" }, deps(run));
     expect(r.ok).toBe(true);
     expect(calls).toEqual([]);
     expect(r.manual?.length).toBe(1);
   });
-  it("dryRun: interactive в manual, авто в planned", () => {
+  it("dryRun: interactive goes to manual, auto goes to planned", () => {
     const { run } = fake();
     const r = runRecipe(
       [{ cmd: "npm", args: ["i","x"] }, { cmd: "aimux", args: ["auth","login"], interactive: true }],

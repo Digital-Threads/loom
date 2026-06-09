@@ -28,7 +28,7 @@ describe("TableView render smoke", () => {
       source: "subscriptions",
       rowKey: "name",
       columns: [
-        { header: "Имя", value: "name", width: 14 },
+        { header: "Name", value: "name", width: 14 },
         { header: "CLI", value: "cli" },
       ],
     };
@@ -46,10 +46,10 @@ describe("TableView render smoke", () => {
       source: "subscriptions",
       rowKey: "name",
       columns: [{ value: "name" }],
-      empty: "Нет подписок",
+      empty: "No subscriptions",
     };
     const { lastFrame } = render(<TableView spec={spec} ctx={{ data: makeData() }} />);
-    expect(lastFrame()).toContain("Нет подписок");
+    expect(lastFrame()).toContain("No subscriptions");
   });
 });
 
@@ -57,12 +57,12 @@ describe("SummaryView render smoke", () => {
   it("renders labels and resolved values", () => {
     const spec: SummaryViewSpec = {
       kind: "summary",
-      lines: [{ label: "Подписки", value: "subscriptions.length" }],
+      lines: [{ label: "Subscriptions", value: "subscriptions.length" }],
     };
     const ctx: BindContext = {
       data: makeData({ subscriptions: [{ name: "a", cli: "c", isSource: false }] }),
     };
     const { lastFrame } = render(<SummaryView spec={spec} ctx={ctx} />);
-    expect(lastFrame()).toContain("Подписки: 1");
+    expect(lastFrame()).toContain("Subscriptions: 1");
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { collectPackInput } from "../../../src/core/pack/collect-pack.js";
 
 describe("collectPackInput", () => {
-  it("использует инъектированные loadData/readConfig", async () => {
+  it("uses the injected loadData/readConfig", async () => {
     const data = { subscriptions: [], sessions: [], health: [], tokens: [], tokenEvents: [],
       taskEvents: [], tasks: [], projectId: "", errors: [] } as any;
     const input = await collectPackInput({

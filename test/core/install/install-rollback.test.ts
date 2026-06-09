@@ -6,7 +6,7 @@ import { installPlugin } from "../../../src/core/install/install.js";
 import { readInstalled } from "../../../src/core/install/registry-file.js";
 import type { CmdRunner, InstallDeps } from "../../../src/core/install/types.js";
 
-// ── temp-фикстуры: чистим после каждого теста ────────────────────────────────
+// ── temp fixtures: cleaned up after each test ────────────────────────────────
 const tmpDirs: string[] = [];
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -17,8 +17,8 @@ afterEach(() => {
   for (const d of tmpDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-// makeDeps(results?) — раннер пишет calls и возвращает results[key] ?? {ok:true}.
-// Ключ = "cmd arg1 arg2".join(" "). dataDir — изолированная temp-директория.
+// makeDeps(results?) — the runner records calls and returns results[key] ?? {ok:true}.
+// Key = "cmd arg1 arg2".join(" "). dataDir is an isolated temp directory.
 function makeDeps(
   results: Record<string, { ok: boolean; stderr?: string }> = {},
 ): { deps: InstallDeps; calls: string[][] } {
@@ -33,7 +33,7 @@ function makeDeps(
   return { deps, calls };
 }
 
-// Валидный манифест Loom-плагина + опциональные поля (name = "demo").
+// A valid Loom plugin manifest + optional fields (name = "demo").
 function baseManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schemaVersion: 1,
@@ -48,7 +48,7 @@ function baseManifest(overrides: Record<string, unknown> = {}): Record<string, u
   };
 }
 
-// Создаёт каталог локального плагина с plugin.json и фейковым адаптером.
+// Creates a local plugin directory with plugin.json and a fake adapter.
 function makeLocalPlugin(manifest: Record<string, unknown>): string {
   const dir = tmp("loom-src-");
   writeFileSync(join(dir, "plugin.json"), JSON.stringify(manifest), "utf8");
@@ -57,8 +57,8 @@ function makeLocalPlugin(manifest: Record<string, unknown>): string {
   return dir;
 }
 
-describe("installPlugin — откат при сбое install-рецепта", () => {
-  it("2-й шаг install падает → реестр чист, ok:false, понятная ошибка", () => {
+describe("installPlugin — rollback when the install recipe fails", () => {
+  it("2nd install step fails → registry stays clean, ok:false, clear error", () => {
     const src = makeLocalPlugin(
       baseManifest({
         install: {
@@ -81,7 +81,7 @@ describe("installPlugin — откат при сбое install-рецепта", 
     expect(calls).toContainEqual(["npm", "install", "-g", "x"]);
   });
 
-  it("optional-шаг падает → install НЕ откатывается, ok:true + warning", () => {
+  it("optional step fails → install is NOT rolled back, ok:true + warning", () => {
     const src = makeLocalPlugin(
       baseManifest({
         install: {
@@ -101,7 +101,7 @@ describe("installPlugin — откат при сбое install-рецепта", 
     expect(readInstalled(deps).plugins["demo"]).toBeDefined();
   });
 
-  it("успешный рецепт → реестр содержит запись", () => {
+  it("successful recipe → the registry contains the entry", () => {
     const src = makeLocalPlugin(
       baseManifest({
         install: {

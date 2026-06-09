@@ -12,7 +12,7 @@ describe("settingsPathForScope", () => {
   it("local → <proj>/.claude/settings.local.json", () => {
     expect(settingsPathForScope("local", { homeDir: "/h", projectDir: "/p" })).toBe(join("/p", ".claude", "settings.local.json"));
   });
-  it("local vs project: одна .claude-директория, разные файлы", () => {
+  it("local vs project: one .claude directory, different files", () => {
     const dirs = { homeDir: "/h", projectDir: "/p" };
     const proj = settingsPathForScope("project", dirs);
     const local = settingsPathForScope("local", dirs);

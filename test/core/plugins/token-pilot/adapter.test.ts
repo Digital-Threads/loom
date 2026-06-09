@@ -18,22 +18,22 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("token-pilot adapter — агрегация по сессиям", () => {
-  it("суммирует used/saved по session_id и игнорирует diagnostic", () => {
+describe("token-pilot adapter — aggregation by session", () => {
+  it("sums used/saved by session_id and ignores diagnostic", () => {
     const rows = tokenUsageBySession(dir);
     expect(rows.find((r) => r.sessionId === "aaa")).toEqual({ sessionId: "aaa", used: 300, saved: 270 });
     expect(rows.find((r) => r.sessionId === "bbb")).toEqual({ sessionId: "bbb", used: 50, saved: 40 });
     expect(rows.find((r) => r.sessionId === "diagnostic")).toBeUndefined();
   });
 
-  it("сортирует по saved по убыванию", () => {
+  it("sorts by saved descending", () => {
     const rows = tokenUsageBySession(dir);
     expect(rows.map((r) => r.sessionId)).toEqual(["aaa", "bbb"]);
   });
 });
 
-describe("token-pilot adapter — отсутствие файла", () => {
-  it("возвращает пустой массив для несуществующего пути", () => {
+describe("token-pilot adapter — missing file", () => {
+  it("returns an empty array for a non-existent path", () => {
     expect(tokenUsageBySession("/nonexistent/path")).toEqual([]);
   });
 });

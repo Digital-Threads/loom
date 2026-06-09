@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loomRegistry, loadDynamicPlugins } from "../../../src/core/plugins/index.js";
 
-// Уникальный id, чтобы не пересекаться с другими прогонами/реестром.
+// A unique id so we do not collide with other runs/the registry.
 const DISABLED_ID = "fake-disabled-11-1";
 
 function writePlugin(root: string, id: string, version: string): void {
@@ -28,14 +28,14 @@ function writePlugin(root: string, id: string, version: string): void {
   );
 }
 
-describe("loadDynamicPlugins — фильтр enabled===false", () => {
+describe("loadDynamicPlugins — enabled===false filter", () => {
   let xdg: string;
   let pluginsDir: string;
   const prevXdg = process.env.XDG_DATA_HOME;
 
   beforeEach(() => {
     xdg = mkdtempSync(join(tmpdir(), "loom-xdg-"));
-    // defaultDeps() читает plugins.json из $XDG_DATA_HOME/loom.
+    // defaultDeps() reads plugins.json from $XDG_DATA_HOME/loom.
     process.env.XDG_DATA_HOME = xdg;
     pluginsDir = join(xdg, "loom", "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -47,10 +47,10 @@ describe("loadDynamicPlugins — фильтр enabled===false", () => {
     rmSync(xdg, { recursive: true, force: true });
   });
 
-  it("плагин с enabled:false в реестре пропускается (не регистрируется)", async () => {
+  it("a plugin with enabled:false in the registry is skipped (not registered)", async () => {
     writePlugin(pluginsDir, DISABLED_ID, "0.0.1");
 
-    // Реестр с этим плагином выключенным.
+    // Registry with this plugin disabled.
     const registry = {
       schemaVersion: 1,
       plugins: {

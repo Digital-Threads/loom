@@ -2,10 +2,10 @@ import React from "react";
 import { render } from "ink-testing-library";
 import { describe, it, expect, vi } from "vitest";
 
-// Изолируем источник данных: на этой машине реальные плагины читают живые данные
-// (aimux ~/.aimux, token-pilot, task-journal), поэтому workspace никогда не пуст.
-// Мокаем loader → пустой workspace, чтобы детерминированно проверить пустой старт
-// (empty → активная вкладка Каталог) на любой машине.
+// Isolate the data source: on this machine the real plugins read live data
+// (aimux ~/.aimux, token-pilot, task-journal), so the workspace is never empty.
+// We mock the loader → an empty workspace, to deterministically test the empty start
+// (empty → the Catalog tab is active) on any machine.
 vi.mock("../../src/core/data/loader.js", () => {
   const empty = {
     subscriptions: [],
@@ -23,13 +23,13 @@ vi.mock("../../src/core/data/loader.js", () => {
   };
 });
 
-// CatalogPanel в useEffect зовёт detectLatest(item, deps) по дефолтным deps, чей
-// run = execFileSync (СИНХРОННЫЙ спавн npm/claude/which, timeout 5000мс на вызов).
-// В юнит-тесте это: (а) лишний реальный I/O, (б) под параллельной нагрузкой сьюта
-// синхронные спавны затыкают event loop → таймер ожидания голодает → тест ловит
-// 5-сек таймаут vitest (это и был флейк ~1/6). Мокаем runner → мгновенный no-op
-// run, ноль спавнов. buildCatalog всё равно отдаёт элементы из loomRegistry
-// («Token Pilot» рендерится синхронно, независимо от detect).
+// CatalogPanel in a useEffect calls detectLatest(item, deps) with the default deps, whose
+// run = execFileSync (a SYNCHRONOUS spawn of npm/claude/which, 5000ms timeout per call).
+// In a unit test this means: (a) extra real I/O, (b) under the suite's parallel load
+// synchronous spawns block the event loop → the waiting timer starves → the test hits
+// the 5-sec vitest timeout (that was the flake ~1/6). We mock the runner → an instant no-op
+// run, zero spawns. buildCatalog still returns items from loomRegistry
+// ("Token Pilot" renders synchronously, independent of detect).
 vi.mock("../../src/core/install/runner.js", async (importActual) => {
   const actual = await importActual<typeof import("../../src/core/install/runner.js")>();
   const instant = () => ({ ok: false, stdout: "", stderr: "" });
@@ -42,10 +42,10 @@ vi.mock("../../src/core/install/runner.js", async (importActual) => {
 
 import { App } from "../../src/ui/App.js";
 
-// Ink коммитит кадры на таймере, а активная вкладка приезжает async
-// (loadWorkspaceData → setActive(Каталог) → ре-рендер → коммит). Поэтому ждём
-// УСЛОВИЕ, а не фиксированное время: поллим lastFrame() пока не появится нужный
-// фрагмент, с запасом по таймауту. Это убирает зависимость от тайминга под нагрузкой.
+// Ink commits frames on a timer, while the active tab arrives async
+// (loadWorkspaceData → setActive(Catalog) → re-render → commit). So we wait for
+// a CONDITION, not a fixed time: we poll lastFrame() until the needed
+// fragment, with timeout headroom. This removes the timing dependency under load.
 async function waitForFrame(
   lastFrame: () => string | undefined,
   needle: string,
@@ -60,10 +60,10 @@ async function waitForFrame(
   return frame;
 }
 
-describe("App: цифровые хоткеи вкладок", () => {
-  it("цифра 1 переключает на вкладку Обзор", async () => {
+describe("App: numeric tab hotkeys", () => {
+  it("digit 1 switches to the Overview tab", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
-    await waitForFrame(lastFrame, "Token Pilot"); // дождались каталога (пустой старт)
+    await waitForFrame(lastFrame, "Token Pilot"); // waited for the catalog (empty start)
     stdin.write("1");
     const frame = await waitForFrame(lastFrame, "Welcome to Loom");
     expect(frame).toContain("Welcome to Loom");

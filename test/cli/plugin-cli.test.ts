@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { parseSource, runPluginCli } from "../../src/cli/plugin-cli.js";
 import type { CmdRunner, InstallDeps } from "../../src/core/install/types.js";
 
-// ── фейк-раннер: пишет вызовы, ничего не делает ──────────────────────────────
+// ── fake runner: records calls, does nothing ────────────────────────────────
 function fakeRun(): { run: CmdRunner; calls: string[][] } {
   const calls: string[][] = [];
   const run: CmdRunner = (cmd, args) => {
@@ -84,14 +84,14 @@ describe("parseSource", () => {
 });
 
 describe("runPluginCli list", () => {
-  it("пусто → 'нет установленных'", () => {
+  it("empty → 'none installed'", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["list"], deps);
     expect(res.code).toBe(0);
     expect(res.lines.join("\n")).toContain("no installed plugins");
   });
 
-  it("после установки показывает плагин", () => {
+  it("after install it shows the plugin", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(baseManifest());
     runPluginCli(["add", src, "--yes"], deps);
@@ -105,7 +105,7 @@ describe("runPluginCli list", () => {
 });
 
 describe("runPluginCli add", () => {
-  it("без --yes печатает план+разрешения, code 0, ничего не ставит", () => {
+  it("without --yes prints plan+permissions, code 0, installs nothing", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(baseManifest({ permissions: ["fs:read", "net"] }));
     const res = runPluginCli(["add", src], deps);
@@ -115,43 +115,43 @@ describe("runPluginCli add", () => {
     expect(out).toContain("fs:read");
     expect(out).toContain("net");
     expect(out).toContain("--yes");
-    // ничего не установлено
+    // nothing was installed
     expect(existsSync(join(deps.dataDir, "plugins.json"))).toBe(false);
     const list = runPluginCli(["list"], deps);
     expect(list.lines.join("\n")).toContain("no installed plugins");
   });
 
-  it("--yes устанавливает local-плагин end-to-end", () => {
+  it("--yes installs a local plugin end-to-end", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(baseManifest());
     const res = runPluginCli(["add", src, "--yes"], deps);
     expect(res.code).toBe(0);
     expect(res.lines.join("\n")).toContain("✓ installed demo@1.0.0");
-    // файлы скопированы
+    // files were copied
     expect(existsSync(join(deps.dataDir, "plugins", "demo", "1.0.0", "plugin.json"))).toBe(true);
-    // реестр обновлён
+    // the registry was updated
     const list = runPluginCli(["list"], deps);
     expect(list.lines.join("\n")).toContain("demo");
   });
 
-  it("невалидный источник → code 1", () => {
+  it("invalid source → code 1", () => {
     const { deps } = makeDeps();
-    // несуществующий npm-пакет: planInstall зафейлит на fetch (фейк-run вернёт ok,
-    // но staging будет пуст → нет plugin.json). Берём заведомо несуществующий путь
-    // как npm-спеку через bare-имя, fetch не найдёт plugin.json.
+    // a non-existent npm package: planInstall fails at fetch (the fake run returns ok,
+    // but staging will be empty → no plugin.json). We use a deliberately non-existent path
+    // as an npm spec via a bare name; fetch will not find plugin.json.
     const res = runPluginCli(["add", "definitely-not-a-real-pkg-xyz"], deps);
     expect(res.code).toBe(1);
     expect(res.lines.join("\n")).toContain("Error");
   });
 
-  it("без аргумента источника → code 1 + usage", () => {
+  it("without a source argument → code 1 + usage", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["add"], deps);
     expect(res.code).toBe(1);
     expect(res.lines.join("\n")).toContain("Usage");
   });
 
-  it("claudePlugin → вызывает claude install при --yes", () => {
+  it("claudePlugin → calls claude install with --yes", () => {
     const { deps, calls } = makeDeps();
     const src = makeLocalPlugin(
       baseManifest({ claudePlugin: { name: "cp", marketplace: "mk" } }),
@@ -165,7 +165,7 @@ describe("runPluginCli add", () => {
     expect(claudeInstall).toContain("cp@mk");
   });
 
-  it("add с interactive-рецептом печатает manual-команды", () => {
+  it("add with an interactive recipe prints the manual commands", () => {
     const src = makeLocalPlugin(baseManifest({ install: {
       install: [{ cmd: "npm", args: ["install","-g","aimux"] },
                 { cmd: "aimux", args: ["auth","login"], interactive: true }],
@@ -179,7 +179,7 @@ describe("runPluginCli add", () => {
 });
 
 describe("runPluginCli remove", () => {
-  it("удаление установленного → code 0, ушёл из реестра", () => {
+  it("removing an installed plugin → code 0, gone from the registry", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(baseManifest());
     runPluginCli(["add", src, "--yes"], deps);
@@ -190,14 +190,14 @@ describe("runPluginCli remove", () => {
     expect(list.lines.join("\n")).toContain("no installed plugins");
   });
 
-  it("удаление несуществующего → code 1", () => {
+  it("removing a non-existent plugin → code 1", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["remove", "nope"], deps);
     expect(res.code).toBe(1);
     expect(res.lines.join("\n")).toContain("Error");
   });
 
-  it("без имени → code 1 + usage", () => {
+  it("without a name → code 1 + usage", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["remove"], deps);
     expect(res.code).toBe(1);
@@ -206,7 +206,7 @@ describe("runPluginCli remove", () => {
 });
 
 describe("runPluginCli unknown", () => {
-  it("неизвестная подкоманда → code 1 + usage", () => {
+  it("unknown subcommand → code 1 + usage", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["frobnicate"], deps);
     expect(res.code).toBe(1);
@@ -215,7 +215,7 @@ describe("runPluginCli unknown", () => {
 });
 
 describe("runPluginCli --scope", () => {
-  it("add --scope project прокидывает scope в рецепт", () => {
+  it("add --scope project passes the scope into the recipe", () => {
     const { deps, calls } = makeDeps();
     const src = makeLocalPlugin(
       baseManifest({
@@ -248,7 +248,7 @@ describe("runPluginCli --scope", () => {
     ]);
   });
 
-  it("add без --scope → scope=user по умолчанию", () => {
+  it("add without --scope → scope=user by default", () => {
     const { deps, calls } = makeDeps();
     const src = makeLocalPlugin(
       baseManifest({
@@ -269,7 +269,7 @@ describe("runPluginCli --scope", () => {
     expect(calls).toContainEqual(["claude", "plugin", "install", "--scope", "user", "x@x"]);
   });
 
-  it("невалидный --scope → ошибка, команда не запускается", () => {
+  it("invalid --scope → error, the command is not run", () => {
     const { deps, calls } = makeDeps();
     const r = runPluginCli(["add", "x", "--yes", "--scope", "evil"], deps);
     expect(r.code).toBe(1);
@@ -278,7 +278,7 @@ describe("runPluginCli --scope", () => {
 });
 
 describe("runPluginCli detect", () => {
-  it("detect <name> печатает installed/version", () => {
+  it("detect <name> prints installed/version", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(
       baseManifest({
@@ -295,16 +295,16 @@ describe("runPluginCli detect", () => {
     expect(r.lines.join("\n")).toContain("installed demo");
   });
 
-  it("detect несуществующего → code 1", () => {
+  it("detect of a non-existent plugin → code 1", () => {
     const { deps } = makeDeps();
     const r = runPluginCli(["detect", "nope"], deps);
     expect(r.code).toBe(1);
   });
 
-  // Мягкий кейс: общий fakeRun всегда возвращает пустой stdout и не настраивается
-  // по-командно, поэтому реально проверить "↻" в выводе нельзя без переписывания
-  // makeDeps. Проверяем, что detect с detect.latest-спекой не падает (code 0).
-  it("detect с detect.latest-спекой не падает (code 0)", () => {
+  // Soft case: the shared fakeRun always returns empty stdout and is not configured
+  // per-command, so we cannot really check "↻" in the output without rewriting
+  // makeDeps. We check that detect with a detect.latest spec does not crash (code 0).
+  it("detect with a detect.latest spec does not crash (code 0)", () => {
     const { deps } = makeDeps();
     const src = makeLocalPlugin(
       baseManifest({

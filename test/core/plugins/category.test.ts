@@ -8,14 +8,14 @@ const EXPECTED: Record<string, LoomCategory> = {
   "task-journal": "memory",
 };
 
-describe("LP1 category — слой плагина", () => {
-  it("каждый builtin объявляет ожидаемую category", () => {
+describe("LP1 category — plugin layer", () => {
+  it("every builtin declares the expected category", () => {
     for (const [id, cat] of Object.entries(EXPECTED)) {
       expect(loomRegistry.get(id)?.category).toBe(cat);
     }
   });
 
-  it("category — один из 8 допустимых слоёв", () => {
+  it("category — one of the 8 allowed layers", () => {
     const allowed = [
       "accounts", "efficiency", "memory", "learning",
       "knowledge", "quality", "automation", "observability",
@@ -26,8 +26,8 @@ describe("LP1 category — слой плагина", () => {
   });
 });
 
-describe("LP1 capabilities — декларация возможностей", () => {
-  it("каждый builtin объявляет capabilities-флаги (boolean)", () => {
+describe("LP1 capabilities — capability declaration", () => {
+  it("every builtin declares capability flags (boolean)", () => {
     for (const p of loomRegistry.list()) {
       expect(p.capabilities).toBeDefined();
       const c = p.capabilities!;
@@ -37,20 +37,20 @@ describe("LP1 capabilities — декларация возможностей", (
     }
   });
 
-  it("флаги отражают реальную форму плагина", () => {
+  it("the flags reflect the actual shape of the plugin", () => {
     const tp = loomRegistry.get("token-pilot")!;
-    expect(tp.capabilities!.settings).toBe(true);   // непустая settings.schema
+    expect(tp.capabilities!.settings).toBe(true);   // non-empty settings.schema
     expect(tp.capabilities!.actions).toBe(false);   // actions: []
 
     const aimux = loomRegistry.get("aimux")!;
     expect(aimux.capabilities!.actions).toBe(true);  // addSubscription
 
-    // install-рецептов ещё нет (LP2) → install=false у всех трёх
+    // no install recipes yet (LP2) → install=false for all three
     for (const id of ["aimux", "token-pilot", "task-journal"]) {
       expect(loomRegistry.get(id)!.capabilities!.install).toBe(false);
     }
 
-    // data: у всех трёх есть load() → true
+    // data: all three have load() → true
     for (const p of loomRegistry.list()) expect(p.capabilities!.data).toBe(true);
   });
 });

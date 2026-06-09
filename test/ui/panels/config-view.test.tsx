@@ -11,18 +11,18 @@ const reports = [
 const prereq = { ok: true, tools: [{ name: "node", found: true, hint: "" }], missing: [] } as any;
 
 describe("ConfigView", () => {
-  it("рендерит scope-секции и статусы", () => {
+  it("renders the scope sections and statuses", () => {
     const { lastFrame } = render(<ConfigView reports={reports} prereq={prereq} onApply={() => {}} />);
     const f = lastFrame()!;
     expect(f).toMatch(/user/);
     expect(f).toMatch(/project/);
-    expect(f).toMatch(/token-pilot/); // missing запись видна
+    expect(f).toMatch(/token-pilot/); // the missing entry is visible
   });
-  it("показывает Prerequisites", () => {
+  it("shows Prerequisites", () => {
     const { lastFrame } = render(<ConfigView reports={reports} prereq={prereq} onApply={() => {}} />);
     expect(lastFrame()!.toLowerCase()).toMatch(/prerequisit|node/);
   });
-  it("apply-хоткей вызывает onApply (а не пишет напрямую)", async () => {
+  it("apply hotkey calls onApply (instead of writing directly)", async () => {
     let applied = false;
     const { stdin } = render(<ConfigView reports={reports} prereq={prereq} onApply={() => { applied = true; }} />);
     await Promise.resolve();

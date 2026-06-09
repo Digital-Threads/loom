@@ -19,9 +19,9 @@ describe("layerOf", () => {
 });
 
 const plugins = [
-  { id: "task-journal", category: "memory", tabs: [{ id: "tasks", title: "Задачи" }] },
-  { id: "aimux", category: "accounts", tabs: [{ id: "subs", title: "Подписки" }, { id: "sess", title: "Сессии" }] },
-  { id: "token-pilot", category: "efficiency", tabs: [{ id: "tok", title: "Токены" }] },
+  { id: "task-journal", category: "memory", tabs: [{ id: "tasks", title: "Tasks" }] },
+  { id: "aimux", category: "accounts", tabs: [{ id: "subs", title: "Subscriptions" }, { id: "sess", title: "Sessions" }] },
+  { id: "token-pilot", category: "efficiency", tabs: [{ id: "tok", title: "Tokens" }] },
 ] as any[];
 
 describe("groupTabsByLayer", () => {
@@ -30,7 +30,7 @@ describe("groupTabsByLayer", () => {
   });
   it("keeps tab order within a plugin and flattens to a stable tab list", () => {
     const flat = groupTabsByLayer(plugins).flatMap((g) => g.tabs.map((t) => t.title));
-    expect(flat).toEqual(["Подписки", "Сессии", "Токены", "Задачи"]);
+    expect(flat).toEqual(["Subscriptions", "Sessions", "Tokens", "Tasks"]);
   });
   it("omits empty layers", () => {
     expect(groupTabsByLayer(plugins).some((g) => g.layer === "learning")).toBe(false);

@@ -33,13 +33,13 @@ afterEach(() => {
 });
 
 describe("discoverPlugins", () => {
-  it("несуществующий каталог → пусто без throw", () => {
+  it("non-existent directory → empty, no throw", () => {
     const r = discoverPlugins(join(root, "does-not-exist"));
     expect(r.found).toEqual([]);
     expect(r.errors).toEqual([]);
   });
 
-  it("находит валидный, репортит битый JSON и невалидный манифест", () => {
+  it("finds the valid one, reports broken JSON and an invalid manifest", () => {
     const goodDir = writePlugin(root, "good", "1.0.0", JSON.stringify(validManifest));
     writePlugin(root, "broken", "1.0.0", "{ not json ");
     writePlugin(
@@ -61,14 +61,14 @@ describe("discoverPlugins", () => {
     expect(r.errors.some((e) => e.includes("invalid"))).toBe(true);
   });
 
-  it("каталог без plugin.json игнорируется (не ошибка)", () => {
+  it("a directory without plugin.json is ignored (not an error)", () => {
     mkdirSync(join(root, "empty", "1.0.0"), { recursive: true });
     const r = discoverPlugins(root);
     expect(r.found).toEqual([]);
     expect(r.errors).toEqual([]);
   });
 
-  it("несколько версий одного name возвращаются обе (дубли не схлопываются здесь)", () => {
+  it("multiple versions of one name are both returned (duplicates are not collapsed here)", () => {
     writePlugin(root, "good", "1.0.0", JSON.stringify(validManifest));
     writePlugin(root, "good", "2.0.0", JSON.stringify({ ...validManifest, version: "2.0.0" }));
     const r = discoverPlugins(root);

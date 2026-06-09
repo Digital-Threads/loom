@@ -19,8 +19,8 @@ function harness(run: ReturnType<typeof vi.fn>) {
         id: "mk",
         label: "make",
         prompt: [
-          { key: "title", label: "Заголовок" },
-          { key: "goal", label: "Цель" },
+          { key: "title", label: "Title" },
+          { key: "goal", label: "Goal" },
         ],
         run,
       },
@@ -37,8 +37,8 @@ function harness(run: ReturnType<typeof vi.fn>) {
   return { plugin, spec, data };
 }
 
-describe("ViewRenderer: prompt-режим action", () => {
-  it("собирает поля и зовёт run с typed-args", async () => {
+describe("ViewRenderer: prompt-mode action", () => {
+  it("collects the fields and calls run with typed args", async () => {
     const run = vi.fn(() => ({ ok: true }));
     const { plugin, spec, data } = harness(run);
     const { stdin, lastFrame, unmount } = render(
@@ -48,26 +48,26 @@ describe("ViewRenderer: prompt-режим action", () => {
     );
     await tick();
     stdin.write("o");
-    await tick(); // открыть prompt (поле 1)
-    expect(lastFrame()).toContain("Заголовок");
+    await tick(); // open the prompt (field 1)
+    expect(lastFrame()).toContain("Title");
     stdin.write("hi");
     await tick();
     stdin.write("\r");
-    await tick(); // submit поле 1 → поле 2
-    expect(lastFrame()).toContain("Цель");
+    await tick(); // submit field 1 → field 2
+    expect(lastFrame()).toContain("Goal");
     stdin.write("g");
     await tick();
     stdin.write("\r");
-    await tick(); // submit поле 2 → run
+    await tick(); // submit field 2 → run
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][1]).toMatchObject({ title: "hi", goal: "g" });
-    // prompt закрылся — снова виден список (поле-ввод исчез).
+    // the prompt closed — the list is visible again (the input field is gone).
     expect(lastFrame()).toContain("r1");
-    expect(lastFrame()).not.toContain("Цель");
+    expect(lastFrame()).not.toContain("Goal");
     unmount();
   });
 
-  it("Esc отменяет prompt без вызова run", async () => {
+  it("Esc cancels the prompt without calling run", async () => {
     const run = vi.fn(() => ({ ok: true }));
     const { plugin, spec, data } = harness(run);
     const { stdin, unmount } = render(

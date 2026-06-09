@@ -17,7 +17,7 @@ describe("dashboard derivations", () => {
     expect(rows[0].tokens).toBe("10/2");
   });
 
-  it("hides exact number for overlapping tasks (≈ перекрытие)", () => {
+  it("hides exact number for overlapping tasks (≈ overlap)", () => {
     const overlapping = {
       ...data,
       taskEvents: [
@@ -35,7 +35,7 @@ describe("dashboard derivations", () => {
     expect(a.tokens).not.toBe(`${a.used}/${a.saved}`);
   });
 
-  it("exact-строка (есть meta.session_id) несёт badge 'точно' и точное число", () => {
+  it("exact row (has meta.session_id) carries the 'exact' badge and an exact number", () => {
     const exact = {
       subscriptions: [], sessions: [], health: [], tokens: [],
       tokenEvents: [{ ts: Date.parse("2026-06-01T10:30:00Z"), used: 10, saved: 2, sessionId: "s", agentType: null }],
@@ -49,7 +49,7 @@ describe("dashboard derivations", () => {
     const a = rows.find((r) => r.id === "A");
     expect(a.mode).toBe("exact");
     expect(a.badge).toMatch(/exact/);
-    expect(a.tokens).toBe("10/2"); // exact → точное число, без ≈
+    expect(a.tokens).toBe("10/2"); // exact → an exact number, no ≈
   });
 
   it("layerSummaryLines returns one line per present layer in LAYER_ORDER", () => {

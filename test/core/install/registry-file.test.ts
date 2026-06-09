@@ -37,7 +37,7 @@ function seed(deps: InstallDeps, enabled: boolean): void {
 }
 
 describe("setEnabled", () => {
-  it("выключает включённый плагин и пишет реестр", () => {
+  it("disables an enabled plugin and writes the registry", () => {
     const deps = tmpDeps();
     seed(deps, true);
     const res = setEnabled(deps, "foo", false);
@@ -45,7 +45,7 @@ describe("setEnabled", () => {
     expect(readInstalled(deps).plugins.foo.enabled).toBe(false);
   });
 
-  it("включает выключенный плагин", () => {
+  it("enables a disabled plugin", () => {
     const deps = tmpDeps();
     seed(deps, false);
     const res = setEnabled(deps, "foo", true);
@@ -53,7 +53,7 @@ describe("setEnabled", () => {
     expect(readInstalled(deps).plugins.foo.enabled).toBe(true);
   });
 
-  it("нет такого name → {ok:false}, реестр не меняется", () => {
+  it("no such name → {ok:false}, the registry is unchanged", () => {
     const deps = tmpDeps();
     seed(deps, true);
     const res = setEnabled(deps, "missing", false);

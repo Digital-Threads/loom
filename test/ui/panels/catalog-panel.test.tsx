@@ -10,8 +10,8 @@ import type { InstallDeps } from "../../../src/core/install/types.js";
 const tmp = mkdtempSync(join(tmpdir(), "loom-catui-"));
 const fakeDeps: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
 
-describe("CatalogPanel рендер", () => {
-  it("пустой реестр → все ○ not-installed, видны кейсы и категории", () => {
+describe("CatalogPanel render", () => {
+  it("empty registry → all ○ not-installed, cases and categories visible", () => {
     const { lastFrame } = render(<CatalogPanel deps={fakeDeps} />);
     const f = lastFrame()!;
     expect(f).toContain("○");
@@ -19,30 +19,30 @@ describe("CatalogPanel рендер", () => {
     expect(f).toContain("Save tokens");
     expect(f).toContain("efficiency");
   });
-  it("футер показывает хоткеи каталога", () => {
+  it("the footer shows the catalog hotkeys", () => {
     const { lastFrame } = render(<CatalogPanel deps={fakeDeps} />);
     expect(lastFrame()!).toContain("Enter");
   });
 });
 
-describe("CatalogPanel действия", () => {
-  it("Enter на not-installed → confirm установки", async () => {
+describe("CatalogPanel actions", () => {
+  it("Enter on a not-installed item → install confirmation", async () => {
     const fake: InstallDeps = {
       dataDir: mkdtempSync(join(tmpdir(), "loom-c4-")),
       run: () => ({ ok: false, stdout: "", stderr: "" }),
     };
     const { lastFrame, stdin } = render(<CatalogPanel deps={fake} />);
     stdin.write("\r");
-    await Promise.resolve(); // ink/React: рендер флашится на следующем микротике
+    await Promise.resolve(); // ink/React: the render flushes on the next microtask
     const f = lastFrame()!;
     expect(f.toLowerCase()).toContain("install");
     expect(f).toMatch(/y\/n|y · n|\(y\/n\)/i);
   });
 
-  it("y подтверждает → вызывает install-рецепт через CmdRunner", async () => {
+  it("y confirms → runs the install recipe via CmdRunner", async () => {
     const calls: string[] = [];
     // cursor=0 = aimux: detect probe = npm ls -g ... → not-installed;
-    // install = npm install -g ... → ok + запись в calls.
+    // install = npm install -g ... → ok + a recorded call.
     const fake: InstallDeps = {
       dataDir: mkdtempSync(join(tmpdir(), "loom-c4b-")),
       run: (cmd, args) => {
@@ -53,38 +53,38 @@ describe("CatalogPanel действия", () => {
     };
     const { stdin } = render(<CatalogPanel deps={fake} />);
     stdin.write("\r");
-    await Promise.resolve(); // дать mode перейти в confirmInstall до нажатия y
+    await Promise.resolve(); // let mode move to confirmInstall before pressing y
     stdin.write("y");
     await Promise.resolve();
     expect(calls.length).toBeGreaterThan(0);
   });
 
-  it("хоткеи каталога не конфликтуют с глобальными App (q/←/→)", () => {
+  it("catalog hotkeys do not conflict with the global App ones (q/←/→)", () => {
     const handled = new Set(["i", "u", "d", "e", "y", "n"]);
     expect(handled.has("q")).toBe(false);
   });
 });
 
-describe("CatalogPanel группировка по слоям", () => {
-  it("группирует по слоям из loomRegistry.groupByCategory (LP1): заголовки слоёв в порядке реестра", () => {
+describe("CatalogPanel grouping by layers", () => {
+  it("groups by layers from loomRegistry.groupByCategory (LP1): layer headers in registry order", () => {
     const tmp = mkdtempSync(join(tmpdir(), "loom-c6-"));
     const fake: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
     const { lastFrame } = render(<CatalogPanel deps={fake} />);
-    // Снимаем ANSI-коды (Text bold/color оборачивает заголовок), чтобы проверять
-    // именно текст строк, а не escape-последовательности.
+    // Strip ANSI codes (Text bold/color wraps the header) so we check
+    // the actual line text, not the escape sequences.
     const f = lastFrame()!.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
-    // Заголовок слоя — ОТДЕЛЬНОЙ строкой (секция), не колонкой [category].
+    // The layer header is on its OWN line (a section), not a [category] column.
     expect(f).toMatch(/^\s*—\s*accounts\s*—\s*$/m);
     expect(f).toMatch(/^\s*—\s*efficiency\s*—\s*$/m);
     expect(f).toMatch(/^\s*—\s*memory\s*—\s*$/m);
-    // Порядок секций = порядок регистрации реестра.
+    // Section order = registry registration order.
     expect(f.indexOf("— accounts —")).toBeLessThan(f.indexOf("— memory —"));
     expect(f.indexOf("— efficiency —")).toBeLessThan(f.indexOf("— memory —"));
   });
 });
 
-describe("CatalogPanel ленивый latest", () => {
-  it("ленивая загрузка latest: сначала «проверка», потом ↻", async () => {
+describe("CatalogPanel lazy latest", () => {
+  it("lazy latest loading: first \"checking\", then ↻", async () => {
     const tmp = mkdtempSync(join(tmpdir(), "loom-c45-"));
     const fake: InstallDeps = { dataDir: tmp, run: (c, a) => {
       const key = [c, ...a].join(" ");
@@ -94,13 +94,13 @@ describe("CatalogPanel ленивый latest", () => {
       return { ok: true, stdout: "", stderr: "" };
     } };
     const { lastFrame } = render(<CatalogPanel deps={fake} />);
-    // первый кадр: установленные показывают индикатор проверки
+    // first frame: installed items show the checking indicator
     expect(lastFrame()!).toMatch(/checking|↻…/);
     await Promise.resolve(); await Promise.resolve();
     expect(lastFrame()!).toContain("↻");
   });
 
-  it("not-installed не показывает индикатор проверки обновлений", () => {
+  it("not-installed does not show an update-check indicator", () => {
     const tmp = mkdtempSync(join(tmpdir(), "loom-c45b-"));
     const fake: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
     const { lastFrame } = render(<CatalogPanel deps={fake} />);

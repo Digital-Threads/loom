@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("LP8 readWorkspaceConfig — defensive", () => {
-  it("нет файла → дефолтный конфиг (version 1, пустые секции)", () => {
+  it("no file → default config (version 1, empty sections)", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     const cfg = readWorkspaceConfig(dir);
     expect(cfg.version).toBe(1);
@@ -21,13 +21,13 @@ describe("LP8 readWorkspaceConfig — defensive", () => {
     expect(cfg.plugins).toEqual({});
     expect(cfg.profiles).toEqual({});
   });
-  it("битый YAML → дефолт, не бросает", () => {
+  it("broken YAML → default, does not throw", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     writeFileSync(join(dir, ".ai-workspace.yaml"), "::: not: valid: [yaml", "utf8");
     expect(() => readWorkspaceConfig(dir)).not.toThrow();
     expect(readWorkspaceConfig(dir).version).toBe(1);
   });
-  it("валидный файл → читается с полями плагинов и профиля", () => {
+  it("valid file → parsed with plugin and profile fields", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     writeFileSync(
       join(dir, ".ai-workspace.yaml"),
@@ -42,14 +42,14 @@ describe("LP8 readWorkspaceConfig — defensive", () => {
   });
 });
 
-describe("LP8 writeWorkspaceConfig — patch, сохраняет чужие ключи", () => {
-  it("создаёт файл, если его нет", () => {
+describe("LP8 writeWorkspaceConfig — patch, preserves foreign keys", () => {
+  it("creates the file if it does not exist", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     const ok = writeWorkspaceConfig(dir, { workspace: { name: "fresh" } });
     expect(ok).toBe(true);
     expect(readWorkspaceConfig(dir).workspace.name).toBe("fresh");
   });
-  it("патчит секцию plugins, не теряя другие плагины", () => {
+  it("patches the plugins section without losing other plugins", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     writeWorkspaceConfig(dir, { plugins: { "token-pilot": { enabled: true }, "task-journal": { enabled: true } } });
     writeWorkspaceConfig(dir, { plugins: { "task-journal": { enabled: false } } });
@@ -57,7 +57,7 @@ describe("LP8 writeWorkspaceConfig — patch, сохраняет чужие кл
     expect(cfg.plugins["token-pilot"]?.enabled).toBe(true);
     expect(cfg.plugins["task-journal"]?.enabled).toBe(false);
   });
-  it("сохраняет НЕзнакомые ключи файла (напр. integration:)", () => {
+  it("preserves unfamiliar file keys (e.g. integration:)", () => {
     dir = mkdtempSync(join(tmpdir(), "loom-ws-"));
     writeFileSync(join(dir, ".ai-workspace.yaml"),
       ["version: 1","integration:","  event_bus: true","plugins:","  aimux:","    enabled: true"].join("\n"), "utf8");

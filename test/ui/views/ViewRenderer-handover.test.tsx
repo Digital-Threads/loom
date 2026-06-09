@@ -15,8 +15,8 @@ vi.mock("ink", async (orig) => {
 const tick = () => new Promise((r) => setTimeout(r, 40));
 
 describe("ViewRenderer: exit-and-handover", () => {
-  it("action с handover гасит Ink и регистрирует thunk", async () => {
-    takeHandover(); // очистить остаточное
+  it("action with handover unmounts Ink and registers the thunk", async () => {
+    takeHandover(); // clear any leftover
     exitSpy.mockClear();
     const thunk = vi.fn(() => "launched");
     const plugin = {

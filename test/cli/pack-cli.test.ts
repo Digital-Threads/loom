@@ -6,29 +6,29 @@ const data = { subscriptions: [], sessions: [], health: [], tokens: [], tokenEve
 const baseDeps = { loadData: async () => data, readConfig: () => ({ projectName: "t" }) };
 
 describe("runPackCli", () => {
-  it("stdout по умолчанию: code 0, markdown в lines", async () => {
+  it("stdout by default: code 0, markdown in lines", async () => {
     const r = await runPackCli([], baseDeps);
     expect(r.code).toBe(0);
     expect(r.lines.join("\n")).toContain("# Workspace pack");
   });
-  it("--out пишет в файл (инъекция writeFile)", async () => {
+  it("--out writes to a file (writeFile injection)", async () => {
     let written = "";
     const r = await runPackCli(["--out", "/tmp/p.md"], { ...baseDeps, writeFile: (_p, c) => { written = c; } });
     expect(r.code).toBe(0);
     expect(r.lines[0]).toMatch(/pack written: \/tmp\/p\.md/);
     expect(written).toContain("# Workspace pack");
   });
-  it("--out без пути → code 1", async () => {
+  it("--out without a path → code 1", async () => {
     const r = await runPackCli(["--out"], baseDeps);
     expect(r.code).toBe(1);
   });
-  it("--copy при сбое буфера → code 0 + деградация на stdout", async () => {
+  it("--copy on clipboard failure → code 0 + falls back to stdout", async () => {
     const r = await runPackCli(["--copy"], { ...baseDeps, copyToClipboard: () => { throw new Error("no clip"); } });
     expect(r.code).toBe(0);
     expect(r.lines.join("\n")).toMatch(/clipboard unavailable/);
     expect(r.lines.join("\n")).toContain("# Workspace pack");
   });
-  it("неизвестный флаг → code 1 + usage", async () => {
+  it("unknown flag → code 1 + usage", async () => {
     const r = await runPackCli(["--bogus"], baseDeps);
     expect(r.code).toBe(1);
     expect(r.lines.join("\n")).toMatch(/usage/);

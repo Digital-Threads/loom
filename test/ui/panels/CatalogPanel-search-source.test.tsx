@@ -8,8 +8,8 @@ import { CatalogPanel } from "../../../src/ui/panels/CatalogPanel.js";
 import { InputModeContext } from "../../../src/ui/input/InputModeContext.js";
 import type { InstallDeps } from "../../../src/core/install/types.js";
 
-// Фейковый раннер: ничего не исполняет (избегаем известного spawn-флейка),
-// install всегда падает → детерминированный статус ошибки.
+// Fake runner: executes nothing (avoids the known spawn flake),
+// install always fails → a deterministic error status.
 function makeDeps(): InstallDeps {
   return {
     dataDir: mkdtempSync(join(tmpdir(), "loom-cat-search-")),
@@ -17,7 +17,7 @@ function makeDeps(): InstallDeps {
   };
 }
 
-// TextInput читает InputModeContext — оборачиваем рендеры в provider.
+// TextInput reads InputModeContext — we wrap the renders in a provider.
 function renderPanel(deps: InstallDeps) {
   return render(
     <InputModeContext.Provider value={{ capturing: false, setCapturing: () => {} }}>
@@ -26,7 +26,7 @@ function renderPanel(deps: InstallDeps) {
   );
 }
 
-// Поллинг lastFrame вместо фиксированных sleep: ink флашится асинхронно.
+// Poll lastFrame instead of fixed sleeps: ink flushes asynchronously.
 async function waitFor(get: () => string, pred: (f: string) => boolean, tries = 50): Promise<string> {
   for (let i = 0; i < tries; i++) {
     const f = get();
@@ -36,8 +36,8 @@ async function waitFor(get: () => string, pred: (f: string) => boolean, tries = 
   return get();
 }
 
-describe("CatalogPanel поиск (loom-4co)", () => {
-  it("/ + ввод фильтрует список вживую", async () => {
+describe("CatalogPanel search (loom-4co)", () => {
+  it("/ + typing filters the list live", async () => {
     const { lastFrame, stdin } = renderPanel(makeDeps());
     stdin.write("/");
     await Promise.resolve();
@@ -51,7 +51,7 @@ describe("CatalogPanel поиск (loom-4co)", () => {
     expect(f).not.toContain("aimux");
   });
 
-  it("Esc восстанавливает полный список", async () => {
+  it("Esc restores the full list", async () => {
     const { lastFrame, stdin } = renderPanel(makeDeps());
     stdin.write("/");
     await Promise.resolve();
@@ -69,8 +69,8 @@ describe("CatalogPanel поиск (loom-4co)", () => {
   });
 });
 
-describe("CatalogPanel свободный source-install (loom-fru)", () => {
-  it("a + источник + Enter → возврат к списку и статус ошибки", async () => {
+describe("CatalogPanel free-form source install (loom-fru)", () => {
+  it("a + source + Enter → returns to the list with an error status", async () => {
     const { lastFrame, stdin } = renderPanel(makeDeps());
     stdin.write("a");
     const opened = await waitFor(

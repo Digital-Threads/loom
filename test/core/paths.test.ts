@@ -15,12 +15,12 @@ afterEach(() => {
 });
 
 describe("paths", () => {
-  it("loomDataDir = $XDG_DATA_HOME/loom когда задан", () => {
+  it("loomDataDir = $XDG_DATA_HOME/loom when set", () => {
     process.env.XDG_DATA_HOME = "/tmp/xdg-data";
     expect(loomDataDir()).toBe(join("/tmp/xdg-data", "loom"));
   });
 
-  it("loomDataDir = ~/.loom когда XDG_DATA_HOME не задан", () => {
+  it("loomDataDir = ~/.loom when XDG_DATA_HOME is not set", () => {
     delete process.env.XDG_DATA_HOME;
     expect(loomDataDir()).toBe(join(homedir(), ".loom"));
   });
@@ -37,7 +37,7 @@ describe("paths", () => {
     );
   });
 
-  it("без XDG: plugins/registry складываются от ~/.loom", () => {
+  it("without XDG: plugins/registry are placed under ~/.loom", () => {
     delete process.env.XDG_DATA_HOME;
     expect(loomPluginsDir()).toBe(join(homedir(), ".loom", "plugins"));
     expect(loomRegistryFile()).toBe(join(homedir(), ".loom", "plugins.json"));

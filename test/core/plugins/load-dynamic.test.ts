@@ -7,7 +7,7 @@ import {
   loadDynamicPlugins,
 } from "../../../src/core/plugins/index.js";
 
-// Уникальный id чтобы не загрязнять глобальный реестр между прогонами.
+// A unique id so we do not pollute the global registry between runs.
 const FAKE_ID = "fake-dyn-8-3";
 
 function writeManifestAndEntry(
@@ -50,31 +50,31 @@ describe("loadDynamicPlugins", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("грузит плагин с диска в loomRegistry", async () => {
+  it("loads a plugin from disk into loomRegistry", async () => {
     writeManifestAndEntry(dir, FAKE_ID, "0.0.1", {});
     const errs = await loadDynamicPlugins(dir);
     expect(errs).toEqual([]);
     expect(loomRegistry.get(FAKE_ID)?.title).toBe("Dyn");
   });
 
-  it("дубль builtin id (aimux) не перезаписывается, отмечается в ошибках", async () => {
+  it("a duplicate builtin id (aimux) is not overwritten, gets reported in errors", async () => {
     const builtinTitle = loomRegistry.get("aimux")?.title;
     expect(builtinTitle).toBeDefined();
 
     writeManifestAndEntry(dir, "aimux", "9.9.9", {});
     const errs = await loadDynamicPlugins(dir);
 
-    // aimux остался builtin (title не изменился)
+    // aimux stayed a builtin (title unchanged)
     expect(loomRegistry.get("aimux")?.title).toBe(builtinTitle);
     expect(errs.some((e) => e.includes("aimux"))).toBe(true);
   });
 
-  it("несуществующий каталог → пустой список ошибок, не бросает", async () => {
+  it("non-existent directory → empty error list, does not throw", async () => {
     const errs = await loadDynamicPlugins(join(dir, "nope"));
     expect(errs).toEqual([]);
   });
 
-  it("3 builtin всё ещё в реестре", () => {
+  it("3 builtins are still in the registry", () => {
     expect(loomRegistry.get("aimux")).toBeDefined();
     expect(loomRegistry.get("token-pilot")).toBeDefined();
     expect(loomRegistry.get("task-journal")).toBeDefined();

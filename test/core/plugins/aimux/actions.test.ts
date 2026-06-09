@@ -11,7 +11,7 @@ import {
 } from "@digital-threads/aimux/core";
 import { addSubscription, plugin } from "../../../../src/core/plugins/aimux/adapter.js";
 
-// Изолируем aimuxDir во временную папку на каждый тест — реальный ~/.aimux НЕ трогаем.
+// Isolate aimuxDir into a temp folder for each test — the real ~/.aimux is NOT touched.
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "loom-aimux-actions-"));
@@ -21,7 +21,7 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("aimux actions — addSubscription", () => {
-  it("добавляет новый профиль и персистит его в конфиг", () => {
+  it("adds a new profile and persists it to the config", () => {
     const res = addSubscription("mytest", { cli: "claude" });
     expect(res.ok).toBe(true);
 
@@ -30,7 +30,7 @@ describe("aimux actions — addSubscription", () => {
     expect(Object.keys(cfg!.profiles)).toContain("mytest");
   });
 
-  it("возвращает ошибку при повторном добавлении существующего профиля", () => {
+  it("returns an error when adding an already-existing profile again", () => {
     const first = addSubscription("mytest", { cli: "claude" });
     expect(first.ok).toBe(true);
 
@@ -43,13 +43,13 @@ describe("aimux actions — addSubscription", () => {
 describe("aimux actions — login (exit-and-handover)", () => {
   const login = () => plugin.actions!.find((a) => a.id === "login")!;
 
-  it("с профилем возвращает ok + handover-thunk (не вызываем — спавнит)", () => {
+  it("with a profile it returns ok + a handover thunk (not invoked — it spawns)", () => {
     const res = login().run({ projectRoot: "" }, { profile: "x" });
     expect(res.ok).toBe(true);
     expect(typeof res.handover).toBe("function");
   });
 
-  it("без профиля возвращает ошибку без handover", () => {
+  it("without a profile it returns an error and no handover", () => {
     const res = login().run({ projectRoot: "" }, { profile: "" });
     expect(res.ok).toBe(false);
     expect(res.handover).toBeUndefined();
@@ -59,26 +59,26 @@ describe("aimux actions — login (exit-and-handover)", () => {
 describe("aimux actions — switchProfile", () => {
   const switchProfile = () => plugin.actions!.find((a) => a.id === "switchProfile")!;
 
-  it("action существует и просит профиль через prompt", () => {
+  it("action exists and asks for the profile via prompt", () => {
     const action = switchProfile();
     expect(action).toBeDefined();
     expect(action.prompt?.some((p) => p.key === "profile")).toBe(true);
   });
 
-  it("пустой профиль → { ok: false } без записи активного профиля", () => {
+  it("empty profile → { ok: false } without writing the active profile", () => {
     const res = switchProfile().run({ projectRoot: "" }, { profile: "" });
     expect(res.ok).toBe(false);
     expect(loadActiveProfile()).toBeNull();
   });
 
-  it("известный профиль → ok и сохраняет активный профиль", () => {
-    // createDefaultConfig("main") создаёт профиль "main" в изолированном tmp aimuxDir.
+  it("known profile → ok and saves the active profile", () => {
+    // createDefaultConfig("main") creates the "main" profile in the isolated tmp aimuxDir.
     const res = switchProfile().run({ projectRoot: "" }, { profile: "main" });
     expect(res.ok).toBe(true);
     expect(loadActiveProfile()).toBe("main");
   });
 
-  it("неизвестный профиль → { ok: false } и активный профиль не меняется", () => {
+  it("unknown profile → { ok: false } and the active profile is unchanged", () => {
     const res = switchProfile().run({ projectRoot: "" }, { profile: "ghost" });
     expect(res.ok).toBe(false);
     expect(res.error).toContain("ghost");

@@ -32,19 +32,19 @@ function discovered(
 }
 
 describe("isApiCompatible", () => {
-  it("одинаковый major совместим", () => {
+  it("same major is compatible", () => {
     expect(isApiCompatible("1.0", "1.0")).toBe(true);
     expect(isApiCompatible("^1.2", "1.0")).toBe(true);
     expect(isApiCompatible("~1.2.3", "1.0")).toBe(true);
     expect(isApiCompatible("1", "1.0")).toBe(true);
   });
 
-  it("разный major несовместим", () => {
+  it("different major is incompatible", () => {
     expect(isApiCompatible("2.0", "1.0")).toBe(false);
     expect(isApiCompatible("^2.0", "1.0")).toBe(false);
   });
 
-  it("мусор несовместим", () => {
+  it("garbage is incompatible", () => {
     expect(isApiCompatible("abc", "1.0")).toBe(false);
     expect(isApiCompatible("", "1.0")).toBe(false);
     expect(isApiCompatible("1.0", "xyz")).toBe(false);
@@ -69,7 +69,7 @@ describe("loadPlugins", () => {
     return installDir;
   }
 
-  it("грузит реальный .js-модуль с диска в реестр", async () => {
+  it("loads a real .js module from disk into the registry", async () => {
     const installDir = writePlugin(
       "fake",
       `export const plugin = { id: "fake", title: "Fake", tabs: [{ id: "x", title: "X" }], load: () => ({}) };`,
@@ -82,12 +82,12 @@ describe("loadPlugins", () => {
     expect(plugins[0].title).toBe("Fake");
   });
 
-  it("битый модуль (несуществующий файл) → error, остальные грузятся", async () => {
+  it("broken module (non-existent file) → error, the rest still load", async () => {
     const okDir = writePlugin(
       "good",
       `export const plugin = { id: "good", title: "Good", tabs: [], load: () => ({}) };`,
     );
-    const missingDir = join(dir, "missing"); // файла нет
+    const missingDir = join(dir, "missing"); // the file does not exist
     const { plugins, errors } = await loadPlugins([
       discovered(missingDir, { name: "missing", entry: "./nope.js" }),
       discovered(okDir, { name: "good" }),
@@ -97,7 +97,7 @@ describe("loadPlugins", () => {
     expect(errors[0]).toContain("missing");
   });
 
-  it("syntax error в модуле → error, не роняет", async () => {
+  it("syntax error in the module → error, does not crash", async () => {
     const badDir = writePlugin("bad", `export const plugin = { id: `);
     const { plugins, errors } = await loadPlugins([
       discovered(badDir, { name: "bad" }),
@@ -119,7 +119,7 @@ describe("loadPlugins", () => {
     expect(errors[0]).toContain("does not match");
   });
 
-  it("apiVersion 2.0 → skip + error (код не импортируется)", async () => {
+  it("apiVersion 2.0 → skip + error (the code is not imported)", async () => {
     const d = writePlugin(
       "v2",
       `export const plugin = { id: "v2", title: "V2", tabs: [], load: () => ({}) };`,
@@ -132,7 +132,7 @@ describe("loadPlugins", () => {
     expect(errors[0]).toContain("apiVersion");
   });
 
-  it("отсутствует tabs / load → skip + error", async () => {
+  it("missing tabs / load → skip + error", async () => {
     const d = writePlugin(
       "notabs",
       `export const plugin = { id: "notabs", title: "N", load: () => ({}) };`,

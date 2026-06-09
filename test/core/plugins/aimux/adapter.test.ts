@@ -34,13 +34,13 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("aimux adapter — подписки", () => {
-  it("возвращает имена профилей", () => {
+describe("aimux adapter — subscriptions", () => {
+  it("returns the profile names", () => {
     const subs = listSubscriptions();
     expect(subs.map((s) => s.name).sort()).toEqual(["personal", "work"]);
   });
 
-  it("прокидывает cli и isSource из конфига", () => {
+  it("passes through cli and isSource from the config", () => {
     const subs = listSubscriptions();
     const work = subs.find((s) => s.name === "work");
     expect(work).toEqual({ name: "work", cli: "claude", isSource: true });
@@ -49,8 +49,8 @@ describe("aimux adapter — подписки", () => {
   });
 });
 
-describe("aimux adapter — здоровье и сессии", () => {
-  it("возвращает health по профилям (массив отчётов)", () => {
+describe("aimux adapter — health and sessions", () => {
+  it("returns per-profile health (array of reports)", () => {
     const health = listHealth();
     expect(Array.isArray(health)).toBe(true);
     for (const report of health) {
@@ -60,7 +60,7 @@ describe("aimux adapter — здоровье и сессии", () => {
     }
   });
 
-  it("возвращает массив сессий", () => {
+  it("returns an array of sessions", () => {
     const sessions = listSessions();
     expect(Array.isArray(sessions)).toBe(true);
     for (const s of sessions) {

@@ -8,7 +8,7 @@ describe("tasksTokensView", () => {
     const cols = (tasksTokensView as any).columns.map((c: any) => c.value);
     expect(cols).toContain("tokens");
   });
-  it("в колонках есть бейдж точности (badge)", () => {
+  it("the columns include an accuracy badge", () => {
     const cols = (tasksTokensView as any).columns.map((c: any) => c.value);
     expect(cols).toContain("badge");
   });

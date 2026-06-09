@@ -7,7 +7,7 @@ import { requiredToolsForRecipe, preflightRecipe } from "../../../src/core/insta
 import { readInstalled } from "../../../src/core/install/registry-file.js";
 import type { CmdRunner, InstallDeps } from "../../../src/core/install/types.js";
 
-// ── self-contained хелперы (форма из install.test.ts) ────────────────────────
+// ── self-contained helpers (shape from install.test.ts) ─────────────────────
 const tmpDirs: string[] = [];
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -52,26 +52,26 @@ function makeDeps(): { deps: InstallDeps; calls: string[][] } {
 
 function allowCheck(present: string[]) {
   return (names: string[]) => {
-    const tools = names.map((name) => ({ name, found: present.includes(name), hint: `нужен ${name}` }));
+    const tools = names.map((name) => ({ name, found: present.includes(name), hint: `${name} is required` }));
     const missing = tools.filter((t) => !t.found).map((t) => t.name);
     return { ok: missing.length === 0, tools, missing };
   };
 }
 
 describe("requiredToolsForRecipe", () => {
-  it("явный requires имеет приоритет", () => {
+  it("an explicit requires takes priority", () => {
     expect(requiredToolsForRecipe({ requires: ["cargo", "claude"],
       install: [{ cmd: "npm", args: ["i"] }], detect: { probe: { cmd: "which", args: ["x"] } }, remove: [] }))
       .toEqual(["cargo", "claude"]);
   });
-  it("без requires выводит из step.cmd", () => {
+  it("without requires it derives them from step.cmd", () => {
     const r = requiredToolsForRecipe({ install: [
       { cmd: "cargo", args: ["install", "task-journal-cli"] }, { cmd: "claude", args: ["plugin", "install", "x@x"] }],
       detect: { probe: { cmd: "claude", args: ["plugin", "list"] } }, remove: [] });
     expect(r).toEqual(expect.arrayContaining(["cargo", "claude"]));
     expect(r).not.toContain("which");
   });
-  it("npm-шаг тянет node и npm", () => {
+  it("npm step pulls in node and npm", () => {
     const r = requiredToolsForRecipe({ install: [{ cmd: "npm", args: ["install", "-g", "x"] }],
       detect: { probe: { cmd: "npm", args: ["ls"] } }, remove: [] });
     expect(r).toEqual(expect.arrayContaining(["node", "npm"]));
@@ -79,14 +79,14 @@ describe("requiredToolsForRecipe", () => {
 });
 
 describe("preflightRecipe", () => {
-  it("инструмент отсутствует → ok:false, missing + hint", () => {
+  it("a tool is missing → ok:false, missing + hint", () => {
     const r = preflightRecipe({ install: [{ cmd: "cargo", args: ["install", "x"] }],
       detect: { probe: { cmd: "which", args: ["x"] } }, remove: [] }, { check: allowCheck(["node", "npm", "claude"]) });
     expect(r.ok).toBe(false);
     expect(r.missing).toContain("cargo");
     expect(r.hint).toMatch(/cargo|Rust/i);
   });
-  it("все на месте → ok:true, missing:[]", () => {
+  it("all present → ok:true, missing:[]", () => {
     const r = preflightRecipe({ install: [{ cmd: "npm", args: ["i", "-g", "x"] }],
       detect: { probe: { cmd: "which", args: ["x"] } }, remove: [] }, { check: allowCheck(["node", "npm"]) });
     expect(r.ok).toBe(true);
@@ -94,8 +94,8 @@ describe("preflightRecipe", () => {
   });
 });
 
-describe("installPlugin — preflight интеграция", () => {
-  it("нет cargo → install НЕ зовёт рецепт, missing+hint, реестр чист", () => {
+describe("installPlugin — preflight integration", () => {
+  it("no cargo → install does NOT call the recipe, missing+hint, registry stays clean", () => {
     const src = makeLocalPlugin(baseManifest({ install: {
       install: [{ cmd: "cargo", args: ["install", "task-journal-cli"] }, { cmd: "claude", args: ["plugin", "install", "x@x"] }],
       detect: { probe: { cmd: "which", args: ["x"] } }, remove: [] } }));
@@ -104,7 +104,7 @@ describe("installPlugin — preflight интеграция", () => {
       { scope: "user", preflightCheck: allowCheck(["node", "npm", "claude"]) });
     expect(res.ok).toBe(false);
     expect(res.missing).toContain("cargo");
-    expect(res.error).toMatch(/cargo|Rust|инструмент/i);
+    expect(res.error).toMatch(/cargo|Rust|tool/i);
     expect(calls.some((c) => c[0] === "cargo")).toBe(false);
     expect(calls.some((c) => c[0] === "claude")).toBe(false);
     expect(readInstalled(deps).plugins["demo"]).toBeUndefined();

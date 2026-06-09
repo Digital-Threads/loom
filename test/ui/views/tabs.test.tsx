@@ -25,11 +25,11 @@ const aimux = loomRegistry.get("aimux")!;
 const tokenPilot = loomRegistry.get("token-pilot")!;
 const taskJournal = loomRegistry.get("task-journal")!;
 
-// Небольшая пауза, чтобы Ink успел отрисовать после stdin.write.
+// A small pause so Ink can render after stdin.write.
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
-describe("per-tab декларативный рендер через ViewRenderer", () => {
-  it("Обзор: показывает счётчики (host summary, без плагина)", () => {
+describe("per-tab declarative render via ViewRenderer", () => {
+  it("Overview: shows the counters (host summary, no plugin)", () => {
     const data = makeData({
       subscriptions: [{ name: "a", cli: "c", isSource: false }],
       sessions: [{ sessionId: "s1", profile: "p1" }, { sessionId: "s2", profile: "p2" }],
@@ -39,14 +39,14 @@ describe("per-tab декларативный рендер через ViewRendere
     expect(lastFrame()).toContain("Sessions: 2");
   });
 
-  it("Обзор: строка ошибок видна только при errors.length > 0", () => {
+  it("Overview: the error line is visible only when errors.length > 0", () => {
     const ok = render(<ViewRenderer spec={overviewView} data={makeData()} />);
     expect(ok.lastFrame()).not.toContain("Load errors");
     const bad = render(<ViewRenderer spec={overviewView} data={makeData({ errors: ["boom"] })} />);
     expect(bad.lastFrame()).toContain("Load errors: 1");
   });
 
-  it("Подписки: имя, маркер источника ★ и cli", () => {
+  it("Subscriptions: name, source marker ★ and cli", () => {
     const data = makeData({
       subscriptions: [
         { name: "claude", cli: "claude-cli", isSource: true },
@@ -60,11 +60,11 @@ describe("per-tab декларативный рендер через ViewRendere
     expect(f).toContain("★ claude");
     expect(f).toContain("claude-cli");
     expect(f).toContain("gpt");
-    // gpt не источник → нет звезды перед ним
+    // gpt is not a source → no star in front of it
     expect(f).not.toContain("★ gpt");
   });
 
-  it("Сессии: id8, профиль и used/saved", () => {
+  it("Sessions: id8, profile and used/saved", () => {
     const data = makeData({
       sessions: [{ sessionId: "abcdef1234567890", profile: "claude" }],
       tokens: [{ sessionId: "abcdef1234567890", used: 100, saved: 25 }],
@@ -78,7 +78,7 @@ describe("per-tab декларативный рендер через ViewRendere
     expect(f).toContain("100/25");
   });
 
-  it("Токены: итоговая строка + строка таблицы", () => {
+  it("Tokens: total line + a table row", () => {
     const data = makeData({
       tokens: [
         { sessionId: "abcdef1234", used: 100, saved: 10 },
@@ -94,7 +94,7 @@ describe("per-tab декларативный рендер через ViewRendere
     expect(f).toContain("100");
   });
 
-  it("Токены: пустое состояние без итоговой строки", () => {
+  it("Tokens: empty state without a total line", () => {
     const { lastFrame } = render(
       <ViewRenderer plugin={tokenPilot} spec={tokenPilot.views!.tokens} data={makeData()} />,
     );
@@ -103,11 +103,11 @@ describe("per-tab декларативный рендер через ViewRendere
     expect(f).not.toContain("Total:");
   });
 
-  it("Задачи: строка задачи + футер ↑/↓ — выбрать · Enter — открыть", () => {
+  it("Tasks: a task row + footer ↑/↓ — select · Enter — open", () => {
     const data = makeData({
       tasks: [
-        { id: "tj-1", title: "Открытая задача", status: "open" },
-        { id: "tj-2", title: "Закрытая задача", status: "closed" },
+        { id: "tj-1", title: "Open task", status: "open" },
+        { id: "tj-2", title: "Closed task", status: "closed" },
       ],
     });
     const { lastFrame } = render(
@@ -115,12 +115,12 @@ describe("per-tab декларативный рендер через ViewRendere
     );
     const f = lastFrame()!;
     expect(f).toContain("↑/↓ select · Enter open");
-    expect(f).toContain("○ Открытая задача");
-    expect(f).toContain("✓ Закрытая задача");
+    expect(f).toContain("○ Open task");
+    expect(f).toContain("✓ Closed task");
     expect(f).toContain("tj-1");
   });
 
-  it("Настройки: форма показывает поле token-pilot", () => {
+  it("Settings: the form shows the token-pilot field", () => {
     const { lastFrame } = render(<ViewRenderer spec={settingsView} data={makeData()} />);
     const f = lastFrame()!;
     expect(f).toContain("Settings");
@@ -128,51 +128,51 @@ describe("per-tab декларативный рендер через ViewRendere
   });
 });
 
-describe("list → detail: открытие задачи через ViewRenderer", () => {
-  it("Enter на задаче открывает деталь с секциями и легендой c/t", async () => {
+describe("list → detail: opening a task via ViewRenderer", () => {
+  it("Enter on a task opens the detail with sections and the c/t legend", async () => {
     const taskEvents = [
-      { event_id: "e1", task_id: "tj-1", type: "open", timestamp: "2026-06-07T10:00:00.000Z", text: "Открытая задача", meta: { title: "Открытая задача" } },
-      { event_id: "e2", task_id: "tj-1", type: "decision", timestamp: "2026-06-07T10:05:00.000Z", text: "Решили использовать X" },
-      { event_id: "e3", task_id: "tj-1", type: "finding", timestamp: "2026-06-07T10:06:00.000Z", text: "Нашли причину" },
+      { event_id: "e1", task_id: "tj-1", type: "open", timestamp: "2026-06-07T10:00:00.000Z", text: "Open task", meta: { title: "Open task" } },
+      { event_id: "e2", task_id: "tj-1", type: "decision", timestamp: "2026-06-07T10:05:00.000Z", text: "Decided to use X" },
+      { event_id: "e3", task_id: "tj-1", type: "finding", timestamp: "2026-06-07T10:06:00.000Z", text: "Found the cause" },
     ];
     const data = makeData({
-      tasks: [{ id: "tj-1", title: "Открытая задача", status: "open" }],
+      tasks: [{ id: "tj-1", title: "Open task", status: "open" }],
       taskEvents,
     });
     const { lastFrame, stdin } = render(
       <ViewRenderer plugin={taskJournal} spec={taskJournal.views!.tasks} data={data} />,
     );
-    stdin.write("\r"); // Enter — открыть выбранную (первую) задачу
+    stdin.write("\r"); // Enter — open the selected (first) task
     await tick();
     const f = lastFrame()!;
-    expect(f).toContain("Открытая задача");
+    expect(f).toContain("Open task");
     expect(f).toContain("Decisions (1)");
-    expect(f).toContain("Решили использовать X");
+    expect(f).toContain("Decided to use X");
     expect(f).toContain("Findings (1)");
     expect(f).toContain("Task tokens");
     expect(f).toContain("c — close · t — write tokens · Esc — back");
   });
 
-  it("taskDetail-spec резолвится и DetailView рисует секции на прямом маунте", async () => {
-    // Прямой маунт detail-вида (на случай если stdin-симуляция окажется хрупкой).
+  it("taskDetail spec resolves and DetailView draws the sections on a direct mount", async () => {
+    // Direct mount of the detail view (in case the stdin simulation turns out fragile).
     const taskEvents = [
       { event_id: "e1", task_id: "tj-9", type: "open", timestamp: "2026-06-07T10:00:00.000Z", text: "T", meta: { title: "T" } },
-      { event_id: "e2", task_id: "tj-9", type: "rejection", timestamp: "2026-06-07T10:05:00.000Z", text: "Отвергли Y" },
+      { event_id: "e2", task_id: "tj-9", type: "rejection", timestamp: "2026-06-07T10:05:00.000Z", text: "Rejected Y" },
     ];
-    const data = makeData({ tasks: [{ id: "tj-9", title: "Девятая", status: "open" }], taskEvents });
+    const data = makeData({ tasks: [{ id: "tj-9", title: "Ninth", status: "open" }], taskEvents });
     const detailSpec = (taskJournal.views!.taskDetail as ViewSpec);
     expect((detailSpec as { kind: string }).kind).toBe("detail");
 
-    // Маунтим таблицу, открываем через onSelect: проще проверить через DetailView напрямую.
-    // Здесь — sanity: derivations отдают секции для конкретного taskId.
+    // Mount the table, open via onSelect: easier to verify through DetailView directly.
+    // Here — a sanity check: derivations return sections for a specific taskId.
     const { lastFrame, stdin } = render(
       <ViewRenderer plugin={taskJournal} spec={taskJournal.views!.tasks} data={data} />,
     );
     stdin.write("\r");
     await tick();
     const f = lastFrame()!;
-    expect(f).toContain("Девятая");
+    expect(f).toContain("Ninth");
     expect(f).toContain("Rejected (1)");
-    expect(f).toContain("Отвергли Y");
+    expect(f).toContain("Rejected Y");
   });
 });

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tokenEventsByTime } from "../../../../src/core/plugins/token-pilot/adapter.js";
 
-// helper: записать jsonl-событие
+// helper: write a jsonl event
 const ev = (o: Record<string, unknown>) => JSON.stringify(o);
 
 let dirs: string[] = [];
@@ -18,8 +18,8 @@ function tmp(): string {
   return d;
 }
 
-describe("LP13 token-pilot adapter: архивы + поддеревья + agentType", () => {
-  it("читает текущий hook-events.jsonl И архив hook-events.<ts>.jsonl", () => {
+describe("LP13 token-pilot adapter: archives + subtrees + agentType", () => {
+  it("reads the current hook-events.jsonl AND the archived hook-events.<ts>.jsonl", () => {
     const root = tmp();
     const tp = join(root, ".token-pilot");
     mkdirSync(tp, { recursive: true });
@@ -35,7 +35,7 @@ describe("LP13 token-pilot adapter: архивы + поддеревья + agentT
     expect(out.map((e) => e.ts).sort((a, b) => a - b)).toEqual([1000, 2000]);
   });
 
-  it("фильтрует session_id==='diagnostic'", () => {
+  it("filters out session_id==='diagnostic'", () => {
     const root = tmp();
     const tp = join(root, ".token-pilot");
     mkdirSync(tp, { recursive: true });
@@ -49,7 +49,7 @@ describe("LP13 token-pilot adapter: архивы + поддеревья + agentT
     expect(tokenEventsByTime(root).map((e) => e.sessionId)).toEqual(["s"]);
   });
 
-  it("обходит .token-pilot в ПОДПАПКЕ (монорепо)", () => {
+  it("walks into .token-pilot in a SUBFOLDER (monorepo)", () => {
     const root = tmp();
     const sub = join(root, "packages", "x", ".token-pilot");
     mkdirSync(sub, { recursive: true });
@@ -60,7 +60,7 @@ describe("LP13 token-pilot adapter: архивы + поддеревья + agentT
     expect(tokenEventsByTime(root).some((e) => e.ts === 5)).toBe(true);
   });
 
-  it("НЕ заходит в node_modules", () => {
+  it("does NOT descend into node_modules", () => {
     const root = tmp();
     const nm = join(root, "node_modules", "pkg", ".token-pilot");
     mkdirSync(nm, { recursive: true });
@@ -71,7 +71,7 @@ describe("LP13 token-pilot adapter: архивы + поддеревья + agentT
     expect(tokenEventsByTime(root).some((e) => e.ts === 9)).toBe(false);
   });
 
-  it("agentType: subagent → 'subagent', основной → null (поле всегда присутствует)", () => {
+  it("agentType: subagent → 'subagent', main → null (the field is always present)", () => {
     const root = tmp();
     const tp = join(root, ".token-pilot");
     mkdirSync(tp, { recursive: true });

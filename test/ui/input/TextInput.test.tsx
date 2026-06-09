@@ -16,7 +16,7 @@ function renderWithMode(ui: React.ReactElement) {
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
 describe("TextInput", () => {
-  it("включает режим захвата на маунте", async () => {
+  it("enables capture mode on mount", async () => {
     const { setCapturing, unmount } = renderWithMode(
       <TextInput onSubmit={() => {}} onCancel={() => {}} />,
     );
@@ -25,7 +25,7 @@ describe("TextInput", () => {
     unmount();
   });
 
-  it("печатает символы и сабмитит по Enter", async () => {
+  it("types characters and submits on Enter", async () => {
     const onSubmit = vi.fn();
     const { stdin, unmount } = renderWithMode(
       <TextInput onSubmit={onSubmit} onCancel={() => {}} />,
@@ -39,7 +39,7 @@ describe("TextInput", () => {
     unmount();
   });
 
-  it("Backspace стирает последний символ", async () => {
+  it("Backspace deletes the last character", async () => {
     const onSubmit = vi.fn();
     const { stdin, unmount } = renderWithMode(
       <TextInput onSubmit={onSubmit} onCancel={() => {}} />,
@@ -55,7 +55,7 @@ describe("TextInput", () => {
     unmount();
   });
 
-  it("Esc отменяет", async () => {
+  it("Esc cancels", async () => {
     const onCancel = vi.fn();
     const { stdin, unmount } = renderWithMode(
       <TextInput onSubmit={() => {}} onCancel={onCancel} />,
