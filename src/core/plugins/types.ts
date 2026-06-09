@@ -1,4 +1,4 @@
-// Шим: типы контракта переехали в contract.ts (контракт плагина) (Phase 9.1).
-// `export type *` полностью эрейзится в рантайме; существующие импорты loom-host
-// (`../plugins/types.js`) продолжают работать без правок.
+// Shim: the contract types moved to contract.ts (the plugin contract) (Phase 9.1).
+// `export type *` is fully erased at runtime; existing loom-host imports
+// (`../plugins/types.js`) keep working without changes.
 export type * from "./contract.js";

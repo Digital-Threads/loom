@@ -3,9 +3,9 @@ import { Box, Text, useInput } from "ink";
 import type { DoctorReport } from "../../core/doctor/types.js";
 import type { PrereqReport } from "../../core/doctor/prereqs.js";
 
-// Презентационная вкладка Config (LP5): read-only doctor-вывод (scope-секции +
-// коллизии + prerequisites). Запись — только через ИНЪЕКТИРОВАННЫЕ callbacks
-// (onApply/onDryRun → runMerge); никакой бизнес-логики в компоненте.
+// Presentational Config tab (LP5): read-only doctor output (scope sections +
+// collisions + prerequisites). Writing -- only via INJECTED callbacks
+// (onApply/onDryRun -> runMerge); no business logic in the component.
 export function ConfigView({ reports, prereq, onApply, onDryRun }: {
   reports: DoctorReport[];
   prereq: PrereqReport;

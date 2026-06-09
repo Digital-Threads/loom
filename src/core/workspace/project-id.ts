@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-// Резолв корня проекта: git-toplevel от кандидата, иначе кандидат как есть.
+// Resolve the project root: git toplevel of the candidate, otherwise the candidate as-is.
 export function resolveProjectRoot(candidate: string): string {
   try {
     const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -16,8 +16,8 @@ export function resolveProjectRoot(candidate: string): string {
   }
 }
 
-// Собственная стабильная метка рабочего пространства Loom. НЕ воспроизводит хеш task-journal.
-// Требование — только детерминированность (один корень → один id, 16 hex).
+// Loom's own stable workspace label. Does NOT reproduce the task-journal hash.
+// The only requirement is determinism (one root -> one id, 16 hex).
 export function deriveProjectId(projectRoot: string): string {
   return createHash("sha256").update(projectRoot).digest("hex").slice(0, 16);
 }

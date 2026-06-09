@@ -25,18 +25,18 @@ import { TextInput } from "../input/TextInput.js";
 import { requestHandover } from "../../core/handover.js";
 
 interface ViewRendererProps {
-  plugin?: LoomPlugin;                  // host-виды (Обзор/Настройки) не имеют плагина
+  plugin?: LoomPlugin;                  // host views (Overview/Settings) have no plugin
   spec: ViewSpec | ViewSpec[];
   data: WorkspaceData;
 }
 
-// Нормализуем в массив видов (составная вкладка — несколько ViewSpec сверху вниз).
+// Normalize into an array of views (a composite tab -- several ViewSpec top to bottom).
 function asArray(spec: ViewSpec | ViewSpec[]): ViewSpec[] {
   return Array.isArray(spec) ? spec : [spec];
 }
 
-// Интерактивный (selectable/detail/onSelect) вид в массиве — управляет навигацией.
-// В v1 их максимум один на вкладку (table-список ИЛИ form), остальное — статичный вывод.
+// An interactive (selectable/detail/onSelect) view in the array -- it drives navigation.
+// In v1 there is at most one per tab (a table list OR a form), the rest is static output.
 function findInteractive(specs: ViewSpec[]): ViewSpec | undefined {
   return specs.find(
     (s) =>
@@ -45,8 +45,8 @@ function findInteractive(specs: ViewSpec[]): ViewSpec | undefined {
   );
 }
 
-// Резолвит detail-spec открытого подвида из plugin.views[viewKey] (напр. "taskDetail"),
-// падая обратно на detail-вид среди specs текущей вкладки (на случай составной вкладки).
+// Resolves the detail spec of the open subview from plugin.views[viewKey] (e.g. "taskDetail"),
+// falling back to a detail view among the current tab's specs (in case of a composite tab).
 function resolveDetailSpec(
   viewKey: string,
   specs: ViewSpec[],
@@ -66,7 +66,7 @@ function buildOpts(
   data: WorkspaceData,
 ): { opts: ViewReducerOpts; current: ViewSpec | undefined } {
   const frame = state.stack[state.stack.length - 1];
-  // Если в стеке detail-кадр, берём его detail-вид; иначе интерактивный вид вкладки.
+  // If there is a detail frame on the stack, take its detail view; otherwise the tab's interactive view.
   const detailSpec =
     state.stack.length > 1 ? resolveDetailSpec(frame.viewKey, specs, plugin) : undefined;
   const current = detailSpec ?? findInteractive(specs);
@@ -117,7 +117,7 @@ function confirmKeysFor(
   return map;
 }
 
-// Резолвит и исполняет ActionBinding. result.ok → статус-строка + опц. handover-thunk.
+// Resolves and runs an ActionBinding. result.ok -> status line + optional handover thunk.
 function runAction(
   binding: ActionBinding,
   ctx: BindContext,
@@ -130,7 +130,7 @@ function runAction(
   for (const [k, bind] of Object.entries(binding.args ?? {})) {
     args[k] = resolveBind(bind, ctx);
   }
-  Object.assign(args, extra); // typed prompt-значения дополняют/перекрывают статические
+  Object.assign(args, extra); // typed prompt values augment/override the static ones
   const res = action.run({ projectRoot: process.cwd() }, args);
   return {
     status: res.ok ? "done (updates on restart)" : `error: ${res.error ?? ""}`,
@@ -158,7 +158,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
     dispatch({ type: "setStatus", text: r.status });
     if (r.handover) {
       requestHandover(r.handover);
-      exit(); // гасим Ink → cli.tsx исполнит handover после waitUntilExit
+      exit(); // tear down Ink -> cli.tsx runs the handover after waitUntilExit
     }
   };
 
@@ -170,8 +170,8 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
   } | null>(null);
 
   useInput((input, key) => {
-    if (prompt) return; // TextInput владеет вводом, пока собираем prompt-поля
-    // confirm-режим: y исполняет action, n/esc отменяет.
+    if (prompt) return; // TextInput owns input while we collect prompt fields
+    // confirm mode: y runs the action, n/esc cancels.
     if (state.mode === "confirm" && state.confirmKey) {
       if (input === "y") {
         const binding = (current as TableViewSpec | DetailViewSpec)?.actions?.find(
@@ -194,7 +194,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
     else if (key.return) dispatch({ type: "enter" });
     else if (key.escape) dispatch({ type: "esc" });
     else if (input) {
-      // action-key из текущего интерактивного вида?
+      // an action-key from the current interactive view?
       const binding = (current as TableViewSpec | DetailViewSpec)?.actions?.find(
         (a) => a.key === input,
       );
@@ -242,7 +242,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
     );
   }
 
-  // detail-режим: показываем detail-вид с idParam из стека.
+  // detail mode: show the detail view with idParam from the stack.
   if (inDetail) {
     const detailSpec = resolveDetailSpec(frame.viewKey, specs, plugin);
     if (detailSpec) {
@@ -258,12 +258,12 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
     }
   }
 
-  // Список видов сверху вниз. Интерактивной таблице отдаём cursor.
+  // List of views top to bottom. The interactive table gets the cursor.
   const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
   return (
     <Box flexDirection="column">
       {specs.map((s, i) => {
-        if (s.kind === "detail") return null; // detail рисуется по стеку, не в списке
+        if (s.kind === "detail") return null; // detail is drawn by the stack, not in the list
         if (s.kind === "summary") return <SummaryView key={i} spec={s} ctx={ctx} />;
         if (s.kind === "table") {
           return (

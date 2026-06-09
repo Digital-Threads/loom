@@ -8,20 +8,20 @@ import { loomPluginsDir } from "../paths.js";
 import { readInstalled } from "../install/registry-file.js";
 import { defaultDeps } from "../install/runner.js";
 
-// Builtin-сид — синхронно. Потребители (App / loader / FormView) импортят
-// loomRegistry синхронно, поэтому 3 встроенных плагина должны быть на месте сразу.
+// Builtin seed -- synchronous. Consumers (App / loader / FormView) import
+// loomRegistry synchronously, so the 3 built-in plugins must be present immediately.
 export const loomRegistry = createRegistry([aimux, tokenPilot, taskJournal]);
 
-// Асинхронно подгружает плагины с диска и регистрирует в loomRegistry.
-// Builtin приоритетнее: дубль id → не перезаписываем, помечаем в ошибках.
-// НЕ бросает — возвращает список накопленных ошибок (может быть пустым).
+// Asynchronously loads plugins from disk and registers them in loomRegistry.
+// Builtin takes priority: a duplicate id -> we don't overwrite, we note it in errors.
+// Does NOT throw -- returns the list of accumulated errors (may be empty).
 export async function loadDynamicPlugins(
   dir: string = loomPluginsDir(),
 ): Promise<string[]> {
   const { found, errors } = discoverPlugins(dir);
   const { plugins, errors: loadErrors } = await loadPlugins(found);
 
-  // Реестр установленных читаем defensive: любой сбой → фильтр no-op (грузим всё).
+  // We read the installed registry defensively: any failure -> filter is a no-op (load everything).
   let installed: ReturnType<typeof readInstalled>["plugins"] = {};
   try {
     installed = readInstalled(defaultDeps()).plugins;
@@ -31,8 +31,8 @@ export async function loadDynamicPlugins(
 
   const dupErrors: string[] = [];
   for (const p of plugins) {
-    // Пропускаем только если в реестре ЕСТЬ запись для этого id И она enabled===false.
-    // Плагина нет в plugins.json (встроенный/бандл) → грузим как есть.
+    // Skip only if the registry HAS an entry for this id AND it is enabled===false.
+    // A plugin absent from plugins.json (built-in/bundled) -> load as-is.
     const entry = installed[p.id];
     if (entry && entry.enabled === false) continue;
 

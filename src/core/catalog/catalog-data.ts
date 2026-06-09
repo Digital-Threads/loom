@@ -1,7 +1,7 @@
 import type { CatalogEntry } from "./types.js";
 
-// Единственное, что каталог хардкодит про «наши 3» — продуктовый кейс.
-// category берётся из реестра (LP1), recipe — из манифеста plugin.json (LP2).
+// The only thing the catalog hardcodes about "our 3" -- the product case.
+// category comes from the registry (LP1), recipe -- from the plugin.json manifest (LP2).
 export const CATALOG_ENTRIES: CatalogEntry[] = [
   { id: "aimux",        title: "aimux",
     case: "Multiple AI subscriptions: profiles, auth, sessions in one TUI" },

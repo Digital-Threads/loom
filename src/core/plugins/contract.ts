@@ -1,18 +1,18 @@
-// Контракт Loom-плагина — ТОЛЬКО типы контракта Loom-плагина.
-// Без рантайм-значений: tsc резолвит эти типы через "types"-поле package.json,
-// type-импорты эрейзятся, билд пакета не нужен.
+// The Loom plugin contract -- ONLY the types of the Loom plugin contract.
+// No runtime values: tsc resolves these types via the "types" field of package.json,
+// type imports are erased, no package build is needed.
 //
-// Рантайм-логика хоста (LOOM_CONTRACT_VERSION, validateManifest, loader, views,
-// derivations, metrics) ОСТАЁТСЯ в loom-host — это не контракт.
+// The host's runtime logic (LOOM_CONTRACT_VERSION, validateManifest, loader, views,
+// derivations, metrics) STAYS in loom-host -- it is not the contract.
 
 export type SettingFieldType = "string" | "number" | "boolean" | "enum";
 
 export interface SettingField {
-  key: string;          // плоский или dotted-путь, напр. "hooks.mode"
+  key: string;          // flat or dotted path, e.g. "hooks.mode"
   label: string;
   type: SettingFieldType;
-  options?: string[];   // только для type==="enum"
-  readonly?: boolean;   // string-поля token-pilot («правьте файл») → не редактируются в UI
+  options?: string[];   // only for type==="enum"
+  readonly?: boolean;   // token-pilot string fields ("edit the file") -> not editable in the UI
 }
 
 export interface SettingsSchema {
@@ -26,17 +26,17 @@ export interface LoomContext {
 export interface ActionResult {
   ok: boolean;
   error?: string;
-  // exit-and-handover: thunk, исполняемый ПОСЛЕ выхода из Ink (для интерактивных
-  // дочерних процессов, которым нужен терминал). См. core/handover.ts.
+  // exit-and-handover: a thunk run AFTER exiting Ink (for interactive
+  // child processes that need the terminal). See core/handover.ts.
   handover?: () => unknown | Promise<unknown>;
 }
 
 export interface PluginAction {
   id: string;
   label: string;
-  confirm?: boolean; // необратимое действие → требует подтверждения в UI
-  // Свободный текст-ввод перед запуском: каждое поле собирается через TextInput,
-  // значения попадают в args по ключу. Пусто/нет — поведение как раньше.
+  confirm?: boolean; // irreversible action -> requires confirmation in the UI
+  // Free-text input before launch: each field is collected via TextInput,
+  // values land in args by key. Empty/absent -- behaves as before.
   prompt?: { key: string; label: string }[];
   run(ctx: LoomContext, args?: Record<string, unknown>): ActionResult;
 }
@@ -48,75 +48,75 @@ export interface PluginSettings {
 }
 
 export interface PluginTab {
-  id: string;    // стабильный id вкладки
-  title: string; // отображаемое имя
+  id: string;    // stable tab id
+  title: string; // displayed name
 }
 
-// ── Слой платформы (LP1) ─────────────────────────────────────────────────────
-// 8 слоёв AI-разработки из видения §3. Опционально: динамические плагины без
-// объявленного слоя валидны (попадают в группу undefined).
+// -- Platform layer (LP1) ------------------------------------------------------
+// The 8 AI-development layers from the vision, section 3. Optional: dynamic plugins without
+// a declared layer are valid (they go into the undefined group).
 export type LoomCategory =
-  | "accounts"      // доступ/аккаунты (aimux)
-  | "efficiency"    // эффективность/токены (token-pilot)
-  | "memory"        // память/рассуждения (task-journal)
-  | "learning"      // обучение (будущий слой)
-  | "knowledge"     // знания (будущий слой)
-  | "quality"       // качество (будущий слой)
-  | "automation"    // автоматизация (будущий слой)
-  | "observability"; // наблюдаемость (будущий слой)
+  | "accounts"      // access/accounts (aimux)
+  | "efficiency"    // efficiency/tokens (token-pilot)
+  | "memory"        // memory/reasoning (task-journal)
+  | "learning"      // learning (future layer)
+  | "knowledge"     // knowledge (future layer)
+  | "quality"       // quality (future layer)
+  | "automation"    // automation (future layer)
+  | "observability"; // observability (future layer)
 
-// Декларация возможностей плагина (LP1). Флаги «есть/нет», не команды.
-// install — есть ли install-рецепт (реальные команды появятся в LP2);
-// здесь только признак наличия. data/settings/actions — что плагин привносит.
+// Declaration of a plugin's capabilities (LP1). "Has/has not" flags, not commands.
+// install -- whether there is an install recipe (the real commands arrive in LP2);
+// here only the presence flag. data/settings/actions -- what the plugin brings.
 export interface PluginCapabilities {
-  install: boolean;   // у адаптера есть install-рецепт (LP2); пока false
-  data: boolean;      // плагин отдаёт данные через load()
-  settings: boolean;  // есть редактируемые настройки (непустая settings.schema)
-  actions: boolean;   // есть хотя бы одно действие
+  install: boolean;   // the adapter has an install recipe (LP2); false for now
+  data: boolean;      // the plugin returns data via load()
+  settings: boolean;  // there are editable settings (non-empty settings.schema)
+  actions: boolean;   // there is at least one action
 }
 
-// data source абстрагирован за load(): плагин сам знает способ (core-import / файл / CLI)
+// the data source is abstracted behind load(): the plugin itself knows the method (core-import / file / CLI)
 export interface LoomPlugin<TData = unknown> {
   id: string;
   title: string;
-  category?: LoomCategory; // слот слоя; отсутствие = слой не объявлен
-  capabilities?: PluginCapabilities; // декларация возможностей (LP1)
-  tabs: PluginTab[];                                 // вкладки, которые вносит плагин
-  load(ctx: LoomContext): TData | Promise<TData>;    // забор данных плагина
+  category?: LoomCategory; // layer slot; absence = no layer declared
+  capabilities?: PluginCapabilities; // capability declaration (LP1)
+  tabs: PluginTab[];                                 // tabs the plugin contributes
+  load(ctx: LoomContext): TData | Promise<TData>;    // fetching the plugin's data
   settings?: PluginSettings;
   actions?: PluginAction[];
-  views?: Record<string, ViewSpec | ViewSpec[]>;     // ключ = PluginTab.id; массив = виды сверху-вниз
-  // Одно-плагинные деривации для {fn} в view-спеках — знают схему событий своего плагина.
-  // data — WorkspaceData в рантайме хоста; в types-only контракте тип unknown,
-  // чтобы не тащить WorkspaceData в этот пакет.
+  views?: Record<string, ViewSpec | ViewSpec[]>;     // key = PluginTab.id; an array = views top-to-bottom
+  // Single-plugin derivations for {fn} in view specs -- they know their own plugin's event schema.
+  // data -- WorkspaceData at host runtime; in the types-only contract the type is unknown,
+  // so as not to pull WorkspaceData into this package.
   derivations?: Record<string, (data: unknown, ...args: unknown[]) => unknown>;
 }
 
-// ── Декларативная view-схема (Task 7.2) ──────────────────────────────────────
-// Плагин описывает вкладку как данные (ViewSpec); хост рисует обобщённым рендерером.
+// -- Declarative view schema (Task 7.2) ----------------------------------------
+// The plugin describes a tab as data (ViewSpec); the host draws it with a generic renderer.
 
-export type FieldRef = string;          // dotted-путь в контексте вида
+export type FieldRef = string;          // dotted path in the view context
 export type Bind = FieldRef | { fn: string; args?: (FieldRef | string | number | boolean)[] };
-// Bind резолвится против контекста: WorkspaceData + (для detail) idParam + (для action) выбранная строка.
-// FieldRef "x.y" → путь; {fn} → derivations[fn](data, ...resolvedArgs).
+// A Bind resolves against the context: WorkspaceData + (for detail) idParam + (for action) the selected row.
+// FieldRef "x.y" -> path; {fn} -> derivations[fn](data, ...resolvedArgs).
 
 export interface Column {
   header?: string;
-  value: FieldRef;                      // путь в строке
+  value: FieldRef;                      // path in the row
   width?: number;
   align?: "left" | "right";
   marker?: { when: FieldRef; truthy: string; falsy?: string; equals?: string | number | boolean }; // ★ / ✓○
-  // equals задан → маркер truthy при value === equals (статус задач: "closed" → "✓").
-  // equals не задан → старое truthy-поведение Boolean(value) (для isSource подписок).
+  // equals set -> truthy marker when value === equals (task status: "closed" -> "checkmark").
+  // equals not set -> old truthy behavior Boolean(value) (for isSource subscriptions).
 }
 
 export interface ActionBinding {
   key: string;                          // "c","t"
   actionId: string;                     // resolves loomRegistry.get(pluginId).actions
-  args?: Record<string, Bind>;          // static path ИЛИ computed
-  label?: string;                       // легенда хоткеев
-  confirmPrompt?: string;               // текст y/n-подтверждения (для паритета с панелями)
-}                                        // нужно ли подтверждение — читается из PluginAction.confirm
+  args?: Record<string, Bind>;          // static path OR computed
+  label?: string;                       // hotkey legend
+  confirmPrompt?: string;               // y/n confirmation text (for parity with the panels)
+}                                        // whether confirmation is needed -- read from PluginAction.confirm
 
 export interface SummaryView {
   kind: "summary";
@@ -125,112 +125,112 @@ export interface SummaryView {
 
 export interface TableView {
   kind: "table";
-  source: Bind;                         // путь к массиву ("sessions") ИЛИ деривация ({fn:"sessionsWithTokens"})
-  rowKey: FieldRef;                     // напр "sessionId"
+  source: Bind;                         // path to the array ("sessions") OR a derivation ({fn:"sessionsWithTokens"})
+  rowKey: FieldRef;                     // e.g. "sessionId"
   columns: Column[];
   empty?: string;
-  gap?: number;                         // число пробелов-разделителей между колонками (по умолчанию 2)
-  selectable?: boolean;                 // включает ↑/↓ + Enter
+  gap?: number;                         // number of separator spaces between columns (default 2)
+  selectable?: boolean;                 // enables up/down + Enter
   onSelect?: { openView: string; passId: FieldRef };  // list→detail
   actions?: ActionBinding[];
 }
 
 export interface DetailSection {
   label: string;
-  items: Bind;                          // массив (путь или {fn})
-  itemText: FieldRef;                   // путь внутри item, напр "text"
+  items: Bind;                          // array (path or {fn})
+  itemText: FieldRef;                   // path inside the item, e.g. "text"
   empty?: string;
-  note?: string;                        // dim-суффикс у заголовка (напр. «(эвристика по времени)»)
-  hideCount?: boolean;                  // не показывать «(N)» у заголовка (блок «Токены задачи»)
-  lead?: Bind;                          // строка под заголовком без буллета (итог токенов)
-  trailer?: Bind;                       // dim-строка после списка (рендерится только если непустая)
+  note?: string;                        // dim suffix on the heading (e.g. "(time-based heuristic)")
+  hideCount?: boolean;                  // don't show "(N)" on the heading (the "Task tokens" block)
+  lead?: Bind;                          // line under the heading without a bullet (token total)
+  trailer?: Bind;                       // dim line after the list (rendered only if non-empty)
 }
 
 export interface DetailView {
   kind: "detail";
-  idParam: string;                      // прокинут из table.onSelect.passId
+  idParam: string;                      // passed through from table.onSelect.passId
   title: Bind;
   sections: DetailSection[];
-  scalars?: { label: string; value: Bind }[];  // блок «Токены задачи»
+  scalars?: { label: string; value: Bind }[];  // the "Task tokens" block
   actions?: ActionBinding[];
 }
 
 export interface FormView {
   kind: "form";
-  source: "registry-settings";         // спец: хост читает loomRegistry
+  source: "registry-settings";         // special: the host reads loomRegistry
 }
 
 export type ViewSpec = SummaryView | TableView | DetailView | FormView;
 
-// ── Манифест плагина (тип) ───────────────────────────────────────────────────
-// Только interface. LOOM_CONTRACT_VERSION и validateManifest — рантайм-логика хоста,
-// остаются в loom-host/src/core/plugins/manifest.ts.
+// -- Plugin manifest (type) ----------------------------------------------------
+// Interface only. LOOM_CONTRACT_VERSION and validateManifest are the host's runtime logic,
+// they stay in loom-host/src/core/plugins/manifest.ts.
 export interface LoomPluginManifest {
-  // идентификация
-  schemaVersion: 1; // версия формата манифеста
-  type: "loom-plugin"; // дискриминатор
-  name: string; // = LoomPlugin.id, уникален
-  title: string; // отображаемое
-  version: string; // semver кода плагина
-  apiVersion: string; // версия контракта LoomPlugin ("^1.0")
+  // identification
+  schemaVersion: 1; // manifest format version
+  type: "loom-plugin"; // discriminator
+  name: string; // = LoomPlugin.id, unique
+  title: string; // displayed
+  version: string; // semver of the plugin code
+  apiVersion: string; // LoomPlugin contract version ("^1.0")
   description?: string;
   author?: { name: string; email?: string; url?: string };
   keywords?: string[];
 
-  // загрузка кода
-  entry: string; // путь к собранному ESM, напр "./dist/adapter.js"
-  export?: string; // имя экспорта, default "plugin"
+  // code loading
+  entry: string; // path to the built ESM, e.g. "./dist/adapter.js"
+  export?: string; // export name, default "plugin"
 
-  // что привносит — для preview/меню/прав ДО динамического import()
+  // what it brings -- for preview/menu/permissions BEFORE the dynamic import()
   provides: {
     tabs: { id: string; title: string }[];
     settings?: boolean;
     actions?: { id: string; label: string }[];
   };
 
-  // права (декларативно; формат verb:target). v1 — хранятся+показываются, НЕ enforced.
+  // permissions (declarative; verb:target format). v1 -- stored+shown, NOT enforced.
   permissions?: string[];
 
-  // связь с реальным CC-плагином
+  // link to the real CC plugin
   claudePlugin?: {
     name: string;
     marketplace: string;
     source?: string | { source: "github"; repo: string };
   };
 
-  // рецепт установки (LP2). Отсутствует → хост синтезирует из claudePlugin (shim).
+  // install recipe (LP2). Absent -> the host synthesizes one from claudePlugin (shim).
   install?: InstallRecipe;
 }
 
-// ── Рецепт установки (LP2) ───────────────────────────────────────────────────
-// Шаг рецепта установки/удаления. cmd+args — публичная команда плагина.
-// scoped:true → хост подставит "{scope}"-плейсхолдер реальным scope (user|project).
+// -- Install recipe (LP2) ------------------------------------------------------
+// An install/remove recipe step. cmd+args -- the plugin's public command.
+// scoped:true -> the host substitutes the "{scope}" placeholder with the real scope (user|project).
 export interface RecipeStep {
   cmd: string;            // "npm" | "claude" | "cargo" | "which" | ...
-  args: string[];         // может содержать плейсхолдер "{scope}"
-  scoped?: boolean;       // true → требует подстановки scope в args
-  optional?: boolean;     // true → провал шага НЕ фейлит рецепт (только warning)
-  // true → интерактивный (OAuth/выбор), Loom НЕ запускает его, а отдаёт пользователю (semi-auto).
+  args: string[];         // may contain the "{scope}" placeholder
+  scoped?: boolean;       // true -> requires scope substitution in args
+  optional?: boolean;     // true -> a step failure does NOT fail the recipe (warning only)
+  // true -> interactive (OAuth/choice), Loom does NOT run it but hands it to the user (semi-auto).
   interactive?: boolean;
 }
 
-// Как определить, что плагин стоит, и его версию.
-// Запускаем probe; installed = probe.ok; version = versionFrom(probe.stdout) (если задан regex).
+// How to detect that a plugin is installed, and its version.
+// Run probe; installed = probe.ok; version = versionFrom(probe.stdout) (if a regex is given).
 export interface DetectSpec {
-  probe: RecipeStep;      // напр. {cmd:"npm", args:["ls","-g","@digital-threads/aimux"]}
-  versionRegex?: string;  // извлечь версию из stdout (1-я группа)
-  // presenceMatch: для команд вроде `claude plugin list`, где probe.ok НЕ значит «нужный плагин стоит».
-  //   Если задан — installed требует ещё и совпадения имени в stdout. (Используется в Task 6.)
+  probe: RecipeStep;      // e.g. {cmd:"npm", args:["ls","-g","@digital-threads/aimux"]}
+  versionRegex?: string;  // extract the version from stdout (1st group)
+  // presenceMatch: for commands like `claude plugin list`, where probe.ok does NOT mean "the right plugin is installed".
+  //   If set -- installed also requires a name match in stdout. (Used in Task 6.)
   presenceMatch?: string;
-  // как узнать последнюю доступную версию (LP2). Отсутствует → update-статус "unknown".
+  // how to learn the latest available version (LP2). Absent -> update status "unknown".
   latest?: { probe: RecipeStep; versionRegex?: string };
 }
 
-// Полный рецепт плагина: установка / детект / удаление.
+// Full plugin recipe: install / detect / remove.
 export interface InstallRecipe {
-  // явные пререк-инструменты (LP2/preflight). Отсутствует → выводятся из step.cmd.
+  // explicit prerequisite tools (LP2/preflight). Absent -> derived from step.cmd.
   requires?: ("node" | "npm" | "cargo" | "claude")[];
-  install: RecipeStep[];  // выполняются по порядку
+  install: RecipeStep[];  // run in order
   detect: DetectSpec;
-  remove: RecipeStep[];   // выполняются по порядку
+  remove: RecipeStep[];   // run in order
 }

@@ -1,13 +1,13 @@
 import type { InstallRecipe } from "../plugins/contract.js";
 import { checkPrerequisites } from "../doctor/prereqs.js";
 
-// step.cmd → пререк-инструменты. probe-утилиты (which/where/true) пререками НЕ считаются.
+// step.cmd -> prerequisite tools. probe utilities (which/where/true) are NOT counted as prerequisites.
 const CMD_TO_TOOLS: Record<string, string[]> = {
   npm: ["node", "npm"], npx: ["node", "npm"],
   cargo: ["cargo"], claude: ["claude"],
 };
 
-// Какие инструменты нужны рецепту: явный requires или вывод из install-шагов. Чистая.
+// Which tools the recipe needs: explicit requires or derived from the install steps. Pure.
 export function requiredToolsForRecipe(recipe: InstallRecipe): string[] {
   if (recipe.requires && recipe.requires.length > 0) return [...recipe.requires];
   const set = new Set<string>();
@@ -20,7 +20,7 @@ export function requiredToolsForRecipe(recipe: InstallRecipe): string[] {
 export interface PreflightResult { ok: boolean; missing: string[]; hint?: string; }
 type CheckFn = (names: string[]) => { ok: boolean; missing: string[]; tools: { name: string; hint: string }[] };
 
-// Проверяет наличие нужных рецепту инструментов. check инъектируется в тестах; прод = filterPrereqs.
+// Checks that the tools the recipe needs are present. check is injected in tests; prod = filterPrereqs.
 export function preflightRecipe(recipe: InstallRecipe, deps: { check?: CheckFn } = {}): PreflightResult {
   const need = requiredToolsForRecipe(recipe);
   if (need.length === 0) return { ok: true, missing: [] };
@@ -31,7 +31,7 @@ export function preflightRecipe(recipe: InstallRecipe, deps: { check?: CheckFn }
   return { ok: false, missing: rep.missing, hint };
 }
 
-// Прод-обёртка: checkPrerequisites проверяет весь REQUIRED_TOOLS, фильтруем по нужным рецепту.
+// Prod wrapper: checkPrerequisites checks the whole REQUIRED_TOOLS, we filter by what the recipe needs.
 function filterPrereqs(names: string[]) {
   const rep = checkPrerequisites();
   const tools = rep.tools.filter((t) => names.includes(t.name));

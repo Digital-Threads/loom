@@ -1,8 +1,8 @@
 import { createContext } from "react";
 
-// Режим захвата ввода: когда панель открывает свободный текст-ввод, глобальные
-// хоткеи App (q / ←/→ / цифры) должны молчать, иначе буквы уходят в них (напр. 'q'
-// закрыл бы приложение). App владеет состоянием и кладёт его сюда; TextInput его дёргает.
+// Input capture mode: when a panel opens free-text input, App's global
+// hotkeys (q / left/right / digits) must stay silent, otherwise letters go to them (e.g. 'q'
+// would close the app). App owns the state and stores it here; TextInput toggles it.
 export interface InputMode {
   capturing: boolean;
   setCapturing: (b: boolean) => void;

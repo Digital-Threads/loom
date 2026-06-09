@@ -1,6 +1,6 @@
-// Тестируемое ядро CLI `loom plugin <add|remove|list>` (Task 10.3).
-// Чистая логика без process.exit/argv/console внутри — всё через CliResult.
-// I/O ограничен пайплайном установки (deps) + existsSync для эвристики local.
+// Testable core of the CLI `loom plugin <add|remove|list>` (Task 10.3).
+// Pure logic with no process.exit/argv/console inside -- everything via CliResult.
+// I/O is limited to the install pipeline (deps) + existsSync for the local heuristic.
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { readFileSync } from "node:fs";
@@ -11,8 +11,8 @@ import { readInstalled } from "../core/install/registry-file.js";
 import type { InstallDeps, InstallSource } from "../core/install/types.js";
 
 export interface CliResult {
-  code: number; // 0 ок / !=0 ошибка
-  lines: string[]; // что напечатать
+  code: number; // 0 ok / !=0 error
+  lines: string[]; // what to print
 }
 
 const USAGE = [
@@ -23,7 +23,7 @@ const USAGE = [
   "  loom plugin detect <name>",
 ];
 
-// Похоже ли на существующий путь к локальной папке.
+// Whether it looks like an existing path to a local folder.
 function isExistingDir(p: string): boolean {
   try {
     return existsSync(p) && statSync(p).isDirectory();
@@ -32,7 +32,7 @@ function isExistingDir(p: string): boolean {
   }
 }
 
-// Эвристика источника. Чистая, кроме existsSync для local.
+// Source heuristic. Pure, except existsSync for local.
 export function parseSource(arg: string): InstallSource {
   // git: github:owner/repo, http(s)://...git, *.git, git@...
   if (
@@ -43,11 +43,11 @@ export function parseSource(arg: string): InstallSource {
   ) {
     return { type: "git", url: arg };
   }
-  // local: начинается с "." или "/", абсолютный путь, или существующая папка.
+  // local: starts with "." or "/", an absolute path, or an existing folder.
   if (arg.startsWith(".") || arg.startsWith("/") || isAbsolute(arg) || isExistingDir(arg)) {
     return { type: "local", path: arg };
   }
-  // иначе npm-спека.
+  // otherwise an npm spec.
   return { type: "npm", spec: arg };
 }
 
@@ -65,8 +65,8 @@ function listCmd(deps: InstallDeps): CliResult {
   return { code: 0, lines };
 }
 
-// Извлекает значение флага "--scope <v>" из аргументов. Defensive:
-// нет флага → undefined; флаг без значения → undefined; иначе строка значения.
+// Extracts the value of the "--scope <v>" flag from the arguments. Defensive:
+// no flag -> undefined; flag without a value -> undefined; otherwise the value string.
 function parseScopeFlag(rest: string[]): { scope: string | undefined; positional: string[] } {
   const positional: string[] = [];
   let scope: string | undefined;
@@ -154,8 +154,8 @@ function removeCmd(rest: string[], deps: InstallDeps): CliResult {
   return { code: 0, lines: [`✓ removed ${name}`] };
 }
 
-// detect <name>: ищет плагин в реестре, читает его plugin.json, прогоняет detect-пробу.
-// Defensive: нет в реестре → code 1; битый/нет манифеста → нет detect → "не установлен".
+// detect <name>: finds the plugin in the registry, reads its plugin.json, runs the detect probe.
+// Defensive: not in the registry -> code 1; corrupt/missing manifest -> no detect -> "not installed".
 function detectCmd(rest: string[], deps: InstallDeps): CliResult {
   const name = rest[0];
   if (!name) {
@@ -181,7 +181,7 @@ function detectCmd(rest: string[], deps: InstallDeps): CliResult {
     };
     detectSpec = raw.install?.detect;
   } catch {
-    // нет/битый манифест → detectSpec остаётся undefined
+    // missing/corrupt manifest -> detectSpec stays undefined
   }
 
   if (!detectSpec) {
@@ -198,8 +198,8 @@ function detectCmd(rest: string[], deps: InstallDeps): CliResult {
   return { code: 0, lines: [`installed ${name}${ver}${upd}`] };
 }
 
-// args = всё после "loom plugin": ["add","./x","--yes"] / ["list"] / ["remove","name"].
-// Defensive: ничего не бросает, любой сбой → CliResult с code!=0.
+// args = everything after "loom plugin": ["add","./x","--yes"] / ["list"] / ["remove","name"].
+// Defensive: throws nothing, any failure -> a CliResult with code!=0.
 export function runPluginCli(args: string[], deps: InstallDeps): CliResult {
   try {
     const sub = args[0];

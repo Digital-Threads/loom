@@ -1,7 +1,7 @@
-// Реестр отложенной "передачи терминала" (exit-and-handover). Интерактивный
-// дочерний процесс (напр. aimux launchProfile с OAuth) нельзя запускать внутри
-// живого Ink-рендера — он владеет терминалом. Поэтому action кладёт сюда thunk,
-// ViewRenderer гасит Ink (exit), а cli.tsx после waitUntilExit исполняет thunk.
+// Registry for a deferred "terminal handover" (exit-and-handover). An interactive
+// child process (e.g. aimux launchProfile with OAuth) cannot run inside a
+// live Ink render -- it owns the terminal. So the action stores a thunk here,
+// ViewRenderer tears down Ink (exit), and cli.tsx runs the thunk after waitUntilExit.
 export type HandoverThunk = () => unknown | Promise<unknown>;
 
 let pending: HandoverThunk | null = null;

@@ -17,9 +17,9 @@ export interface WorkspaceData {
   projectId: string;
 }
 
-// Пустой старт: ни один плагин не отдал полезных данных.
-// health/errors не учитываем — health может быть от незапущенных сессий,
-// а errors сигнализируют о сбоях загрузки, а не об отсутствии настройки.
+// Empty start: no plugin returned any useful data.
+// We ignore health/errors -- health may come from sessions that never ran,
+// and errors signal load failures, not the absence of configuration.
 export function isWorkspaceEmpty(data: WorkspaceData): boolean {
   return (
     data.subscriptions.length === 0 &&

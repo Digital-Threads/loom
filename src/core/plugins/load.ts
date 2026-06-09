@@ -4,15 +4,15 @@ import { LOOM_CONTRACT_VERSION } from "./manifest.js";
 import type { DiscoveredManifest } from "./discover.js";
 import type { LoomPlugin } from "./types.js";
 
-// Достаёт major-версию из semver-подобной строки. Поддерживает
-// "1.0", "^1.0", "~1.2.3", "1". Мусор → null.
+// Extracts the major version from a semver-like string. Supports
+// "1.0", "^1.0", "~1.2.3", "1". Garbage -> null.
 function majorOf(version: string): number | null {
   const m = /^[\^~]?\s*(\d+)/.exec(version.trim());
   if (!m) return null;
   return Number(m[1]);
 }
 
-// Чистая функция: совместимы если major совпадает. Мусор с любой стороны → false.
+// Pure function: compatible if the major matches. Garbage on either side -> false.
 export function isApiCompatible(pluginApiVersion: string, hostVersion: string): boolean {
   const a = majorOf(pluginApiVersion);
   const b = majorOf(hostVersion);
@@ -20,8 +20,8 @@ export function isApiCompatible(pluginApiVersion: string, hostVersion: string): 
   return a === b;
 }
 
-// Динамически импортирует и валидирует найденные плагины.
-// КАЖДЫЙ модуль в своём try/catch — один битый/падающий не валит остальных.
+// Dynamically imports and validates the discovered plugins.
+// EACH module in its own try/catch -- one corrupt/failing module does not break the rest.
 export async function loadPlugins(
   discovered: DiscoveredManifest[],
 ): Promise<{ plugins: LoomPlugin[]; errors: string[] }> {
@@ -31,7 +31,7 @@ export async function loadPlugins(
   for (const { manifest, installDir } of discovered) {
     const name = manifest.name;
 
-    // apiVersion semver-совместимость до загрузки кода.
+    // apiVersion semver compatibility before loading the code.
     if (!isApiCompatible(manifest.apiVersion, LOOM_CONTRACT_VERSION)) {
       errors.push(
         `${name}: apiVersion ${manifest.apiVersion} is incompatible with host ${LOOM_CONTRACT_VERSION}`,

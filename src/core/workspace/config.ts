@@ -59,7 +59,7 @@ export function writeWorkspaceConfig(
     try {
       const raw = parse(readFileSync(file, "utf8"));
       if (isPlainObject(raw)) current = raw;
-    } catch { /* нет файла / битый — стартуем с минимума */ }
+    } catch { /* no file / corrupt -- start from the minimum */ }
     const merged = deepMerge(current, patch as Record<string, unknown>);
     if (typeof merged.version !== "number") merged.version = 1;
     writeFileSync(file, stringify(merged), "utf8");

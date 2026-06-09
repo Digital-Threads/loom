@@ -8,9 +8,9 @@ export interface CollectDeps {
   readConfig?: () => WorkspaceConfigSlice;
 }
 
-// Дефолтное чтение workspace-config (LP8): projectName ← workspace.name.
-// activeProfile/activeTaskId в схеме .ai-workspace.yaml пока не хранятся → undefined
-// (pack упадёт на эвристики из build-pack). Это честно и согласовано с LP8.
+// Default reading of the workspace config (LP8): projectName <- workspace.name.
+// activeProfile/activeTaskId are not yet stored in the .ai-workspace.yaml schema -> undefined
+// (pack falls back to heuristics from build-pack). This is honest and consistent with LP8.
 function defaultReadConfig(): WorkspaceConfigSlice {
   try {
     const root = resolveProjectRoot(process.cwd());

@@ -4,9 +4,9 @@ import { loomRegistry } from "../plugins/index.js";
 
 export type DerivationFn = (data: WorkspaceData, ...args: any[]) => unknown;
 
-// Объединённая карта деривлаций для резолвера {fn}: host-built-in + деривации всех
-// зарегистрированных плагинов. Плагины ДОПОЛНЯЮТ карту; host-built-in приоритетнее —
-// при коллизии имени host-версия не перекрывается (мержим плагины первыми, host сверху).
+// Combined derivations map for the {fn} resolver: host built-in + derivations of all
+// registered plugins. Plugins ADD to the map; host built-in takes priority --
+// on a name collision the host version is not overwritten (we merge plugins first, host on top).
 export function allDerivations(): Record<string, DerivationFn> {
   const merged: Record<string, DerivationFn> = {};
   for (const p of loomRegistry.list()) {

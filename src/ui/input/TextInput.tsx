@@ -2,9 +2,9 @@ import React, { useState, useEffect, useContext } from "react";
 import { Text, useInput } from "ink";
 import { InputModeContext } from "./InputModeContext.js";
 
-// Минимальный Ink-компонент свободного текст-ввода (без внешних зависимостей —
-// в проекте свой useInput-стиль). Enter=submit, Esc=cancel, Backspace=стереть.
-// На маунте включает режим захвата (App глушит глобальные хоткеи), на размонтаже — выключает.
+// Minimal Ink component for free-text input (no external dependencies --
+// the project has its own useInput style). Enter=submit, Esc=cancel, Backspace=erase.
+// On mount it enables capture mode (App mutes global hotkeys), on unmount it disables it.
 export function TextInput({
   initial = "",
   placeholder = "",
@@ -43,7 +43,7 @@ export function TextInput({
       });
       return;
     }
-    // Печатные символы. Игнорируем управляющие комбинации.
+    // Printable characters. We ignore control combinations.
     if (input && !key.ctrl && !key.meta) {
       setValue((v) => {
         const next = v + input;

@@ -1,6 +1,6 @@
-// Чистая машина навигации обобщённого ViewRenderer. Без Ink, без данных, без мутаций:
-// меняет только состояние навигации/режима. РЕШЕНИЕ вызывать action принимает Ink-слой,
-// глядя на mode/confirmKey. Это поднятая в данные логика TasksPanel/SettingsPanel.
+// Pure navigation machine for the generic ViewRenderer. No Ink, no data, no mutations:
+// it only changes navigation/mode state. The DECISION to invoke an action is made by the Ink layer,
+// looking at mode/confirmKey. This is the TasksPanel/SettingsPanel logic lifted into data.
 
 export type ViewMode = "nav" | "editNumber" | "confirm";
 
@@ -14,7 +14,7 @@ export interface ViewState {
   cursor: number;
   mode: ViewMode;
   editBuffer: string;
-  confirmKey: string | null; // ActionBinding.key, по которому висит подтверждение
+  confirmKey: string | null; // ActionBinding.key the confirmation is pending on
   status: string;
 }
 
@@ -31,18 +31,18 @@ export type ViewEvent =
   | { type: "setStatus"; text: string };
 
 export interface ViewReducerOpts {
-  // Длина текущего списка для clamp курсора (table/form). 0 → курсор остаётся 0.
+  // Length of the current list to clamp the cursor (table/form). 0 -> cursor stays 0.
   listLength: number;
-  // true → Enter на текущей строке ведёт в detail (table.onSelect). Слой сам делает push.
+  // true -> Enter on the current row leads into detail (table.onSelect). The layer does the push itself.
   hasOnSelect?: boolean;
-  // viewKey + idParam для push в стек при Enter (если hasOnSelect).
+  // viewKey + idParam to push onto the stack on Enter (if hasOnSelect).
   openView?: string;
   selectedId?: string;
-  // true → текущее выбранное поле формы — number (Enter → editNumber-режим).
+  // true -> the currently selected form field is a number (Enter -> editNumber mode).
   enterEditsNumber?: boolean;
-  // initial-значение буфера при входе в editNumber (текущее значение поля).
+  // initial buffer value on entering editNumber (the field's current value).
   editInitial?: string;
-  // требует ли action с этим ключом подтверждения (PluginAction.confirm).
+  // whether the action with this key requires confirmation (PluginAction.confirm).
   confirmKeys?: Record<string, boolean>;
 }
 
@@ -63,11 +63,11 @@ function clampCursor(cursor: number, listLength: number): number {
 }
 
 export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReducerOpts): ViewState {
-  // ── confirm-режим ──────────────────────────────────────────────────────────
+  // -- confirm mode --------------------------------------------------------------
   if (state.mode === "confirm") {
     switch (event.type) {
       case "confirmYes":
-        // Слой исполняет action на confirmYes, затем шлёт setStatus. Здесь — выход в nav.
+        // The layer runs the action on confirmYes, then sends setStatus. Here -- exit to nav.
         return { ...state, mode: "nav", confirmKey: null };
       case "confirmNo":
       case "esc":
@@ -79,7 +79,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
     }
   }
 
-  // ── editNumber-режим ────────────────────────────────────────────────────────
+  // -- editNumber mode -----------------------------------------------------------
   if (state.mode === "editNumber") {
     switch (event.type) {
       case "esc":
@@ -92,7 +92,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
         }
         return state;
       case "enter":
-        // Пустой буфер → отмена. Иначе слой читает editBuffer и пишет значение.
+        // Empty buffer -> cancel. Otherwise the layer reads editBuffer and writes the value.
         if (state.editBuffer === "") {
           return { ...state, mode: "nav", status: "cancelled" };
         }
@@ -104,7 +104,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
     }
   }
 
-  // ── nav-режим ───────────────────────────────────────────────────────────────
+  // -- nav mode --------------------------------------------------------------------
   switch (event.type) {
     case "up":
       return { ...state, cursor: clampCursor(state.cursor - 1, opts.listLength) };
@@ -112,7 +112,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
       return { ...state, cursor: clampCursor(state.cursor + 1, opts.listLength) };
     case "enter": {
       if (opts.hasOnSelect && opts.openView) {
-        // list→detail: push нового кадра, курсор сбрасываем.
+        // list->detail: push a new frame, reset the cursor.
         return {
           ...state,
           stack: [...state.stack, { viewKey: opts.openView, idParam: opts.selectedId }],
@@ -126,7 +126,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
       return state;
     }
     case "esc": {
-      // pop стека (закрыть detail). Корень не закрываем.
+      // pop the stack (close detail). We don't close the root.
       if (state.stack.length > 1) {
         return { ...state, stack: state.stack.slice(0, -1), cursor: 0, status: "" };
       }
@@ -137,7 +137,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
       if (needsConfirm) {
         return { ...state, mode: "confirm", confirmKey: event.key };
       }
-      // Без confirm: слой исполняет action сам и пришлёт setStatus. Стейт не меняем.
+      // No confirm: the layer runs the action itself and will send setStatus. We don't change state.
       return state;
     }
     case "setStatus":

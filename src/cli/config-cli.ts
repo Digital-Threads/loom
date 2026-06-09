@@ -10,8 +10,8 @@ import type {
 } from "../core/doctor/types.js";
 
 export interface CliResult {
-  code: number; // 0 ок / !=0 ошибка
-  lines: string[]; // что напечатать
+  code: number; // 0 ok / !=0 error
+  lines: string[]; // what to print
 }
 
 export interface ConfigCliDeps {
@@ -29,13 +29,13 @@ const USAGE = [
 const SCOPE_NAMES: ScopeName[] = ["user", "project", "local"];
 
 function resolveDirs(deps: ConfigCliDeps): ScopeDirs {
-  // В проде: домашняя директория + текущая рабочая. В тестах — инъекция.
+  // In prod: home directory + current working directory. In tests -- injection.
   return deps.dirs ?? { homeDir: homedir(), projectDir: process.cwd() };
 }
 
 function resolveContributions(deps: ConfigCliDeps): PluginContribution[] {
-  // По умолчанию пусто: формализация вклада плагинов из реестра/манифестов —
-  // будущая задача. Пустой список => doctor покажет всё как missing, но не упадёт.
+  // Empty by default: formalizing the contribution of plugins from the registry/manifests is
+  // a future task. An empty list => doctor shows everything as missing but does not crash.
   return deps.contributions ?? [];
 }
 
@@ -78,7 +78,7 @@ function doctorCmd(deps: ConfigCliDeps): CliResult {
 
 function parseMergeFlags(rest: string[]): { scope: ScopeName; apply: boolean } {
   let scope: ScopeName = "user";
-  let apply = false; // dry-run по умолчанию
+  let apply = false; // dry-run by default
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === "--apply") apply = true;

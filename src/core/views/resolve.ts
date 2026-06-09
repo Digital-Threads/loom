@@ -6,16 +6,16 @@ export interface BindContext {
   data: WorkspaceData;
   idParam?: string;
   row?: Record<string, unknown>;
-  // Объединённая карта деривлаций (host + плагины). Если задана, resolveBind резолвит
-  // {fn} против неё; иначе — против host-built-in derivations (дефолт для тестов).
+  // Combined map of derivations (host + plugins). If provided, resolveBind resolves
+  // {fn} against it; otherwise against host built-in derivations (the default for tests).
   derivations?: Record<string, (data: WorkspaceData, ...args: any[]) => unknown>;
 }
 
-// Спец-ключи контекста: строковый Bind/arg, равный одному из них, читается из ctx,
-// а не как dotted-путь и не как литерал.
+// Special context keys: a string Bind/arg equal to one of these is read from ctx,
+// not as a dotted path and not as a literal.
 const CONTEXT_KEYS = new Set(["idParam", "taskId"]);
 
-// Достаёт значение по dotted-пути. Поддерживает ".length" на массивах/строках.
+// Reads a value by dotted path. Supports ".length" on arrays/strings.
 export function getDotted(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const part of path.split(".")) {
@@ -30,9 +30,9 @@ export function getDotted(obj: unknown, path: string): unknown {
   return cur;
 }
 
-// Резолвит FieldRef-строку против контекста.
-// Корень: спец-ключ "idParam"/"taskId" → ctx.idParam; иначе если есть row и первый
-// сегмент пути присутствует в row — резолв от row; иначе от data.
+// Resolves a FieldRef string against the context.
+// Root: special key "idParam"/"taskId" -> ctx.idParam; otherwise if there is a row and the first
+// path segment is present in row -- resolve from row; otherwise from data.
 export function resolveFieldRef(path: FieldRef, ctx: BindContext): unknown {
   if (CONTEXT_KEYS.has(path)) return ctx.idParam;
   const firstSeg = path.split(".")[0];
@@ -42,11 +42,11 @@ export function resolveFieldRef(path: FieldRef, ctx: BindContext): unknown {
   return getDotted(ctx.data, path);
 }
 
-// Резолвит Bind: FieldRef-строку или {fn,args}.
-// Для {fn}: каждый arg — FieldRef ИЛИ литерал. Строковый arg, равный спец-ключу
-// ("idParam"/"taskId"), берётся из ctx.idParam; прочие строки трактуются как литералы
-// (а НЕ как пути) — args в ViewSpec всегда плоские параметры деривации, не выражения.
-// Числа/булевы/прочее — как есть. Неизвестный fn → undefined (defensive, не бросаем).
+// Resolves a Bind: a FieldRef string or {fn,args}.
+// For {fn}: each arg is a FieldRef OR a literal. A string arg equal to a special key
+// ("idParam"/"taskId") is taken from ctx.idParam; other strings are treated as literals
+// (NOT as paths) -- ViewSpec args are always flat derivation parameters, not expressions.
+// Numbers/booleans/etc. -- as-is. Unknown fn -> undefined (defensive, we don't throw).
 export function resolveBind(
   bind: Bind,
   ctx: BindContext,
@@ -61,9 +61,9 @@ export function resolveBind(
   const args = (bind.args ?? []).map((arg) => {
     if (typeof arg === "string") {
       if (CONTEXT_KEYS.has(arg)) return ctx.idParam;
-      return arg; // литерал-строка
+      return arg; // literal string
     }
-    return arg; // number | boolean | литерал
+    return arg; // number | boolean | literal
   });
   return fn(ctx.data, ...args);
 }

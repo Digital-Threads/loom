@@ -3,9 +3,9 @@ import { Box, Text, useInput } from "ink";
 import { loomRegistry } from "../../core/plugins/index.js";
 import type { LoomContext, LoomPlugin, SettingField } from "../../core/plugins/types.js";
 
-// source:"registry-settings" — хост читает loomRegistry (НЕ WorkspaceData).
-// Логика портирована из SettingsPanel (Task 7.3 — допускается временное дублирование,
-// уберётся в 7.4 когда App переключится на ViewRenderer).
+// source:"registry-settings" -- the host reads loomRegistry (NOT WorkspaceData).
+// Logic ported from SettingsPanel (Task 7.3 -- temporary duplication is allowed,
+// to be removed in 7.4 when App switches to ViewRenderer).
 
 function getDotted(obj: Record<string, unknown>, path: string): unknown {
   let cur: unknown = obj;

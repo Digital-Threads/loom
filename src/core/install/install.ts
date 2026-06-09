@@ -1,5 +1,5 @@
-// Ядро пайплайна установки/удаления Loom-плагинов (Task 10.2).
-// Все функции defensive (НЕ бросают). Внешние эффекты идут через deps.run и deps.dataDir.
+// Core of the Loom plugin install/remove pipeline (Task 10.2).
+// All functions are defensive (do NOT throw). External effects go through deps.run and deps.dataDir.
 import {
   cpSync,
   existsSync,
@@ -24,17 +24,17 @@ import type {
   InstallSource,
 } from "./types.js";
 
-// ── Валидаторы входа (argument-injection hardening) ──────────────────────────
-// Любой пользовательский source попадает в argv git/npm/tar/claude. Без проверки
-// значение вида "-x" / "--upload-pack=evil" протащит флаг. Все валидаторы чистые
-// и экспортируются для тестов.
+// -- Input validators (argument-injection hardening) --------------------------
+// Any user-supplied source ends up in the argv of git/npm/tar/claude. Without a check
+// a value like "-x" / "--upload-pack=evil" would smuggle in a flag. All validators are pure
+// and exported for tests.
 
-// Значение «похоже на флаг»: начинается с "-" (после возможных пробелов) — отсекаем.
+// Value "looks like a flag": starts with "-" (after possible spaces) -- we reject it.
 export function isFlagShaped(value: string): boolean {
   return /^\s*-/.test(value);
 }
 
-// git url: https?:// | git@host:path | github:owner/repo. Никаких флагов/пробелов в начале.
+// git url: https?:// | git@host:path | github:owner/repo. No flags/leading spaces.
 export function isValidGitUrl(value: string): boolean {
   if (typeof value !== "string" || value.length === 0) return false;
   if (isFlagShaped(value)) return false;
@@ -44,31 +44,31 @@ export function isValidGitUrl(value: string): boolean {
   return false;
 }
 
-// npm package-spec: опц. scope + имя + опц. версия/диапазон. Не flag-shaped, без пробелов в начале.
+// npm package-spec: optional scope + name + optional version/range. Not flag-shaped, no leading spaces.
 export function isValidNpmSpec(value: string): boolean {
   if (typeof value !== "string" || value.length === 0) return false;
   if (isFlagShaped(value)) return false;
   return /^(@[a-z0-9-._]+\/)?[a-z0-9-._]+(@[a-z0-9-._^~*x><=. |]+)?$/i.test(value);
 }
 
-// claude marketplace source: https?:// | owner/repo (github-форма) | ./локальный путь. Не flag-shaped.
+// claude marketplace source: https?:// | owner/repo (github form) | ./local path. Not flag-shaped.
 export function isValidMarketplaceSource(value: string): boolean {
   if (typeof value !== "string" || value.length === 0) return false;
   if (isFlagShaped(value)) return false;
   if (/^https?:\/\/\S+$/.test(value)) return true;
-  if (/^\.{1,2}\//.test(value)) return true; // ./ или ../ локальный путь
+  if (/^\.{1,2}\//.test(value)) return true; // ./ or ../ local path
   if (/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(value)) return true; // owner/repo
   return false;
 }
 
-// Имя найденного tgz: только безопасные символы и расширение .tgz, не flag-shaped.
+// Name of the found tgz: only safe characters and the .tgz extension, not flag-shaped.
 export function isValidTgzName(value: string): boolean {
   if (typeof value !== "string" || value.length === 0) return false;
   if (isFlagShaped(value)) return false;
   return /^[A-Za-z0-9._@/+-]+\.tgz$/.test(value);
 }
 
-// Человекочитаемое описание источника для записи в реестр.
+// Human-readable description of the source for the registry entry.
 function describeSource(source: InstallSource): string {
   switch (source.type) {
     case "local":
@@ -80,7 +80,7 @@ function describeSource(source: InstallSource): string {
   }
 }
 
-// Приводим claudePlugin.source (string | {source:"github";repo} | undefined) к строке.
+// Coerce claudePlugin.source (string | {source:"github";repo} | undefined) to a string.
 function normalizeClaudePlugin(
   cp: NonNullable<import("../plugins/contract.js").LoomPluginManifest["claudePlugin"]>,
 ): ClaudePluginRef {
@@ -93,9 +93,9 @@ function normalizeClaudePlugin(
   return { name: cp.name, marketplace: cp.marketplace, source };
 }
 
-// Defensive: из синтезированного claudePlugin-рецепта убираем шаг
-// `claude plugin marketplace add -- <src>`, если source flag-shaped/невалидный
-// (argument-injection hardening — раньше делала прошитая claude-ветка finalize).
+// Defensive: from the synthesized claudePlugin recipe we remove the step
+// `claude plugin marketplace add -- <src>` if source is flag-shaped/invalid
+// (argument-injection hardening -- previously done by the hardcoded claude finalize branch).
 function sanitizeSynthRecipe(
   recipe: import("../plugins/contract.js").InstallRecipe,
 ): import("../plugins/contract.js").InstallRecipe {
@@ -112,8 +112,8 @@ function sanitizeSynthRecipe(
   return { ...recipe, install };
 }
 
-// Кладёт сырьё плагина в каталог, возвращает путь к корню (где plugin.json).
-// npm/git реально качают через deps.run; в тестах run фейковый — эффектов нет.
+// Places the plugin's raw files into a directory, returns the path to the root (where plugin.json is).
+// npm/git actually download via deps.run; in tests run is fake -- no effects.
 export function fetchToStaging(
   source: InstallSource,
   deps: InstallDeps,
@@ -123,7 +123,7 @@ export function fetchToStaging(
       if (!existsSync(join(source.path, "plugin.json"))) {
         return { ok: false, error: `plugin.json not found in ${source.path}` };
       }
-      // Не копируем на этом шаге — копия при финализации.
+      // We don't copy at this step -- the copy happens at finalization.
       return { ok: true, dir: source.path };
     }
 
@@ -132,10 +132,10 @@ export function fetchToStaging(
         return { ok: false, error: `invalid npm spec: ${source.spec}` };
       }
       const dest = mkdtempSync(join(tmpdir(), "loom-npm-"));
-      // end-of-options "--" перед spec — spec не может быть распознан как флаг.
+      // end-of-options "--" before spec -- spec cannot be parsed as a flag.
       const packed = deps.run("npm", ["pack", "--pack-destination", dest, "--", source.spec]);
       if (!packed.ok) return { ok: false, error: `npm pack failed: ${packed.stderr}` };
-      // Имя tgz печатает npm pack на stdout (последняя строка). Если пусто — ищем в dest.
+      // npm pack prints the tgz name on stdout (last line). If empty -- search in dest.
       let tgzName = packed.stdout.trim().split(/\r?\n/).pop() ?? "";
       let tgz = tgzName ? join(dest, tgzName) : "";
       if (!tgz || !existsSync(tgz)) {
@@ -143,12 +143,12 @@ export function fetchToStaging(
         tgzName = found ?? tgzName;
         tgz = found ? join(dest, found) : tgz;
       }
-      // Имя tgz должно быть безопасным и не flag-shaped (defensive против подмены вывода).
+      // The tgz name must be safe and not flag-shaped (defensive against output tampering).
       if (!isValidTgzName(tgzName)) {
         return { ok: false, error: `invalid tgz name: ${tgzName}` };
       }
       const out = mkdtempSync(join(tmpdir(), "loom-npm-x-"));
-      // Защита от пути, начинающегося с "-": префиксуем "./". Затем "--" перед файлом.
+      // Guard against a path starting with "-": prefix it with "./". Then "--" before the file.
       const safeTgz = tgz.startsWith("-") ? `./${tgz}` : tgz;
       const ex = deps.run("tar", ["-xzf", "-C", out, "--strip-components=1", "--", safeTgz]);
       if (!ex.ok) return { ok: false, error: `tar extract failed: ${ex.stderr}` };
@@ -160,7 +160,7 @@ export function fetchToStaging(
       return { ok: false, error: `invalid git url: ${source.url}` };
     }
     const dir = mkdtempSync(join(tmpdir(), "loom-git-"));
-    // end-of-options "--" перед url — url не может быть распознан как флаг.
+    // end-of-options "--" before url -- url cannot be parsed as a flag.
     const cloned = deps.run("git", ["clone", "--depth", "1", "--", source.url, dir]);
     if (!cloned.ok) return { ok: false, error: `git clone failed: ${cloned.stderr}` };
     return { ok: true, dir };
@@ -169,7 +169,7 @@ export function fetchToStaging(
   }
 }
 
-// Строит план установки: fetch → читает plugin.json → validateManifest → InstallPlan.
+// Builds the install plan: fetch -> read plugin.json -> validateManifest -> InstallPlan.
 export function planInstall(source: InstallSource, deps: InstallDeps): InstallResult {
   const staged = fetchToStaging(source, deps);
   if (!staged.ok || !staged.dir) {
@@ -206,8 +206,8 @@ export function planInstall(source: InstallSource, deps: InstallDeps): InstallRe
   return { ok: true, plan };
 }
 
-// Выполняет установку ПОСЛЕ подтверждения: копирует файлы, пишет реестр, дергает claude CLI.
-// Ошибки claude НЕ фейлят установку Loom-части — возвращаются как warning.
+// Performs the install AFTER confirmation: copies files, writes the registry, calls the claude CLI.
+// claude errors do NOT fail the Loom part of the install -- they are returned as a warning.
 export function finalizeInstall(
   plan: InstallPlan,
   stagingDir: string,
@@ -228,8 +228,8 @@ export function finalizeInstall(
     return { ok: false, error: `copy failed: ${(err as Error).message}` };
   }
 
-  // Рецепт гоняем ПОСЛЕ копирования, но ДО записи реестра: при провале
-  // обязательного шага откатываем файлы и не оставляем запись в реестре.
+  // We run the recipe AFTER copying but BEFORE writing the registry: on a required
+  // step's failure we roll back the files and leave no registry entry.
   const rec = runRecipe(plan.recipe.install, ctx, deps);
   if (!rec.ok) {
     rmSync(plan.installDir, { recursive: true, force: true });
@@ -249,7 +249,7 @@ export function finalizeInstall(
   return { ok: true, warning: rec.warning, manual: rec.manual };
 }
 
-// Полный пайплайн: план → подтверждение → финализация.
+// Full pipeline: plan -> confirmation -> finalization.
 export function installPlugin(
   source: InstallSource,
   deps: InstallDeps,
@@ -263,8 +263,8 @@ export function installPlugin(
     return { ok: false, error: "cancelled", plan: planned.plan };
   }
 
-  // Для local исходник = source.path; для npm/git staging уже скачан в fetchToStaging,
-  // но planInstall не возвращает staging-каталог наружу → перезапрашиваем для финализации.
+  // For local, the source = source.path; for npm/git the staging is already downloaded in fetchToStaging,
+  // but planInstall does not return the staging directory -> we re-fetch for finalization.
   const staged = source.type === "local" ? { ok: true, dir: source.path } : fetchToStaging(source, deps);
   if (!staged.ok || !staged.dir) {
     return { ok: false, error: staged.error ?? "fetch failed", plan: planned.plan };
@@ -275,7 +275,7 @@ export function installPlugin(
   return { ok: true, plan: planned.plan, warning: fin.warning, manual: fin.manual };
 }
 
-// Удаляет плагин: убирает installDir, чистит реестр, пробует снять claude-плагин.
+// Removes a plugin: deletes installDir, cleans the registry, tries to remove the claude plugin.
 export function removePlugin(
   name: string,
   deps: InstallDeps,
@@ -285,7 +285,7 @@ export function removePlugin(
   const entry = reg.plugins[name];
   if (!entry) return { ok: false, error: `plugin not installed: ${name}` };
 
-  // Собрать recipe из установленного plugin.json ДО удаления (defensive).
+  // Assemble the recipe from the installed plugin.json BEFORE removal (defensive).
   let removeSteps: InstallPlan["recipe"]["remove"] = [];
   try {
     const raw = JSON.parse(readFileSync(join(entry.installPath, "plugin.json"), "utf8")) as unknown;
@@ -298,7 +298,7 @@ export function removePlugin(
       removeSteps = recipe.remove;
     }
   } catch {
-    // нет/битый манифест — пропускаем remove-рецепт
+    // missing/corrupt manifest -- skip the remove recipe
   }
 
   try {
@@ -310,7 +310,7 @@ export function removePlugin(
   delete reg.plugins[name];
   writeInstalled(deps, reg);
 
-  // Defensive: провал remove-рецепта не блокирует чистку.
+  // Defensive: a remove-recipe failure does not block the cleanup.
   runRecipe(removeSteps, ctx, deps);
 
   return { ok: true };

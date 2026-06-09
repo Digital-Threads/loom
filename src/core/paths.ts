@@ -1,8 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-// Директории Loom. Чистые функции — НЕ создают каталоги.
-// LOOM_DATA = $XDG_DATA_HOME/loom если задан, иначе ~/.loom (см. plugin-manifest.md).
+// Loom directories. Pure functions -- they do NOT create directories.
+// LOOM_DATA = $XDG_DATA_HOME/loom if set, otherwise ~/.loom (see plugin-manifest.md).
 
 export function loomDataDir(): string {
   const xdg = process.env.XDG_DATA_HOME;

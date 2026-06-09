@@ -4,7 +4,7 @@ import type { InstallDeps } from "./types.js";
 export type Scope = "user" | "project";
 export interface RecipeCtx {
   scope: Scope; dryRun?: boolean; platform?: NodeJS.Platform;
-  // инъекция preflight-чека (тесты); прод по умолчанию = реальный checkPrerequisites
+  // injection of the preflight check (tests); prod default = the real checkPrerequisites
   preflightCheck?: (names: string[]) => { ok: boolean; missing: string[]; tools: { name: string; hint: string }[] };
 }
 export interface RunResult { ok: boolean; error?: string; warning?: string; planned?: string[][]; manual?: string[][]; }
@@ -14,28 +14,28 @@ export function isValidScope(s: string): s is Scope {
   return s === "user" || s === "project";
 }
 
-// Обёртки-лаунчеры, которые на Windows существуют как *.cmd-шиммы
-// (execFileSync без shell их по «голому» имени не находит).
+// Launcher wrappers that on Windows exist as *.cmd shims
+// (execFileSync without a shell does not find them by their bare name).
 const WIN_CMD_LAUNCHERS = new Set(["npm", "npx", "cargo", "claude", "bun", "bunx", "yarn", "pnpm"]);
 
-// Резолв исполняемого имени под платформу. Чистая.
+// Resolve the executable name for the platform. Pure.
 export function resolveLauncher(cmd: string, platform: NodeJS.Platform = process.platform): string {
   if (platform === "win32" && WIN_CMD_LAUNCHERS.has(cmd)) return `${cmd}.cmd`;
   return cmd;
 }
 
-// Резолв probe-команды под платформу: which→where на win32; прочее — через launcher. Чистая.
+// Resolve the probe command for the platform: which->where on win32; otherwise via launcher. Pure.
 export function resolveProbeCmd(cmd: string, platform: NodeJS.Platform = process.platform): string {
   if (cmd === "which") return platform === "win32" ? "where" : "which";
   return resolveLauncher(cmd, platform);
 }
-// Заменяет плейсхолдер "{scope}" реальным scope. Чистая.
+// Replaces the "{scope}" placeholder with the real scope. Pure.
 export function substituteScope(args: string[], scope: Scope): string[] {
   return args.map((a) => (a === "{scope}" ? scope : a));
 }
 
-// Прогоняет шаги по порядку. Defensive: обязательный провал → стоп+error; optional → warning.
-// dryRun → не запускает, возвращает planned (cmd+args после подстановки).
+// Runs the steps in order. Defensive: a required failure -> stop+error; optional -> warning.
+// dryRun -> does not run, returns planned (cmd+args after substitution).
 export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps): RunResult {
   const planned: string[][] = [];
   const manual: string[][] = [];
@@ -48,8 +48,8 @@ export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps
     const args = step.scoped ? substituteScope(step.args, ctx.scope) : step.args;
     const realCmd = resolveProbeCmd(step.cmd, platform);
     if (step.interactive) {
-      manual.push([realCmd, ...args]); // собираем, НЕ запускаем
-      continue;                         // авто-шаги дальше выполняются
+      manual.push([realCmd, ...args]); // collect, do NOT run
+      continue;                         // auto steps continue to run
     }
     planned.push([realCmd, ...args]);
     if (ctx.dryRun) continue;
@@ -63,7 +63,7 @@ export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps
   return { ok: true, warning, planned, manual: manual.length ? manual : undefined };
 }
 
-// Детект: probe; installed = probe.ok (+ presenceMatch, если задан); version = versionRegex(probe.stdout).
+// Detect: probe; installed = probe.ok (+ presenceMatch if set); version = versionRegex(probe.stdout).
 export function detect(spec: DetectSpec, deps: InstallDeps, platform: NodeJS.Platform = process.platform): DetectResult {
   const res = deps.run(resolveProbeCmd(spec.probe.cmd, platform), spec.probe.args);
   if (!res.ok) return { installed: false };
@@ -83,7 +83,7 @@ export interface UpdateResult extends DetectResult {
   updateAvailable?: boolean; // undefined = unknown
 }
 
-// Числовое semver-сравнение по сегментам (без pre-release). Чистая.
+// Numeric semver comparison by segments (no pre-release). Pure.
 export function compareVersions(a: string, b: string): number {
   const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
   const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
@@ -112,7 +112,7 @@ export function detectUpdate(
   return { ...base, latest, updateAvailable: compareVersions(latest, base.version) > 0 };
 }
 
-// Backward-compat: нет manifest.install → синтезируем рецепт из claudePlugin.
+// Backward-compat: no manifest.install -> synthesize a recipe from claudePlugin.
 export function synthesizeRecipeFromClaudePlugin(
   cp: { name: string; marketplace: string; source?: string },
 ): InstallRecipe {

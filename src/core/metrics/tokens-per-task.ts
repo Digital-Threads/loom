@@ -103,7 +103,7 @@ export function tokensBySessionForTask(
 }
 
 /**
- * Сессии задачи: множество meta.session_id по всем событиям задачи. Чистая.
+ * Sessions of a task: the set of meta.session_id across all events of the task. Pure.
  */
 export function sessionsForTask(allEvents: TjEvent[], taskId: string): Set<string> {
   const out = new Set<string>();
@@ -116,8 +116,8 @@ export function sessionsForTask(allEvents: TjEvent[], taskId: string): Set<strin
 }
 
 /**
- * Точная атрибуция (exact): токены, чей sessionId ∈ сессии задачи. Сабагенты той же
- * сессии включены (работают на ту же задачу). Несколько сессий — суммируются. Чистая.
+ * Exact attribution: tokens whose sessionId is in the task's sessions. Subagents of the same
+ * session are included (they work on the same task). Multiple sessions are summed. Pure.
  */
 export function tokensForTaskBySession(
   allEvents: TjEvent[],
@@ -141,15 +141,15 @@ export interface BestTokens {
 }
 
 /**
- * Селектор exact vs estimate (LP13). Если у задачи есть сессии (meta.session_id),
- * берём точную атрибуцию по session-join (tokensForTaskBySession) → mode="exact".
- * Иначе fallback на окно времени LP4 (tokensForTask) → mode="estimate".
- * Нет данных → нули. Чистая.
+ * exact vs estimate selector (LP13). If the task has sessions (meta.session_id),
+ * we take exact attribution via session-join (tokensForTaskBySession) -> mode="exact".
+ * Otherwise fall back to the LP4 time window (tokensForTask) -> mode="estimate".
+ * No data -> zeros. Pure.
  *
- * NOTE (следующий шаг): resolveCollisionByCurrentTask (T5) уже протестирован и
- * подключается, когда сессия задачи делится ≥2 задачами. Пока используем прямой
- * session-join как exact-значение — для одной задачи на сессию это и есть верная
- * сумма; коллизия-резолвер интегрируется без смены mode (всё равно exact).
+ * NOTE (next step): resolveCollisionByCurrentTask (T5) is already tested and
+ * gets wired in when a task's session is shared by >=2 tasks. For now we use the direct
+ * session-join as the exact value -- for one task per session this is the correct
+ * sum; the collision resolver integrates without changing mode (still exact).
  */
 export function tokensForTaskBest(
   allEvents: TjEvent[],
@@ -174,7 +174,7 @@ export interface TaskWithTokens {
   overlap: boolean;
 }
 
-/** Окно задачи [min..max] ts её событий (inclusive). null — событий нет. */
+/** Task window [min..max] of its events' ts (inclusive). null -- no events. */
 export function taskWindow(allEvents: TjEvent[], taskId: string): { startMs: number; endMs: number } | null {
   let startMs = Infinity;
   let endMs = -Infinity;
@@ -188,7 +188,7 @@ export function taskWindow(allEvents: TjEvent[], taskId: string): { startMs: num
   return Number.isFinite(startMs) && Number.isFinite(endMs) ? { startMs, endMs } : null;
 }
 
-/** Пересекаются ли два инклюзивных окна. */
+/** Whether two inclusive windows overlap. */
 export function taskWindowsOverlap(
   a: { startMs: number; endMs: number },
   b: { startMs: number; endMs: number },
@@ -197,11 +197,11 @@ export function taskWindowsOverlap(
 }
 
 /**
- * Агрегатор: токены на каждую задачу (tokensForTask по окну [min..max]) + флаг overlap.
- * ИЗВЕСТНАЯ ДЫРА double-count: окна задач накладываются (side-quest'ы, фон, 2 проекта) →
- * токен в пересечении учтён в ОБЕИХ задачах → Σ used завышена. Без метки task_id на токене
- * разделить нельзя (плагины независимы). overlap=true → число НЕНАДЁЖНО, UI не покажет как факт.
- * Задача без событий (нет окна) → overlap=false. См. .docs/loom/dashboard/correlation-accuracy.md.
+ * Aggregator: tokens per task (tokensForTask over window [min..max]) + an overlap flag.
+ * KNOWN double-count HOLE: task windows overlap (side-quests, background, 2 projects) ->
+ * a token in the intersection is counted in BOTH tasks -> total used is inflated. Without a task_id label on the token
+ * it cannot be split (plugins are independent). overlap=true -> the number is UNRELIABLE, the UI won't show it as fact.
+ * A task with no events (no window) -> overlap=false. See .docs/loom/dashboard/correlation-accuracy.md.
  */
 export function tasksWithTokens(
   allEvents: TjEvent[],
@@ -236,40 +236,40 @@ export function tasksWithTokens(
 }
 
 /**
- * Разрешение коллизии «несколько задач в одной сессии» (LP13).
+ * Resolving the "several tasks in one session" collision (LP13).
  *
- * Одну session_id могут делить ≥2 задачи во времени (переключение между задачами).
- * Тогда нельзя отнести всю сессию одной задаче. Строим временну́ю шкалу «какая задача
- * была ТЕКУЩЕЙ в каждый момент» по событиям task-journal этой сессии и относим каждый
- * токен по его ts к задаче, текущей в этот момент.
+ * A single session_id may be shared by >=2 tasks over time (switching between tasks).
+ * Then the whole session cannot be attributed to one task. We build a timeline of "which task
+ * was CURRENT at each moment" from this session's task-journal events and attribute each
+ * token by its ts to the task current at that moment.
  *
- * Модель текущей задачи — стек открытых задач (most-recently-touched среди открытых):
- *   - open<task>  → task становится текущей (поднимается на вершину стека);
- *   - close<task> → task удаляется; текущей становится новая вершина (или null);
- *   - прочие события → most-recently-touched: task поднимается на вершину (если открыта).
- * Токен относится к задаче, текущей в момент его ts (по последнему событию с
- * timestamp <= ts). Токен раньше первого open → ничей (не приписываем силой).
+ * The current-task model is a stack of open tasks (most-recently-touched among the open ones):
+ *   - open<task>  -> task becomes current (rises to the top of the stack);
+ *   - close<task> -> task is removed; the new top becomes current (or null);
+ *   - other events -> most-recently-touched: the task rises to the top (if open).
+ * A token is attributed to the task current at the moment of its ts (by the last event with
+ * timestamp <= ts). A token before the first open -> nobody's (we don't force an attribution).
  *
- * ЧЕСТНОСТЬ: timestamp событий task-journal = ingest-time (не точное event-time),
- * поэтому границы интервалов приблизительны — документированный предел метода.
- * Чистая, детерминированная функция.
+ * HONESTY: task-journal event timestamps are ingest-time (not exact event-time),
+ * so interval boundaries are approximate -- a documented limit of the method.
+ * Pure, deterministic function.
  */
 export function resolveCollisionByCurrentTask(
   allEvents: TjEvent[],
   sessionId: string,
   tokenEvents: TokenEvent[],
 ): Map<string, TaskTokens> {
-  // События этой сессии, отсортированные по времени (стабильно по event_id при равенстве).
+  // This session's events, sorted by time (stable by event_id on ties).
   const events = allEvents
     .filter((e) => (e.meta as { session_id?: unknown } | undefined)?.session_id === sessionId)
     .map((e) => ({ e, ms: Date.parse(e.timestamp) }))
     .filter((x) => !Number.isNaN(x.ms))
     .sort((a, b) => (a.ms !== b.ms ? a.ms - b.ms : a.e.event_id < b.e.event_id ? -1 : a.e.event_id > b.e.event_id ? 1 : 0));
 
-  // Временна́я шкала: после обработки каждого события — кто текущая задача (или null).
-  // Сегмент действует от ms события (включительно) до ms следующего события.
+  // Timeline: after processing each event -- which task is current (or null).
+  // A segment is in effect from the event's ms (inclusive) until the next event's ms.
   const segments: { fromMs: number; task: string | null }[] = [];
-  const stack: string[] = []; // открытые задачи, вершина = текущая
+  const stack: string[] = []; // open tasks, top = current
   for (const { e, ms } of events) {
     if (e.type === "open") {
       const idx = stack.indexOf(e.task_id);
@@ -279,7 +279,7 @@ export function resolveCollisionByCurrentTask(
       const idx = stack.indexOf(e.task_id);
       if (idx !== -1) stack.splice(idx, 1);
     } else {
-      // прочее событие задачи: most-recently-touched среди открытых → поднять на вершину
+      // other task event: most-recently-touched among the open ones -> raise to the top
       const idx = stack.indexOf(e.task_id);
       if (idx !== -1) {
         stack.splice(idx, 1);
@@ -293,7 +293,7 @@ export function resolveCollisionByCurrentTask(
   const byTask = new Map<string, TaskTokens>();
   for (const t of tokenEvents) {
     if (t.sessionId !== sessionId) continue;
-    // Найти последний сегмент с fromMs <= t.ts. Токен раньше первого события → ничей.
+    // Find the last segment with fromMs <= t.ts. A token before the first event -> nobody's.
     let task: string | null = null;
     for (const seg of segments) {
       if (seg.fromMs <= t.ts) task = seg.task;

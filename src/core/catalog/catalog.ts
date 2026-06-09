@@ -9,8 +9,8 @@ import aimuxManifest from "../plugins/aimux/plugin.json" with { type: "json" };
 import tokenPilotManifest from "../plugins/token-pilot/plugin.json" with { type: "json" };
 import taskJournalManifest from "../plugins/task-journal/plugin.json" with { type: "json" };
 
-// Манифесты builtin-плагинов живут рядом с адаптерами и бандлятся в dist через
-// JSON-импорт (tsc инлайнит JSON в .js) — никакой зависимости от ФС в рантайме.
+// Builtin plugin manifests live next to the adapters and are bundled into dist via
+// JSON import (tsc inlines JSON into .js) -- no dependency on the FS at runtime.
 const BUILTIN_MANIFESTS: Record<string, unknown> = {
   aimux: aimuxManifest,
   "token-pilot": tokenPilotManifest,
@@ -33,7 +33,7 @@ export function resolveEntries(entries: CatalogEntry[] = CATALOG_ENTRIES): Resol
   });
 }
 
-// fast-путь: installed + version (без latest/сети). entries инъектируются в тестах.
+// fast path: installed + version (no latest/network). entries are injected in tests.
 export function buildCatalog(
   deps: InstallDeps,
   entries: ResolvedEntry[] = resolveEntries(),
@@ -52,7 +52,7 @@ export function buildCatalog(
   });
 }
 
-// Чистый апгрейд статуса по полученному latest (без сети).
+// Pure status upgrade based on the received latest (no network).
 export function applyLatest(item: CatalogItem, latest?: string): CatalogItem {
   if (item.status === "not-installed" || !latest || !item.installedVersion) return item;
   const isNewer = compareVersions(latest, item.installedVersion) > 0;
@@ -61,7 +61,7 @@ export function applyLatest(item: CatalogItem, latest?: string): CatalogItem {
     : { ...item, latestVersion: latest };
 }
 
-// Сетевой детект последней версии (LP2). Изолирован, чтобы fast-путь его НЕ звал.
+// Network detection of the latest version (LP2). Isolated so the fast path does NOT call it.
 export function detectLatest(item: CatalogItem, deps: InstallDeps): string | undefined {
   return detectUpdate(item.recipe.detect, deps).latest;
 }

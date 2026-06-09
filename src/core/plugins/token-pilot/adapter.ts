@@ -8,15 +8,15 @@ export interface TokenUsageRow {
   saved: number;
 }
 
-// текущий hook-events.jsonl + ротированные архивы hook-events.<digits>.jsonl
+// current hook-events.jsonl + rotated archives hook-events.<digits>.jsonl
 const ARCHIVE_RE = /^hook-events\.\d+\.jsonl$/;
-// тяжёлые каталоги, в которые рекурсивный обход не заходит
+// heavy directories the recursive walk does not descend into
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "target"]);
 const MAX_DEPTH = 6;
 
-// рекурсивно собирает абсолютные пути всех hook-events*.jsonl во всех
-// каталогах .token-pilot ниже projectRoot (включая сам projectRoot/.token-pilot),
-// пропуская тяжёлые каталоги и ограничивая глубину. Defensive: ошибки I/O → skip.
+// recursively collects the absolute paths of all hook-events*.jsonl in all
+// .token-pilot directories below projectRoot (including projectRoot/.token-pilot itself),
+// skipping heavy directories and limiting depth. Defensive: I/O errors -> skip.
 function collectHookEventFiles(projectRoot: string): string[] {
   const files: string[] = [];
 
@@ -67,9 +67,9 @@ interface RawHookEvent {
   ts?: unknown;
 }
 
-// читает и построчно парсит все hook-events*.jsonl из всех .token-pilot
-// поддеревьев. Defensive: битые строки/файлы пропускаются. diagnostic-сессии
-// отфильтрованы здесь. Возвращает уже отфильтрованные сырые события.
+// reads and line-by-line parses all hook-events*.jsonl from all .token-pilot
+// subtrees. Defensive: corrupt lines/files are skipped. diagnostic sessions
+// are filtered out here. Returns the already-filtered raw events.
 function readHookEvents(projectRoot: string): RawHookEvent[] {
   const out: RawHookEvent[] = [];
   for (const file of collectHookEventFiles(projectRoot)) {
@@ -201,7 +201,7 @@ export function writeSettings(projectRoot: string, updates: Record<string, unkno
   }
 }
 
-// plugin-объект собран из существующих функций выше — без новой логики.
+// the plugin object is assembled from the existing functions above -- no new logic.
 export const plugin: LoomPlugin<{
   tokens: TokenUsageRow[];
   tokenEvents: TokenEvent[];
@@ -221,8 +221,8 @@ export const plugin: LoomPlugin<{
     write: (ctx, updates) => writeSettings(ctx.projectRoot, updates),
   },
   actions: [],
-  // TokensPanel = составной экран: итоговая строка + таблица. when:"tokens.length"
-  // прячет итог при пустых токенах — тогда видна только пустышка таблицы (как в панели).
+  // TokensPanel = a composite screen: a total line + a table. when:"tokens.length"
+  // hides the total when tokens are empty -- then only the table's empty state shows (as in the panel).
   views: {
     tokens: [
       {

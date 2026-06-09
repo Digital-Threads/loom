@@ -3,11 +3,11 @@ import type { LoomPlugin } from "./types.js";
 export interface Registry {
   list(): LoomPlugin[];
   get(id: string): LoomPlugin | undefined;
-  // Регистрирует плагин если id ещё не занят → true. Если id уже есть —
-  // НЕ перезаписывает (builtin приоритетнее динамического в Phase 8) → false.
+  // Registers a plugin if the id is not yet taken -> true. If the id already exists --
+  // does NOT overwrite (builtin takes priority over dynamic in Phase 8) -> false.
   register(plugin: LoomPlugin): boolean;
-  // Группирует плагины по category в порядке регистрации.
-  // Плагины без category → ключ "undefined". Возвращает Map<категория|"undefined", LoomPlugin[]>.
+  // Groups plugins by category in registration order.
+  // Plugins without a category -> key "undefined". Returns Map<category|"undefined", LoomPlugin[]>.
   groupByCategory(): Map<string, LoomPlugin[]>;
 }
 

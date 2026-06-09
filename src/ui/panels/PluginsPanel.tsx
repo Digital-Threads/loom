@@ -10,13 +10,13 @@ import { defaultDeps } from "../../core/install/runner.js";
 import { parseSource } from "../../cli/plugin-cli.js";
 import type { InstallPlan, InstallSource } from "../../core/install/types.js";
 
-// Host-экран управления установленными плагинами (Task 11.1).
-// НЕ ViewSpec: текстовый ввод + действия с подтверждением → отдельная Ink-панель.
-// Читает реестр сам через readInstalled(defaultDeps()).
+// Host screen for managing installed plugins (Task 11.1).
+// NOT a ViewSpec: text input + confirmed actions -> a separate Ink panel.
+// Reads the registry itself via readInstalled(defaultDeps()).
 //
-// ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ: в режиме addInput глобальные хоткеи App (q — выход,
-// ←/→ — переключение вкладок) остаются активны, т.к. Ink не даёт focus-capture.
-// Ввод буквы "q" уйдёт в App-quit. Полноценный фокус-менеджмент — отдельная задача.
+// KNOWN LIMITATION: in addInput mode App's global hotkeys (q -- quit,
+// left/right -- tab switching) stay active, because Ink offers no focus-capture.
+// Typing the letter "q" goes to App-quit. Full focus management is a separate task.
 
 interface PluginRow {
   name: string;
@@ -57,10 +57,10 @@ export function PluginsPanel(
   const [rows, setRows] = useState<PluginRow[]>(loadRows);
   const [cursor, setCursor] = useState(0);
   const [mode, setMode] = useState<Mode>("list");
-  const [input, setInput] = useState(""); // буфер ввода source
-  const [plan, setPlan] = useState<InstallPlan | null>(null); // план для confirmInstall
-  const [pendingSource, setPendingSource] = useState<InstallSource | null>(null); // источник для установки
-  const [status, setStatus] = useState(""); // строка статуса/ошибки
+  const [input, setInput] = useState(""); // source input buffer
+  const [plan, setPlan] = useState<InstallPlan | null>(null); // plan for confirmInstall
+  const [pendingSource, setPendingSource] = useState<InstallSource | null>(null); // source for install
+  const [status, setStatus] = useState(""); // status/error line
 
   const reload = () => {
     const next = loadRows();
@@ -69,7 +69,7 @@ export function PluginsPanel(
   };
 
   useInput((ch, key) => {
-    // ── режим текстового ввода source ──────────────────────────────────────
+    // -- source text input mode ----------------------------------------------
     if (mode === "addInput") {
       if (key.escape) {
         setMode("list");
@@ -106,14 +106,14 @@ export function PluginsPanel(
         setInput((s) => s.slice(0, -1));
         return;
       }
-      // обычный печатный символ — накапливаем (игнорируем управляющие)
+      // a normal printable character -- accumulate (ignore control ones)
       if (ch && !key.ctrl && !key.meta) {
         setInput((s) => s + ch);
       }
       return;
     }
 
-    // ── подтверждение установки ────────────────────────────────────────────
+    // -- install confirmation --------------------------------------------------
     if (mode === "confirmInstall") {
       if (ch === "y" || ch === "Y") {
         if (pendingSource && plan) {
@@ -141,7 +141,7 @@ export function PluginsPanel(
       return;
     }
 
-    // ── подтверждение удаления ─────────────────────────────────────────────
+    // -- remove confirmation ---------------------------------------------------
     if (mode === "confirmRemove") {
       const row = rows[cursor];
       if ((ch === "y" || ch === "Y") && row) {
@@ -160,7 +160,7 @@ export function PluginsPanel(
       return;
     }
 
-    // ── список ──────────────────────────────────────────────────────────────
+    // -- list ------------------------------------------------------------------
     if (key.upArrow) {
       setCursor((c) => Math.max(0, c - 1));
       return;

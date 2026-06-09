@@ -5,10 +5,10 @@ import { relatedSessions } from "../metrics/related-sessions.js";
 import { layerSummary } from "../dashboard/layers.js";
 import { buildTimeline } from "../timeline/timeline.js";
 
-// Реестр дериваций v1 — чистые функции над WorkspaceData. Кросс-плагинные склейки
-// (join sessions+tokens, корреляция токенов задачи и т.п.) принадлежат хосту, не плагину:
-// после Phase 9 плагины — отдельные пакеты и видят только свои load()-данные.
-// Каждая деривация ОБОРАЧИВАЕТ существующую функцию метрик/адаптера — логику не дублируем.
+// Registry of v1 derivations -- pure functions over WorkspaceData. Cross-plugin joins
+// (join sessions+tokens, correlating a task's tokens, etc.) belong to the host, not a plugin:
+// after Phase 9 plugins are separate packages and see only their own load() data.
+// Each derivation WRAPS an existing metrics/adapter function -- we don't duplicate the logic.
 
 export interface SessionWithTokens {
   sessionId: string;
@@ -17,7 +17,7 @@ export interface SessionWithTokens {
   saved: number;
 }
 
-// Join data.sessions + data.tokens по sessionId. Перенос inline-логики из SessionsPanel.
+// Join data.sessions + data.tokens by sessionId. Ported from inline logic in SessionsPanel.
 export function sessionsWithTokens(data: WorkspaceData): SessionWithTokens[] {
   return data.sessions.map((s) => {
     const t = data.tokens.find((x) => x.sessionId === s.sessionId);
@@ -30,7 +30,7 @@ export function sessionsWithTokens(data: WorkspaceData): SessionWithTokens[] {
   });
 }
 
-// Итоги по всем токен-строкам. Перенос inline reduce из TokensPanel.
+// Totals across all token rows. Ported from the inline reduce in TokensPanel.
 export function tokenTotals(data: WorkspaceData): { used: number; saved: number } {
   return data.tokens.reduce(
     (acc, t) => ({ used: acc.used + t.used, saved: acc.saved + t.saved }),
@@ -54,21 +54,21 @@ export function relatedSessionsD(data: WorkspaceData, taskId: string) {
   return relatedSessions(data.taskEvents, taskId, data.sessions, data.tokens);
 }
 
-// ── Display-деривации для декларативных видов (Task 7.4) ──────────────────────
-// Возвращают строки с уже-сформатированными полями под колонки/секции рендереров.
-// Пинненные деривации выше (sessionsWithTokens/tokenTotals/taskDetail*) НЕ трогаем —
-// их форма зафиксирована toEqual-тестами. Эти display-деривации — отдельные.
+// -- Display derivations for declarative views (Task 7.4) ----------------------
+// They return rows with already-formatted fields for the renderers' columns/sections.
+// The pinned derivations above (sessionsWithTokens/tokenTotals/taskDetail*) are NOT touched --
+// their shape is frozen by toEqual tests. These display derivations are separate.
 
-// Итоговая строка токенов одной summary-строкой "потрачено X · сэкономлено Y"
-// (Bind не вытаскивает под-поле из {used,saved}; SummaryView вставляет "label: value",
-// поэтому итог = одна строка-значение под лейблом "Всего" → "Всего: потрачено X · …").
+// Token total as a single summary line "spent X / saved Y"
+// (Bind does not pull a sub-field out of {used,saved}; SummaryView inserts "label: value",
+// so the total = one value line under the label "Total" -> "Total: spent X / ...").
 export function tokenTotalsLine(data: WorkspaceData): string {
   const t = tokenTotals(data);
   return `spent ${t.used} · saved ${t.saved}`;
 }
 
-// Строки таблицы Сессий: idShort = slice(0,8), tokens = "used/saved", profileTokens =
-// profile.padEnd(12)+" "+tokens — точное воспроизведение строки SessionsPanel при gap=2.
+// Sessions table rows: idShort = slice(0,8), tokens = "used/saved", profileTokens =
+// profile.padEnd(12)+" "+tokens -- exact reproduction of the SessionsPanel row at gap=2.
 export function sessionRows(data: WorkspaceData): Array<{ sessionId: string; idShort: string; profile: string; tokens: string; profileTokens: string }> {
   return sessionsWithTokens(data).map((s) => {
     const tokens = `${s.used}/${s.saved}`;
@@ -82,7 +82,7 @@ export function sessionRows(data: WorkspaceData): Array<{ sessionId: string; idS
   });
 }
 
-// Строки таблицы Токенов: idShort = slice(0,8); used/saved — числа (padStart в колонках).
+// Tokens table rows: idShort = slice(0,8); used/saved -- numbers (padStart in columns).
 export function tokenRows(data: WorkspaceData): Array<{ sessionId: string; idShort: string; used: number; saved: number }> {
   return data.tokens.map((t) => ({
     sessionId: t.sessionId,
@@ -92,12 +92,12 @@ export function tokenRows(data: WorkspaceData): Array<{ sessionId: string; idSho
   }));
 }
 
-// Строки таблицы Задач: title усечён до 60 (как в TasksPanel), status для маркера ✓/○.
+// Tasks table rows: title truncated to 60 (as in TasksPanel), status for the marker /.
 export function taskRows(data: WorkspaceData): Array<{ id: string; title: string; status: string }> {
   return data.tasks.map((t) => ({ id: t.id, title: t.title.slice(0, 60), status: t.status }));
 }
 
-// «Вероятно связанные сессии» — {text:"id8 · profile||— · used/saved"} (как в TaskDetail).
+// "Likely related sessions" -- {text:"id8 / profile||-- / used/saved"} (as in TaskDetail).
 export function relatedSessionLines(data: WorkspaceData, taskId: string): Array<{ sessionId: string; text: string }> {
   return relatedSessions(data.taskEvents, taskId, data.sessions, data.tokens).map((r) => ({
     sessionId: r.sessionId,
@@ -105,13 +105,13 @@ export function relatedSessionLines(data: WorkspaceData, taskId: string): Array<
   }));
 }
 
-// Итоговая строка токенов задачи: "потрачено X · сэкономлено Y" (как в TaskDetail).
+// Task token total line: "spent X / saved Y" (as in TaskDetail).
 export function taskTokensSummary(data: WorkspaceData, taskId: string): string {
   const t = tokensForTask(data.taskEvents, taskId, data.tokenEvents);
   return `spent ${t.used} · saved ${t.saved}`;
 }
 
-// Разбивка токенов по сессиям: {text:"profile · id8 — used/saved"} (как в TaskDetail).
+// Token breakdown by session: {text:"profile / id8 -- used/saved"} (as in TaskDetail).
 export function taskTokenBreakdownLines(data: WorkspaceData, taskId: string): Array<{ sessionId: string; text: string }> {
   return tokensBySessionForTask(data.taskEvents, taskId, data.tokenEvents, data.sessions).map((r) => ({
     sessionId: r.sessionId,
@@ -119,15 +119,15 @@ export function taskTokenBreakdownLines(data: WorkspaceData, taskId: string): Ar
   }));
 }
 
-// Последняя записанная метрика: "в журнале записано: потрачено X · сэкономлено Y" или "".
+// Last recorded metric: "recorded in the journal: spent X / saved Y" or "".
 export function taskRecordedMetricLine(data: WorkspaceData, taskId: string): string {
   const recorded = tokenMetricsFromEvents(data.taskEvents, taskId);
   const last = recorded.length ? recorded[recorded.length - 1] : null;
   return last ? `recorded in journal: spent ${last.used} · saved ${last.saved}` : "";
 }
 
-// Строки таблицы Задач с токенами: оборачивает tasksWithTokens. ЧЕСТНОСТЬ overlap →
-// число завышено (double-count) → не выдаём за факт, помечаем "≈ … (перекрытие)".
+// Tasks table rows with tokens: wraps tasksWithTokens. HONESTY about overlap ->
+// the number is inflated (double-count) -> we don't present it as fact, we mark it "~ ... (overlap)".
 export function tasksWithTokensRows(data: WorkspaceData) {
   return tasksWithTokens(data.taskEvents, data.tasks, data.tokenEvents).map((r) => ({
     id: r.id,
@@ -147,16 +147,16 @@ export function tasksWithTokensRows(data: WorkspaceData) {
   }));
 }
 
-// По-слойная сводка для обзора — оборачивает layerSummary (см. dashboard/layers.ts).
+// Per-layer summary for the overview -- wraps layerSummary (see dashboard/layers.ts).
 export function layerSummaryLines(data: WorkspaceData) {
   return layerSummary(data);
 }
 
-// Строки «Ленты» (LP10): display-обёртка над buildTimeline. Порядок (новые сверху) и
-// набор источников приходят из buildTimeline; здесь добавляем стабильный key (source-ts-i,
-// уникальный даже при равном ts) и человекочитаемое when (ISO; "~" — приблизительный ts
-// при tsAccuracy="ingest"). Текст token-pilot ("used X, saved Y") приводим к принятому в
-// этом файле display-формату "потрачено X · сэкономлено Y"; прочие источники — как есть.
+// "Timeline" rows (LP10): a display wrapper over buildTimeline. The order (newest first) and
+// the set of sources come from buildTimeline; here we add a stable key (source-ts-i,
+// unique even when ts is equal) and a human-readable when (ISO; "~" -- an approximate ts
+// when tsAccuracy="ingest"). The token-pilot text ("used X, saved Y") is normalized to this
+// file's adopted display format "spent X / saved Y"; other sources are left as-is.
 export function timelineRows(
   data: WorkspaceData,
 ): Array<{ key: string; when: string; source: string; type: string; text: string }> {
@@ -176,8 +176,8 @@ export function timelineRows(
   });
 }
 
-// Ключи реестра — имена, на которые ViewSpec ссылается через {fn,args}.
-// Имена соответствуют спеке view-schema.md (раздел «Реестр деривлаций v1»).
+// Registry keys are the names a ViewSpec references via {fn,args}.
+// The names match the view-schema.md spec (section "v1 derivations registry").
 export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) => unknown> = {
   sessionsWithTokens,
   tokenTotals,
@@ -185,7 +185,7 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   tokensForTask: tokensForTaskD,
   tokensBySessionForTask: tokensBySessionForTaskD,
   relatedSessions: relatedSessionsD,
-  // display-деривации (7.4)
+  // display derivations (7.4)
   tokenTotalsLine,
   sessionRows,
   tokenRows,
@@ -194,9 +194,9 @@ export const derivations: Record<string, (data: WorkspaceData, ...args: any[]) =
   taskTokensSummary,
   taskTokenBreakdownLines,
   taskRecordedMetricLine,
-  // dashboard-деривации (Task 4)
+  // dashboard derivations (Task 4)
   tasksWithTokensRows,
   layerSummaryLines,
-  // timeline-деривации (LP10)
+  // timeline derivations (LP10)
   timelineRows,
 };

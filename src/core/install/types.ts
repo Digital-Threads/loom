@@ -1,39 +1,39 @@
-// Типы пайплайна установки/удаления Loom-плагинов (Task 10.2).
-// Всё инъектируется (dataDir + CmdRunner), чтобы тесты не имели реальных сайд-эффектов.
+// Types for the Loom plugin install/remove pipeline (Task 10.2).
+// Everything is injected (dataDir + CmdRunner) so tests have no real side effects.
 import type { InstallRecipe, LoomPluginManifest } from "../plugins/contract.js";
 export type { InstallRecipe } from "../plugins/contract.js";
 export type { RecipeCtx, DetectResult, Scope } from "./recipe.js";
 
-// Откуда берём плагин.
+// Where we get the plugin from.
 export type InstallSource =
   | { type: "local"; path: string }
-  | { type: "npm"; spec: string } // "@scope/pkg" или "pkg@1.2.3"
+  | { type: "npm"; spec: string } // "@scope/pkg" or "pkg@1.2.3"
   | { type: "git"; url: string };
 
-// Результат внешней команды. Раннер defensive — НЕ бросает.
+// Result of an external command. The runner is defensive -- it does NOT throw.
 export interface CmdResult {
   ok: boolean;
   stdout: string;
   stderr: string;
 }
 
-// Синхронный исполнитель внешних команд. В проде = обёртка execFileSync, в тестах = фейк.
+// Synchronous executor of external commands. In prod = an execFileSync wrapper, in tests = a fake.
 export type CmdRunner = (cmd: string, args: string[]) => CmdResult;
 
-// Инъектируемые зависимости пайплайна.
+// Injected pipeline dependencies.
 export interface InstallDeps {
-  dataDir: string; // = loomDataDir() в проде, temp в тестах
-  run: CmdRunner; // = defaultRun в проде, фейк в тестах
+  dataDir: string; // = loomDataDir() in prod, temp in tests
+  run: CmdRunner; // = defaultRun in prod, a fake in tests
 }
 
-// Нормализованный claudePlugin: source приводим к строке (или undefined).
+// Normalized claudePlugin: source coerced to a string (or undefined).
 export interface ClaudePluginRef {
   name: string;
   marketplace: string;
   source?: string;
 }
 
-// План установки — что и куда встанет (до подтверждения).
+// Install plan -- what installs and where (before confirmation).
 export interface InstallPlan {
   name: string;
   version: string;
@@ -41,7 +41,7 @@ export interface InstallPlan {
   installDir: string; // <dataDir>/plugins/<name>/<version>
   permissions: string[]; // manifest.permissions ?? []
   claudePlugin?: ClaudePluginRef;
-  recipe: InstallRecipe; // из manifest.install или shim из claudePlugin
+  recipe: InstallRecipe; // from manifest.install or a shim from claudePlugin
 }
 
 export interface InstallResult {
@@ -49,16 +49,16 @@ export interface InstallResult {
   plan?: InstallPlan;
   error?: string;
   warning?: string;
-  missing?: string[]; // отсутствующие пререк-инструменты (preflight, LP2)
-  manual?: string[][]; // интерактивные шаги (semi-auto): cmd+args, которые юзер выполняет сам
+  missing?: string[]; // missing prerequisite tools (preflight, LP2)
+  manual?: string[][]; // interactive steps (semi-auto): cmd+args the user runs themselves
 }
 
-// Запись в реестре установленных плагинов.
+// Entry in the installed-plugins registry.
 export interface InstalledEntry {
   version: string;
   installPath: string;
   enabled: boolean;
-  source: string; // человекочитаемое описание источника
+  source: string; // human-readable description of the source
   installedAt?: string;
 }
 

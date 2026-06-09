@@ -152,8 +152,8 @@ export function writeTokenMetric(projectRoot: string, taskId: string, t: TaskTok
   }
 }
 
-// У task-journal нет конфиг-файла (сверено --help): запись только action-образная
-// (create/event/close). Настраиваемых полей нет → схема пустая.
+// task-journal has no config file (verified via --help): records are only action-like
+// (create/event/close). There are no configurable fields -> the schema is empty.
 export function settingsSchema(): SettingsSchema {
   return { fields: [] };
 }
@@ -163,8 +163,8 @@ export function openTask(projectRoot: string, title: string, goal?: string): str
     const args = ["create", title];
     if (goal) args.push("--goal", goal);
     const out = execFileSync("task-journal", args, { cwd: projectRoot, encoding: "utf8" });
-    // Эмпирически `task-journal create` печатает голый id на одной строке (напр. "tj-7ft7swrwfr").
-    // Берём последний whitespace-токен последней непустой строки — устойчиво и к голому id.
+    // Empirically `task-journal create` prints the bare id on a single line (e.g. "tj-7ft7swrwfr").
+    // We take the last whitespace token of the last non-empty line -- robust even to a bare id.
     const lines = out.split("\n").map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return null;
     const id = lines[lines.length - 1].split(/\s+/).pop() ?? "";
@@ -193,19 +193,19 @@ export function closeTask(projectRoot: string, taskId: string, opts: CloseTaskOp
   }
 }
 
-// Одно-плагинные деривации знают только taskEvents из агрегированного WorkspaceData.
-// Контракт типизирует data как unknown — берём минимальную форму локально.
+// Single-plugin derivations know only taskEvents from the aggregated WorkspaceData.
+// The contract types data as unknown -- we take the minimal shape locally.
 type TjDerivationData = { taskEvents: TjEvent[] };
 function tjEvents(data: unknown): TjEvent[] {
   return (data as TjDerivationData).taskEvents;
 }
 
-// Секции событий задачи как {text}-айтемы (cleaned + slice(0,100) — как section() в TaskDetail).
+// Task event sections as {text} items (cleaned + slice(0,100) -- like section() in TaskDetail).
 function eventLines(events: { event_id: string; text: string }[]): Array<{ event_id: string; text: string }> {
   return events.map((e) => ({ event_id: e.event_id, text: e.text.replace(/\s+/g, " ").slice(0, 100) }));
 }
 
-// plugin-объект собран из существующих функций выше — без новой логики.
+// the plugin object is assembled from the existing functions above -- no new logic.
 export const plugin: LoomPlugin<{
   taskEvents: TjEvent[];
   tasks: TaskSummary[];
@@ -264,10 +264,10 @@ export const plugin: LoomPlugin<{
       },
     },
   ],
-  // Декларативные виды (Task 7.4) — воспроизводят TasksPanel (список) и TaskDetail (деталь).
+  // Declarative views (Task 7.4) -- reproduce TasksPanel (list) and TaskDetail (detail).
   views: {
-    // TasksPanel: "{✓|○} {title.slice(0,60)}  {id}" — gap=2 даёт 2 пробела до id.
-    // ОТЛИЧИЕ: id не dimColor (TableView красит строку целиком/инверсией) — косметика.
+    // TasksPanel: "{check|circle} {title.slice(0,60)}  {id}" -- gap=2 gives 2 spaces before the id.
+    // DIFFERENCE: id is not dimColor (TableView colors the whole row/inversion) -- cosmetic.
     tasks: {
       kind: "table",
       source: { fn: "taskRows" },
@@ -282,8 +282,8 @@ export const plugin: LoomPlugin<{
         { value: "id" },
       ],
     } satisfies ViewSpec,
-    // TaskDetail: заголовок + id, секции событий, связанные сессии, блок «Токены задачи»,
-    // легенда c/t/Esc. Секции/итоги собираются display-деривациями (см. derivations.ts).
+    // TaskDetail: title + id, event sections, related sessions, the "Task tokens" block,
+    // c/t/Esc legend. Sections/totals are built by display derivations (see derivations.ts).
     taskDetail: {
       kind: "detail",
       idParam: "taskId",
@@ -326,8 +326,8 @@ export const plugin: LoomPlugin<{
       ],
     } satisfies ViewSpec,
   },
-  // Одно-плагинные деривации — контрибьютятся в общую карту резолвера ({fn} в видах).
-  // Знают схему событий task-journal (TjEvent), работают над data.taskEvents.
+  // Single-plugin derivations -- contributed to the resolver's shared map ({fn} in views).
+  // They know the task-journal event schema (TjEvent), operate over data.taskEvents.
   derivations: {
     taskDetail: (data, taskId) => taskDetailFromEvents(tjEvents(data), taskId as string),
     taskDecisions: (data, taskId) => eventLines(taskDetailFromEvents(tjEvents(data), taskId as string).decisions),

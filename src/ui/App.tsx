@@ -18,35 +18,35 @@ import type { ScopeDirs, PluginContribution } from "../core/doctor/types.js";
 import type { LoomPlugin, ViewSpec } from "../core/plugins/types.js";
 import { InputModeContext } from "./input/InputModeContext.js";
 
-// Плагинные вкладки, сгруппированные по слою (порядок LAYER_ORDER), а не по реестру (LP4).
-// Порядок слоёв: accounts → efficiency → memory → … (см. LAYER_ORDER в layers.ts).
-// buildPluginTabs возвращает LayerTab[] с { pluginId, tabId, title }.
+// Plugin tabs grouped by layer (LAYER_ORDER order), not by registry (LP4).
+// Layer order: accounts -> efficiency -> memory -> ... (see LAYER_ORDER in layers.ts).
+// buildPluginTabs returns LayerTab[] with { pluginId, tabId, title }.
 const pluginTabs = buildPluginTabs(loomRegistry.list());
 
-// Порядок: Обзор, Каталог, Задачи и токены, Лента, Config, [плагинные вкладки по слоям], Настройки, Плагины.
-// "Каталог", "Задачи и токены", "Лента", "Config" и "Плагины" — host-экраны. "Каталог"/"Config"/"Плагины" —
-// отдельные панели; "Задачи и токены"/"Лента" — кросс-слойные ViewSpec (тот же ViewRenderer).
+// Order: Overview, Catalog, Tasks and tokens, Timeline, Config, [plugin tabs by layer], Settings, Plugins.
+// "Catalog", "Tasks and tokens", "Timeline", "Config" and "Plugins" are host screens. "Catalog"/"Config"/"Plugins" are
+// separate panels; "Tasks and tokens"/"Timeline" are cross-layer ViewSpecs (the same ViewRenderer).
 const TABS = ["Overview", "Catalog", "Tasks & Tokens", "Timeline", "Config", ...pluginTabs.map((t) => t.title), "Settings", "Plugins"];
 
-// Индекс host-вкладки каталога (сразу после «Обзора»).
+// Index of the catalog host tab (right after "Overview").
 const CATALOG_TAB = 1;
-// Индекс host-вкладки «Задачи и токены» (кросс-слойный вид, сразу после «Каталога»).
+// Index of the "Tasks and tokens" host tab (a cross-layer view, right after "Catalog").
 const TASKS_TOKENS_TAB = 2;
-// Индекс host-вкладки «Лента» (кросс-слойная хронология, сразу после «Задач и токенов»).
+// Index of the "Timeline" host tab (a cross-layer chronology, right after "Tasks and tokens").
 const TIMELINE_TAB = 3;
-// Индекс host-вкладки Config (doctor + prerequisites), сразу после «Ленты».
+// Index of the Config host tab (doctor + prerequisites), right after "Timeline".
 const CONFIG_TAB = 4;
-// Индекс host-вкладки управления плагинами (последняя).
+// Index of the plugin-management host tab (last).
 const PLUGINS_TAB = TABS.length - 1;
-// Индекс host-вкладки настроек (предпоследняя).
+// Index of the settings host tab (second to last).
 const SETTINGS_TAB = TABS.length - 2;
 
-// Маппинг таб → (плагин?, view-spec). 0 → host overview; TASKS_TOKENS_TAB → host tasks+tokens;
-// TIMELINE_TAB → host timeline; SETTINGS_TAB → host settings; между — соответствующая плагинная
-// вкладка (plugin.views[tabId]).
-// PLUGINS_TAB сюда НЕ попадает — он рендерится <PluginsPanel/> напрямую в App.
-// Каталог взносов плагинов для doctor-вкладки. Пока [] (как в config-cli): формализация
-// сбора PluginContribution из установленных плагинов — отдельная задача (LP позже).
+// Mapping tab -> (plugin?, view-spec). 0 -> host overview; TASKS_TOKENS_TAB -> host tasks+tokens;
+// TIMELINE_TAB -> host timeline; SETTINGS_TAB -> host settings; in between -- the corresponding plugin
+// tab (plugin.views[tabId]).
+// PLUGINS_TAB does NOT land here -- it is rendered as <PluginsPanel/> directly in App.
+// Catalog of plugin contributions for the doctor tab. Empty [] for now (as in config-cli): formalizing
+// the collection of PluginContribution from installed plugins is a separate task (LP later).
 const configDirs: ScopeDirs = { homeDir: homedir(), projectDir: process.cwd() };
 const configContributions: PluginContribution[] = [];
 
@@ -55,7 +55,7 @@ function tabView(active: number): { plugin?: LoomPlugin; spec: ViewSpec | ViewSp
   if (active === TASKS_TOKENS_TAB) return { spec: tasksTokensView };
   if (active === TIMELINE_TAB) return { spec: timelineView };
   if (active === SETTINGS_TAB) return { spec: settingsView };
-  // Обзор=0, Каталог=1, Задачи и токены=2, Лента=3, Config=4 — плагинные вкладки с индекса 5.
+  // Overview=0, Catalog=1, Tasks and tokens=2, Timeline=3, Config=4 -- plugin tabs from index 5.
   const entry = pluginTabs[active - 5];
   if (!entry) return null;
   const plugin = loomRegistry.get(entry.pluginId);
@@ -72,19 +72,19 @@ export function App() {
   useEffect(() => {
     loadWorkspaceData().then((d) => {
       setData(d);
-      // Пустой старт: уводим пользователя сразу в Каталог — оттуда ставят плагины.
+      // Empty start: take the user straight to Catalog -- that's where plugins get installed.
       if (isWorkspaceEmpty(d)) setActive(CATALOG_TAB);
     });
   }, []);
 
   useInput((input, key) => {
-    // В режиме свободного текст-ввода глобальные хоткеи молчат (иначе буквы/'q'
-    // уходят сюда вместо поля ввода).
+    // In free-text input mode the global hotkeys stay silent (otherwise letters/'q'
+    // would go here instead of the input field).
     if (capturing) return;
     if (input === "q") exit();
     if (key.rightArrow) setActive((a) => (a + 1) % TABS.length);
     if (key.leftArrow) setActive((a) => (a - 1 + TABS.length) % TABS.length);
-    // loom-sns: прямой выбор вкладки цифрами 1-9.
+    // loom-sns: direct tab selection via digits 1-9.
     if (/^[1-9]$/.test(input)) {
       const i = Number(input) - 1;
       if (i < TABS.length) setActive(i);
@@ -101,16 +101,16 @@ export function App() {
         {data === null ? (
           <Text dimColor>Loading…</Text>
         ) : active === 0 && isWorkspaceEmpty(data) ? (
-          // Пустой старт: на «Обзоре» вместо нулей показываем онбординг.
-          // Прочие вкладки (Плагины/Настройки) работают как обычно — туда можно уйти.
+          // Empty start: on "Overview" we show onboarding instead of zeros.
+          // Other tabs (Plugins/Settings) work as usual -- you can still go there.
           <OnboardingPanel key={active} />
         ) : active === CATALOG_TAB ? (
-          // Host-экран каталога плагинов — не ViewSpec. key={active} перемонтирует панель.
+          // Host screen of the plugin catalog -- not a ViewSpec. key={active} remounts the panel.
           <CatalogPanel key={active} />
         ) : active === CONFIG_TAB ? (
-          // Host-экран Config (doctor + prerequisites) — не ViewSpec. reports/prereq
-          // вычисляются лениво при рендере вкладки (не на маунте App). Запись только
-          // через runMerge (инъекция onApply/onDryRun); компонент — презентационный.
+          // Host screen Config (doctor + prerequisites) -- not a ViewSpec. reports/prereq
+          // are computed lazily on tab render (not on App mount). Writing only
+          // via runMerge (onApply/onDryRun injection); the component is presentational.
           <ConfigView
             key={active}
             reports={diagnoseAll(configContributions, configDirs)}
@@ -119,10 +119,10 @@ export function App() {
             onDryRun={() => runMerge({ scope: "user", contributions: configContributions, dirs: configDirs, apply: false })}
           />
         ) : active === PLUGINS_TAB ? (
-          // Host-экран управления плагинами — не ViewSpec. key={active} перемонтирует панель.
+          // Host screen for plugin management -- not a ViewSpec. key={active} remounts the panel.
           <PluginsPanel key={active} />
         ) : view ? (
-          // key={active} → смена вкладки перемонтирует ViewRenderer (сброс стека/курсора).
+          // key={active} -> switching tabs remounts ViewRenderer (resets stack/cursor).
           <ViewRenderer key={active} plugin={view.plugin} spec={view.spec} data={data} />
         ) : (
           <Text dimColor>No data</Text>

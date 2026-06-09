@@ -1,5 +1,5 @@
-// Чтение/запись реестра установленных плагинов: <dataDir>/plugins.json.
-// Defensive: нет файла/битый JSON → пустой реестр.
+// Read/write the installed-plugins registry: <dataDir>/plugins.json.
+// Defensive: no file/corrupt JSON -> empty registry.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { InstallDeps, InstalledRegistry } from "./types.js";
@@ -34,8 +34,8 @@ export function writeInstalled(deps: InstallDeps, reg: InstalledRegistry): void 
   writeFileSync(registryPath(deps), JSON.stringify(reg, null, 2), "utf8");
 }
 
-// Переключает флаг enabled установленного плагина. Defensive:
-// нет такого name → {ok:false}; иначе пишет реестр и {ok:true}.
+// Toggles the enabled flag of an installed plugin. Defensive:
+// no such name -> {ok:false}; otherwise writes the registry and {ok:true}.
 export function setEnabled(
   deps: InstallDeps,
   name: string,

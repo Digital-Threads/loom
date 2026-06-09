@@ -1,9 +1,9 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-// Презентационный экран пустого старта (Phase 11.2).
-// Показывается на вкладке «Обзор», когда isWorkspaceEmpty(data) === true:
-// ни один плагин не отдал данных, и нули в сводке человеку ничего не говорят.
+// Presentational empty-start screen (Phase 11.2).
+// Shown on the "Overview" tab when isWorkspaceEmpty(data) === true:
+// no plugin returned data, and zeros in the summary tell a person nothing.
 export function OnboardingPanel() {
   return (
     <Box flexDirection="column">

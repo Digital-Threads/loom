@@ -1,15 +1,15 @@
-// Манифест Loom-плагина (plugin.json в корне пакета) + структурный валидатор.
-// Решения зафиксированы в .docs/loom/plugin-manifest.md (Task 8.1). Это имплементация 8.2.
+// Loom plugin manifest (plugin.json at the package root) + a structural validator.
+// The decisions are recorded in .docs/loom/plugin-manifest.md (Task 8.1). This is the 8.2 implementation.
 //
-// Phase 9.1: тип LoomPluginManifest переехал в contract.ts (контракт плагина).
-// LOOM_CONTRACT_VERSION и validateManifest — рантайм-логика хоста, остаются здесь.
+// Phase 9.1: the LoomPluginManifest type moved to contract.ts (the plugin contract).
+// LOOM_CONTRACT_VERSION and validateManifest are the host's runtime logic, they stay here.
 import type { LoomPluginManifest } from "./contract.js";
 
-// Re-export типа для обратной совместимости существующих импортёров manifest.ts.
+// Re-export the type for backward compatibility of existing manifest.ts importers.
 export type { LoomPluginManifest } from "./contract.js";
 
-// Версия контракта LoomPlugin, под который собран хост.
-// 8.3 будет сверять apiVersion манифеста с этой константой (semver). Тут НЕ используется.
+// The LoomPlugin contract version the host is built against.
+// 8.3 will compare the manifest's apiVersion against this constant (semver). Not used here.
 export const LOOM_CONTRACT_VERSION = "1.0";
 
 export type ValidateResult =
@@ -51,8 +51,8 @@ function validateInstallRecipe(install: unknown): string | null {
   return null;
 }
 
-// Чистая, defensive — НЕ бросает. Проверяет только структуру (не semver apiVersion).
-// Неизвестные/лишние поля игнорируются (forward-compat).
+// Pure, defensive -- does NOT throw. Checks structure only (not the semver apiVersion).
+// Unknown/extra fields are ignored (forward-compat).
 export function validateManifest(raw: unknown): ValidateResult {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return { ok: false, error: "manifest must be an object" };

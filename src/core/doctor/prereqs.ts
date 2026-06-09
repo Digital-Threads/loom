@@ -5,7 +5,7 @@ import { defaultRun } from "../install/runner.js";
 export interface ToolStatus { name: string; found: boolean; hint: string; }
 export interface PrereqReport { ok: boolean; tools: ToolStatus[]; missing: string[]; }
 
-// Единый список пререк-инструментов экосистемы (LP2; LP5 doctor переиспользует — НЕ дублировать).
+// Single list of ecosystem prerequisite tools (LP2; the LP5 doctor reuses it -- do NOT duplicate).
 export const REQUIRED_TOOLS: { name: string; hint: string }[] = [
   { name: "node", hint: "Node.js required: https://nodejs.org" },
   { name: "npm", hint: "npm required (ships with Node.js): https://nodejs.org" },
@@ -13,7 +13,7 @@ export const REQUIRED_TOOLS: { name: string; hint: string }[] = [
   { name: "claude", hint: "Claude Code CLI required: https://claude.com/claude-code" },
 ];
 
-// Проверяет наличие инструментов через which/where (resolveProbeCmd). Инъекция run — для тестов.
+// Checks for tools via which/where (resolveProbeCmd). The run injection is for tests.
 export function checkPrerequisites(
   run: CmdRunner = defaultRun, platform: NodeJS.Platform = process.platform,
 ): PrereqReport {

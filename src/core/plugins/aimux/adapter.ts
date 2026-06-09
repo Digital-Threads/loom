@@ -49,8 +49,8 @@ export function listSessions(): SessionRow[] {
   }));
 }
 
-// aimux-конфиг профиле-образный (cli/model/env на профиль) — это actions (add subscription),
-// а не плоские настройки. Плоских глобальных настроек у aimux нет → схема пустая.
+// the aimux config is profile-like (cli/model/env per profile) -- this is actions (add subscription),
+// not flat settings. aimux has no flat global settings -> the schema is empty.
 export function settingsSchema(): SettingsSchema {
   return { fields: [] };
 }
@@ -75,7 +75,7 @@ export function addSubscription(
   }
 }
 
-// plugin-объект собран из существующих функций выше — без новой логики.
+// the plugin object is assembled from the existing functions above -- no new logic.
 export const plugin: LoomPlugin<{
   subscriptions: Subscription[];
   sessions: SessionRow[];
@@ -137,7 +137,7 @@ export const plugin: LoomPlugin<{
         try {
           const cfg = loadConfig();
           if (!cfg) return { ok: false, error: "no aimux config" };
-          // getProfile бросает, если профиля нет → проверяем явно, чтобы вернуть понятную ошибку.
+          // getProfile throws if the profile is missing -> we check explicitly to return a clear error.
           if (!cfg.profiles[profile]) return { ok: false, error: `profile not found: ${profile}` };
           getProfile(cfg, profile);
           saveActiveProfile(profile);
@@ -148,9 +148,9 @@ export const plugin: LoomPlugin<{
       },
     },
   ],
-  // Декларативные виды вкладок (Task 7.4) — точное воспроизведение Subscriptions/SessionsPanel.
+  // Declarative tab views (Task 7.4) -- exact reproduction of Subscriptions/SessionsPanel.
   views: {
-    // SubscriptionsPanel: "{★|space} {name.padEnd(14)} {cli}" — gap=1 даёт ровно 1 пробел до cli.
+    // SubscriptionsPanel: "{star|space} {name.padEnd(14)} {cli}" -- gap=1 gives exactly 1 space before cli.
     subscriptions: {
       kind: "table",
       source: "subscriptions",
@@ -167,8 +167,8 @@ export const plugin: LoomPlugin<{
         { value: "cli" },
       ],
     } satisfies ViewSpec,
-    // SessionsPanel: "{id8}  {profile.padEnd(12)} {used/saved}" — profileTokens склеивает
-    // profile.padEnd(12)+" "+tokens; gap=2 даёт 2 пробела после id (как в панели).
+    // SessionsPanel: "{id8}  {profile.padEnd(12)} {used/saved}" -- profileTokens joins
+    // profile.padEnd(12)+" "+tokens; gap=2 gives 2 spaces after the id (as in the panel).
     sessions: {
       kind: "table",
       source: { fn: "sessionRows" },

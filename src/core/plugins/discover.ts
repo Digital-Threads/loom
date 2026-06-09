@@ -4,15 +4,15 @@ import { validateManifest, type LoomPluginManifest } from "./manifest.js";
 
 export interface DiscoveredManifest {
   manifest: LoomPluginManifest;
-  installDir: string; // каталог где лежит plugin.json (<name>/<version>)
+  installDir: string; // directory holding plugin.json (<name>/<version>)
   manifestPath: string;
 }
 
-// Скан <pluginsDir>/<name>/<version>/plugin.json. Defensive:
-//  - несуществующий каталог → {found:[], errors:[]} (НЕ бросать)
-//  - битый JSON / невалидный манифест → запись в errors, skip
-//  - одна битая папка не валит весь скан
-// Дубли name тут НЕ разрешаются (это 8.3 при сборке реестра) — возвращаем всё.
+// Scan <pluginsDir>/<name>/<version>/plugin.json. Defensive:
+//  - a nonexistent directory -> {found:[], errors:[]} (do NOT throw)
+//  - corrupt JSON / invalid manifest -> an entry in errors, skip
+//  - one corrupt folder does not break the whole scan
+// Duplicate names are NOT resolved here (that is 8.3 when building the registry) -- we return everything.
 export function discoverPlugins(pluginsDir: string): {
   found: DiscoveredManifest[];
   errors: string[];
@@ -32,7 +32,7 @@ export function discoverPlugins(pluginsDir: string): {
       try {
         text = readFileSync(manifestPath, "utf8");
       } catch {
-        // нет plugin.json в этом каталоге — просто пропускаем (не ошибка)
+        // no plugin.json in this directory -- just skip (not an error)
         continue;
       }
 
@@ -57,7 +57,7 @@ export function discoverPlugins(pluginsDir: string): {
   return { found, errors };
 }
 
-// readdirSync только каталогов; любой сбой (нет пути, нет прав) → пусто.
+// readdirSync of directories only; any failure (no path, no permissions) -> empty.
 function safeReaddir(dir: string): string[] {
   try {
     return readdirSync(dir, { withFileTypes: true })
