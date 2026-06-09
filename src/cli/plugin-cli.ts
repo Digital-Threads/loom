@@ -16,7 +16,7 @@ export interface CliResult {
 }
 
 const USAGE = [
-  "Использование: loom plugin <add|remove|list|detect>",
+  "Usage: loom plugin <add|remove|list|detect>",
   "  loom plugin list",
   "  loom plugin add <source> [--yes] [--scope user|project]",
   "  loom plugin remove <name> [--scope user|project]",
@@ -55,7 +55,7 @@ function listCmd(deps: InstallDeps): CliResult {
   const reg = readInstalled(deps);
   const names = Object.keys(reg.plugins);
   if (names.length === 0) {
-    return { code: 0, lines: ["нет установленных плагинов"] };
+    return { code: 0, lines: ["no installed plugins"] };
   }
   const lines = names.map((name) => {
     const e = reg.plugins[name];
@@ -88,49 +88,49 @@ function addCmd(rest: string[], deps: InstallDeps): CliResult {
   const { scope: scopeArg, positional } = parseScopeFlag(rest);
   const scope = scopeArg ?? "user";
   if (!isValidScope(scope)) {
-    return { code: 1, lines: [`Ошибка: невалидный scope: ${scope} (ожидается user|project)`] };
+    return { code: 1, lines: [`Error: invalid scope: ${scope} (expected user|project)`] };
   }
   const sourceArg = positional[0];
   if (!sourceArg) {
-    return { code: 1, lines: ["loom plugin add: укажите источник", ...USAGE] };
+    return { code: 1, lines: ["loom plugin add: specify a source", ...USAGE] };
   }
 
   const source = parseSource(sourceArg);
   const planned = planInstall(source, deps);
   if (!planned.ok || !planned.plan) {
-    return { code: 1, lines: [`Ошибка: ${planned.error ?? "не удалось построить план"}`] };
+    return { code: 1, lines: [`Error: ${planned.error ?? "failed to build plan"}`] };
   }
   const plan = planned.plan;
 
   const lines: string[] = [`${plan.name}@${plan.version}`];
-  lines.push("Разрешения:");
+  lines.push("Permissions:");
   if (plan.permissions.length === 0) {
-    lines.push("  нет");
+    lines.push("  none");
   } else {
     for (const p of plan.permissions) lines.push(`  ${p}`);
   }
   if (plan.claudePlugin) {
     const cp = plan.claudePlugin;
-    lines.push(`claude-плагин: ${cp.name}@${cp.marketplace}${cp.source ? ` (${cp.source})` : ""}`);
+    lines.push(`claude plugin: ${cp.name}@${cp.marketplace}${cp.source ? ` (${cp.source})` : ""}`);
   }
 
   if (!yes) {
     const actions = plan.claudePlugin
-      ? "будут выполнены: копирование + регистрация + claude install"
-      : "будут выполнены: копирование + регистрация";
-    lines.push(`Для установки добавьте --yes (${actions})`);
+      ? "will run: copy + register + claude install"
+      : "will run: copy + register";
+    lines.push(`Add --yes to install (${actions})`);
     return { code: 0, lines };
   }
 
   const ctx: RecipeCtx = { scope };
   const res = installPlugin(source, deps, () => true, ctx);
   if (!res.ok) {
-    return { code: 1, lines: [...lines, `Ошибка установки: ${res.error ?? "неизвестно"}`] };
+    return { code: 1, lines: [...lines, `Install error: ${res.error ?? "unknown"}`] };
   }
-  lines.push(`✓ установлен ${plan.name}@${plan.version}`);
+  lines.push(`✓ installed ${plan.name}@${plan.version}`);
   if (res.warning) lines.push(`⚠ ${res.warning}`);
   if (res.manual?.length) {
-    lines.push("Дальше нужно выполнить вручную:");
+    lines.push("Next, run manually:");
     for (const cmd of res.manual) lines.push(`  ${cmd.join(" ")}`);
   }
   return { code: 0, lines };
@@ -140,18 +140,18 @@ function removeCmd(rest: string[], deps: InstallDeps): CliResult {
   const { scope: scopeArg, positional } = parseScopeFlag(rest);
   const scope = scopeArg ?? "user";
   if (!isValidScope(scope)) {
-    return { code: 1, lines: [`Ошибка: невалидный scope: ${scope} (ожидается user|project)`] };
+    return { code: 1, lines: [`Error: invalid scope: ${scope} (expected user|project)`] };
   }
   const name = positional[0];
   if (!name) {
-    return { code: 1, lines: ["loom plugin remove: укажите имя", ...USAGE] };
+    return { code: 1, lines: ["loom plugin remove: specify a name", ...USAGE] };
   }
   const ctx: RecipeCtx = { scope };
   const res = removePlugin(name, deps, ctx);
   if (!res.ok) {
-    return { code: 1, lines: [`Ошибка: ${res.error ?? "не удалось удалить"}`] };
+    return { code: 1, lines: [`Error: ${res.error ?? "failed to remove"}`] };
   }
-  return { code: 0, lines: [`✓ удалён ${name}`] };
+  return { code: 0, lines: [`✓ removed ${name}`] };
 }
 
 // detect <name>: ищет плагин в реестре, читает его plugin.json, прогоняет detect-пробу.
@@ -159,12 +159,12 @@ function removeCmd(rest: string[], deps: InstallDeps): CliResult {
 function detectCmd(rest: string[], deps: InstallDeps): CliResult {
   const name = rest[0];
   if (!name) {
-    return { code: 1, lines: ["loom plugin detect: укажите имя", ...USAGE] };
+    return { code: 1, lines: ["loom plugin detect: specify a name", ...USAGE] };
   }
   const reg = readInstalled(deps);
   const entry = reg.plugins[name];
   if (!entry) {
-    return { code: 1, lines: [`Ошибка: плагин не установлен: ${name}`] };
+    return { code: 1, lines: [`Error: plugin not installed: ${name}`] };
   }
 
   let detectSpec:
@@ -185,17 +185,17 @@ function detectCmd(rest: string[], deps: InstallDeps): CliResult {
   }
 
   if (!detectSpec) {
-    return { code: 0, lines: [`не установлен ${name}`] };
+    return { code: 0, lines: [`not installed ${name}`] };
   }
 
   const result = detectUpdate(detectSpec, deps);
   if (!result.installed) {
-    return { code: 0, lines: [`не установлен ${name}`] };
+    return { code: 0, lines: [`not installed ${name}`] };
   }
-  const ver = result.version ? ` (версия ${result.version})` : "";
+  const ver = result.version ? ` (version ${result.version})` : "";
   const upd =
-    result.updateAvailable === true ? ` ↻ доступно ${result.latest ?? ""}`.trimEnd() : "";
-  return { code: 0, lines: [`установлен ${name}${ver}${upd}`] };
+    result.updateAvailable === true ? ` ↻ available ${result.latest ?? ""}`.trimEnd() : "";
+  return { code: 0, lines: [`installed ${name}${ver}${upd}`] };
 }
 
 // args = всё после "loom plugin": ["add","./x","--yes"] / ["list"] / ["remove","name"].
@@ -214,9 +214,9 @@ export function runPluginCli(args: string[], deps: InstallDeps): CliResult {
       case "detect":
         return detectCmd(rest, deps);
       default:
-        return { code: 1, lines: [`Неизвестная подкоманда: ${sub ?? "(нет)"}`, ...USAGE] };
+        return { code: 1, lines: [`Unknown subcommand: ${sub ?? "(none)"}`, ...USAGE] };
     }
   } catch (err) {
-    return { code: 1, lines: [`Внутренняя ошибка CLI: ${(err as Error).message}`] };
+    return { code: 1, lines: [`Internal CLI error: ${(err as Error).message}`] };
   }
 }

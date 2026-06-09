@@ -32,7 +32,7 @@ describe("краевые состояния экранов", () => {
     expect(isWorkspaceEmpty(emptyData)).toBe(true);
     const { lastFrame } = render(<OnboardingPanel />);
     const f = lastFrame()!;
-    expect(f).toContain("С чего начать");
+    expect(f).toContain("Getting started");
     expect(f).toContain("loom plugin add");
   });
 

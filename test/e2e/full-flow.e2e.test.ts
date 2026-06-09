@@ -40,7 +40,7 @@ describe("LP12 e2e: продукт от чистого окружения до w
     expect(Object.keys(readInstalled(deps).plugins)).toHaveLength(0);
     const before = runPluginCli(["list"], deps);
     expect(before.code).toBe(0);
-    expect(before.lines.join("\n")).toContain("нет установленных плагинов");
+    expect(before.lines.join("\n")).toContain("no installed plugins");
 
     // 2. Каталог → ставим плагин (локальный, без сети). Внешние команды — мок.
     const pluginDir = writeFakePlugin(join(t.root, "demo-plugin"));

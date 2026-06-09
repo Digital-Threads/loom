@@ -28,7 +28,7 @@ describe("PluginsPanel render smoke", () => {
   it("пустой реестр → заглушка 'Плагинов нет'", () => {
     const { lastFrame } = render(<PluginsPanel />);
     const f = lastFrame()!;
-    expect(f).toContain("Плагинов нет");
+    expect(f).toContain("No plugins");
   });
 
   it("непустой реестр → строки с именем, версией и состоянием", () => {
@@ -55,11 +55,11 @@ describe("PluginsPanel render smoke", () => {
     const f = lastFrame()!;
     expect(f).toContain("demo-plugin");
     expect(f).toContain("v2.3.4");
-    expect(f).toContain("[вкл]");
+    expect(f).toContain("[on]");
     expect(f).toContain("off-plugin");
-    expect(f).toContain("[выкл]");
+    expect(f).toContain("[off]");
     // футер списка
-    expect(f).toContain("e вкл/выкл");
+    expect(f).toContain("e toggle");
   });
 
   it("хоткей p вызывает packAction и показывает путь", async () => {
@@ -76,7 +76,7 @@ describe("PluginsPanel render smoke", () => {
     // дать промису packAction разрешиться
     await new Promise((r) => setTimeout(r, 20));
     expect(called).toBe(true);
-    expect(lastFrame()!).toMatch(/pack записан|\/tmp\/workspace-pack\.md/);
+    expect(lastFrame()!).toMatch(/pack written|\/tmp\/workspace-pack\.md/);
   });
 
   it("футер упоминает p — собрать pack", () => {

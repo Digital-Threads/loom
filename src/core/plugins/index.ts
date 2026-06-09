@@ -37,7 +37,7 @@ export async function loadDynamicPlugins(
     if (entry && entry.enabled === false) continue;
 
     if (!loomRegistry.register(p)) {
-      dupErrors.push(`дубль id ${p.id} пропущен`);
+      dupErrors.push(`duplicate id ${p.id} skipped`);
     }
   }
 

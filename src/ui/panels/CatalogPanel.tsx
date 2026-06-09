@@ -81,14 +81,14 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
     if (mode === "confirmInstall") {
       if (ch === "y" || ch === "Y") {
         const res = runRecipe(item.recipe.install, { scope: "user" }, deps);
-        setStatus(res.ok ? `✓ установлен ${item.id}` : `Ошибка: ${res.error}`);
+        setStatus(res.ok ? `✓ installed ${item.id}` : `Error: ${res.error}`);
         setMode("list");
         reload();
         return;
       }
       if (ch === "n" || ch === "N" || key.escape) {
         setMode("list");
-        setStatus("Отменено");
+        setStatus("Cancelled");
       }
       return;
     }
@@ -96,14 +96,14 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
     if (mode === "confirmRemove") {
       if (ch === "y" || ch === "Y") {
         const res = runRecipe(item.recipe.remove, { scope: "user" }, deps);
-        setStatus(res.ok ? `Удалён ${item.id}` : `Ошибка: ${res.error}`);
+        setStatus(res.ok ? `Removed ${item.id}` : `Error: ${res.error}`);
         setMode("list");
         reload();
         return;
       }
       if (ch === "n" || ch === "N" || key.escape) {
         setMode("list");
-        setStatus("Отменено");
+        setStatus("Cancelled");
       }
       return;
     }
@@ -155,9 +155,9 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
         const loading = checking && it.status !== "not-installed" && !it.latestVersion;
         const tail =
           it.status === "update-available"
-            ? "  ↻ есть обновление"
+            ? "  ↻ update available"
             : loading
-              ? "  ↻… проверка обновлений"
+              ? "  ↻… checking for updates"
               : "";
         // Заголовок слоя — отдельной строкой перед сменой category (визуальная секция).
         const isFirstOfLayer = i === 0 || visible[i - 1].category !== it.category;
@@ -181,7 +181,7 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
           <Text>/ </Text>
           <TextInput
             initial={query}
-            placeholder="поиск по каталогу…"
+            placeholder="search catalog…"
             onChange={(v) => {
               setQuery(v);
               setCursor(0);
@@ -199,15 +199,15 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
         <Box marginTop={1}>
           <Text>source: </Text>
           <TextInput
-            placeholder="npm-имя / github:owner/repo / путь"
+            placeholder="npm name / github:owner/repo / path"
             onSubmit={(src) => {
               const s = src.trim();
               if (s) {
                 const res = installPlugin(parseSource(s), deps);
                 setStatus(
                   res.ok
-                    ? `✓ установлен ${res.plan?.name ?? s}`
-                    : `Ошибка: ${res.error ?? "не удалось"}`,
+                    ? `✓ installed ${res.plan?.name ?? s}`
+                    : `Error: ${res.error ?? "failed"}`,
                 );
                 reload();
               }
@@ -221,13 +221,13 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
       {mode === "confirmInstall" && current ? (
         <Box marginTop={1}>
           <Text>
-            {current.status === "update-available" ? "Обновить" : "Установить"} {current.id}? (y/n)
+            {current.status === "update-available" ? "Update" : "Install"} {current.id}? (y/n)
           </Text>
         </Box>
       ) : null}
       {mode === "confirmRemove" && current ? (
         <Box marginTop={1}>
-          <Text>Удалить {current.id}? (y/n)</Text>
+          <Text>Remove {current.id}? (y/n)</Text>
         </Box>
       ) : null}
 
@@ -238,10 +238,10 @@ export function CatalogPanel({ deps = defaultDeps() }: { deps?: InstallDeps }) {
       ) : null}
 
       <Box marginTop={1}>
-        <Text dimColor>✓ установлен · ○ нет · ↻ обновление</Text>
+        <Text dimColor>✓ installed · ○ not installed · ↻ update</Text>
       </Box>
       <Box>
-        <Text dimColor>↑/↓ выбор · Enter — установить · u обновить · d удалить · e вкл/выкл · / поиск · a source</Text>
+        <Text dimColor>↑/↓ select · Enter install · u update · d remove · e toggle · / search · a source</Text>
       </Box>
     </Box>
   );

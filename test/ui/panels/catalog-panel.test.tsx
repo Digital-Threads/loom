@@ -16,7 +16,7 @@ describe("CatalogPanel рендер", () => {
     const f = lastFrame()!;
     expect(f).toContain("○");
     expect(f).toContain("Token Pilot");
-    expect(f).toContain("Экономия токенов");
+    expect(f).toContain("Save tokens");
     expect(f).toContain("efficiency");
   });
   it("футер показывает хоткеи каталога", () => {
@@ -35,7 +35,7 @@ describe("CatalogPanel действия", () => {
     stdin.write("\r");
     await Promise.resolve(); // ink/React: рендер флашится на следующем микротике
     const f = lastFrame()!;
-    expect(f.toLowerCase()).toContain("установить");
+    expect(f.toLowerCase()).toContain("install");
     expect(f).toMatch(/y\/n|y · n|\(y\/n\)/i);
   });
 
@@ -95,7 +95,7 @@ describe("CatalogPanel ленивый latest", () => {
     } };
     const { lastFrame } = render(<CatalogPanel deps={fake} />);
     // первый кадр: установленные показывают индикатор проверки
-    expect(lastFrame()!).toMatch(/проверка|↻…/);
+    expect(lastFrame()!).toMatch(/checking|↻…/);
     await Promise.resolve(); await Promise.resolve();
     expect(lastFrame()!).toContain("↻");
   });
@@ -104,7 +104,7 @@ describe("CatalogPanel ленивый latest", () => {
     const tmp = mkdtempSync(join(tmpdir(), "loom-c45b-"));
     const fake: InstallDeps = { dataDir: tmp, run: () => ({ ok: false, stdout: "", stderr: "" }) };
     const { lastFrame } = render(<CatalogPanel deps={fake} />);
-    expect(lastFrame()!).not.toMatch(/проверка|↻…/);
+    expect(lastFrame()!).not.toMatch(/checking|↻…/);
     expect(lastFrame()!).toContain("○");
   });
 });

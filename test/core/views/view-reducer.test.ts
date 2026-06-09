@@ -83,13 +83,13 @@ describe("editNumber mode", () => {
     const s = viewReducer(navState({ mode: "editNumber", editBuffer: "12" }), { type: "esc" }, editOpts);
     expect(s.mode).toBe("nav");
     expect(s.editBuffer).toBe("");
-    expect(s.status).toBe("отмена");
+    expect(s.status).toBe("cancelled");
   });
 
   it("enter on empty buffer cancels", () => {
     const s = viewReducer(navState({ mode: "editNumber", editBuffer: "" }), { type: "enter" }, editOpts);
     expect(s.mode).toBe("nav");
-    expect(s.status).toBe("отмена");
+    expect(s.status).toBe("cancelled");
   });
 
   it("enter on non-empty buffer returns to nav (layer reads buffer)", () => {
@@ -123,7 +123,7 @@ describe("action key + confirm flow", () => {
     const s = viewReducer(navState({ mode: "confirm", confirmKey: "c" }), { type: "confirmNo" }, baseOpts);
     expect(s.mode).toBe("nav");
     expect(s.confirmKey).toBeNull();
-    expect(s.status).toBe("отмена");
+    expect(s.status).toBe("cancelled");
   });
 
   it("confirmYes returns to nav clearing confirmKey", () => {

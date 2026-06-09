@@ -8,10 +8,10 @@
   "entry": "./dist/adapter.js",
   "provides": {
     "tabs": [
-      { "id": "subscriptions", "title": "Подписки" },
-      { "id": "sessions", "title": "Сессии" }
+      { "id": "subscriptions", "title": "Subscriptions" },
+      { "id": "sessions", "title": "Sessions" }
     ],
-    "actions": [{ "id": "addSubscription", "label": "Добавить подписку" }]
+    "actions": [{ "id": "addSubscription", "label": "Add subscription" }]
   },
   "install": {
     "install": [{ "cmd": "npm", "args": ["install","-g","@digital-threads/aimux"] }],

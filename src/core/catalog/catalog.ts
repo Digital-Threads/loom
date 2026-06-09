@@ -19,16 +19,16 @@ const BUILTIN_MANIFESTS: Record<string, unknown> = {
 
 function manifestRecipe(id: string) {
   const m = BUILTIN_MANIFESTS[id];
-  if (!m) throw new Error(`нет манифеста у ${id}`);
+  if (!m) throw new Error(`no manifest for ${id}`);
   const v = validateManifest(m);
-  if (!v.ok || !v.manifest.install) throw new Error(`нет install-рецепта у ${id}`);
+  if (!v.ok || !v.manifest.install) throw new Error(`no install recipe for ${id}`);
   return v.manifest.install;
 }
 
 export function resolveEntries(entries: CatalogEntry[] = CATALOG_ENTRIES): ResolvedEntry[] {
   return entries.map((e) => {
     const reg = loomRegistry.get(e.id);
-    if (!reg?.category) throw new Error(`нет category в реестре у ${e.id}`);
+    if (!reg?.category) throw new Error(`no category in registry for ${e.id}`);
     return { ...e, category: reg.category, recipe: manifestRecipe(e.id) };
   });
 }

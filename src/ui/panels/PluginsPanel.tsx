@@ -88,7 +88,7 @@ export function PluginsPanel(
           const source = parseSource(buf);
           const planned = planInstall(source, defaultDeps());
           if (!planned.ok || !planned.plan) {
-            setStatus(`Ошибка: ${planned.error ?? "не удалось построить план"}`);
+            setStatus(`Error: ${planned.error ?? "failed to build plan"}`);
             setMode("list");
             return;
           }
@@ -97,7 +97,7 @@ export function PluginsPanel(
           setMode("confirmInstall");
           setStatus("");
         } catch (err) {
-          setStatus(`Ошибка: ${(err as Error).message}`);
+          setStatus(`Error: ${(err as Error).message}`);
           setMode("list");
         }
         return;
@@ -120,11 +120,11 @@ export function PluginsPanel(
           const res = installPlugin(pendingSource, defaultDeps(), () => true);
           setStatus(
             res.ok
-              ? `✓ установлен ${plan.name}@${plan.version}`
-              : `Ошибка установки: ${res.error ?? "неизвестно"}`,
+              ? `✓ installed ${plan.name}@${plan.version}`
+              : `Install error: ${res.error ?? "unknown"}`,
           );
         } else {
-          setStatus("Ошибка: нет плана установки");
+          setStatus("Error: no install plan");
         }
         setPlan(null);
         setPendingSource(null);
@@ -136,7 +136,7 @@ export function PluginsPanel(
         setPlan(null);
         setPendingSource(null);
         setMode("list");
-        setStatus("Установка отменена");
+        setStatus("Install cancelled");
       }
       return;
     }
@@ -147,7 +147,7 @@ export function PluginsPanel(
       if ((ch === "y" || ch === "Y") && row) {
         const res = removePlugin(row.name, defaultDeps());
         setStatus(
-          res.ok ? `✓ удалён ${row.name}` : `Ошибка: ${res.error ?? "не удалось удалить"}`,
+          res.ok ? `✓ removed ${row.name}` : `Error: ${res.error ?? "failed to remove"}`,
         );
         setMode("list");
         reload();
@@ -155,7 +155,7 @@ export function PluginsPanel(
       }
       if (ch === "n" || ch === "N" || key.escape) {
         setMode("list");
-        setStatus("Удаление отменено");
+        setStatus("Removal cancelled");
       }
       return;
     }
@@ -177,8 +177,8 @@ export function PluginsPanel(
     }
     if (ch === "p") {
       packAction()
-        .then((path) => setStatus(`pack записан: ${path}`))
-        .catch((e) => setStatus(`Ошибка pack: ${(e as Error).message}`));
+        .then((path) => setStatus(`pack written: ${path}`))
+        .catch((e) => setStatus(`Pack error: ${(e as Error).message}`));
       return;
     }
     const row = rows[cursor];
@@ -187,8 +187,8 @@ export function PluginsPanel(
       const res = setEnabled(defaultDeps(), row.name, !row.enabled);
       setStatus(
         res.ok
-          ? `${row.name}: ${!row.enabled ? "включён" : "выключен"} (обновится при перезапуске)`
-          : `Ошибка: ${res.error ?? "не удалось"}`,
+          ? `${row.name}: ${!row.enabled ? "enabled" : "disabled"} (updates on restart)`
+          : `Error: ${res.error ?? "failed"}`,
       );
       reload();
       return;
@@ -222,13 +222,13 @@ export function PluginsPanel(
 
 function ListView({ rows, cursor }: { rows: PluginRow[]; cursor: number }) {
   if (rows.length === 0) {
-    return <Text dimColor>Плагинов нет. a — добавить</Text>;
+    return <Text dimColor>No plugins. a — add</Text>;
   }
   return (
     <Box flexDirection="column">
       {rows.map((r, i) => {
         const dot = r.enabled ? "●" : "○";
-        const flag = r.enabled ? "вкл" : "выкл";
+        const flag = r.enabled ? "on" : "off";
         const line = `${dot} ${r.name}  v${r.version}  [${flag}]  ${r.source}`;
         return (
           <Text key={r.name} inverse={i === cursor}>
@@ -243,7 +243,7 @@ function ListView({ rows, cursor }: { rows: PluginRow[]; cursor: number }) {
 function AddInputView({ input }: { input: string }) {
   return (
     <Box flexDirection="column">
-      <Text>Источник плагина (npm/git/локальный путь):</Text>
+      <Text>Plugin source (npm/git/local path):</Text>
       <Text>
         {"> "}
         {input}
@@ -254,18 +254,18 @@ function AddInputView({ input }: { input: string }) {
 }
 
 function ConfirmRemoveView({ name }: { name: string }) {
-  return <Text>Удалить {name}? y/n</Text>;
+  return <Text>Remove {name}? y/n</Text>;
 }
 
 function ConfirmInstallView({ plan }: { plan: InstallPlan | null }) {
-  if (!plan) return <Text>Нет плана установки</Text>;
-  const perms = plan.permissions.length > 0 ? plan.permissions.join(", ") : "нет";
+  if (!plan) return <Text>No install plan</Text>;
+  const perms = plan.permissions.length > 0 ? plan.permissions.join(", ") : "none";
   return (
     <Box flexDirection="column">
       <Text>
-        Установить {plan.name}@{plan.version}?
+        Install {plan.name}@{plan.version}?
       </Text>
-      <Text>Доступы: {perms}</Text>
+      <Text>Permissions: {perms}</Text>
       <Text>y/n</Text>
     </Box>
   );
@@ -274,12 +274,12 @@ function ConfirmInstallView({ plan }: { plan: InstallPlan | null }) {
 function footerFor(mode: Mode): string {
   switch (mode) {
     case "addInput":
-      return "Enter — продолжить · Esc — отмена";
+      return "Enter — continue · Esc — cancel";
     case "confirmRemove":
-      return "y — удалить · n/Esc — отмена";
+      return "y — remove · n/Esc — cancel";
     case "confirmInstall":
-      return "y — установить · n/Esc — отмена";
+      return "y — install · n/Esc — cancel";
     default:
-      return "↑/↓ выбор · e вкл/выкл · d удалить · a добавить · p собрать pack";
+      return "↑/↓ select · e toggle · d remove · a add · p build pack";
   }
 }

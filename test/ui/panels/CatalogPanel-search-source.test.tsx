@@ -83,9 +83,9 @@ describe("CatalogPanel свободный source-install (loom-fru)", () => {
     stdin.write("\r"); // Enter
     const f = await waitFor(
       () => lastFrame()!,
-      (x) => !x.includes("source:") && x.includes("Ошибка"),
+      (x) => !x.includes("source:") && x.includes("Error"),
     );
     expect(f).not.toContain("source:");
-    expect(f).toContain("Ошибка");
+    expect(f).toContain("Error");
   });
 });

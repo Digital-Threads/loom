@@ -15,7 +15,7 @@ describe("runPackCli", () => {
     let written = "";
     const r = await runPackCli(["--out", "/tmp/p.md"], { ...baseDeps, writeFile: (_p, c) => { written = c; } });
     expect(r.code).toBe(0);
-    expect(r.lines[0]).toMatch(/pack записан: \/tmp\/p\.md/);
+    expect(r.lines[0]).toMatch(/pack written: \/tmp\/p\.md/);
     expect(written).toContain("# Workspace pack");
   });
   it("--out без пути → code 1", async () => {
@@ -25,7 +25,7 @@ describe("runPackCli", () => {
   it("--copy при сбое буфера → code 0 + деградация на stdout", async () => {
     const r = await runPackCli(["--copy"], { ...baseDeps, copyToClipboard: () => { throw new Error("no clip"); } });
     expect(r.code).toBe(0);
-    expect(r.lines.join("\n")).toMatch(/буфер недоступен/);
+    expect(r.lines.join("\n")).toMatch(/clipboard unavailable/);
     expect(r.lines.join("\n")).toContain("# Workspace pack");
   });
   it("неизвестный флаг → code 1 + usage", async () => {

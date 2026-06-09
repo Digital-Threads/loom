@@ -128,7 +128,7 @@ describe("installPlugin — local", () => {
 
     const res = installPlugin({ type: "local", path: src }, deps, () => false);
     expect(res.ok).toBe(false);
-    expect(res.error).toBe("отменено");
+    expect(res.error).toBe("cancelled");
 
     expect(existsSync(join(deps.dataDir, "plugins", "demo"))).toBe(false);
     expect(existsSync(join(deps.dataDir, "plugins.json"))).toBe(false);

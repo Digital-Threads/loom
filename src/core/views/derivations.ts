@@ -64,7 +64,7 @@ export function relatedSessionsD(data: WorkspaceData, taskId: string) {
 // поэтому итог = одна строка-значение под лейблом "Всего" → "Всего: потрачено X · …").
 export function tokenTotalsLine(data: WorkspaceData): string {
   const t = tokenTotals(data);
-  return `потрачено ${t.used} · сэкономлено ${t.saved}`;
+  return `spent ${t.used} · saved ${t.saved}`;
 }
 
 // Строки таблицы Сессий: idShort = slice(0,8), tokens = "used/saved", profileTokens =
@@ -108,7 +108,7 @@ export function relatedSessionLines(data: WorkspaceData, taskId: string): Array<
 // Итоговая строка токенов задачи: "потрачено X · сэкономлено Y" (как в TaskDetail).
 export function taskTokensSummary(data: WorkspaceData, taskId: string): string {
   const t = tokensForTask(data.taskEvents, taskId, data.tokenEvents);
-  return `потрачено ${t.used} · сэкономлено ${t.saved}`;
+  return `spent ${t.used} · saved ${t.saved}`;
 }
 
 // Разбивка токенов по сессиям: {text:"profile · id8 — used/saved"} (как в TaskDetail).
@@ -123,7 +123,7 @@ export function taskTokenBreakdownLines(data: WorkspaceData, taskId: string): Ar
 export function taskRecordedMetricLine(data: WorkspaceData, taskId: string): string {
   const recorded = tokenMetricsFromEvents(data.taskEvents, taskId);
   const last = recorded.length ? recorded[recorded.length - 1] : null;
-  return last ? `в журнале записано: потрачено ${last.used} · сэкономлено ${last.saved}` : "";
+  return last ? `recorded in journal: spent ${last.used} · saved ${last.saved}` : "";
 }
 
 // Строки таблицы Задач с токенами: оборачивает tasksWithTokens. ЧЕСТНОСТЬ overlap →
@@ -137,12 +137,12 @@ export function tasksWithTokensRows(data: WorkspaceData) {
     saved: r.saved,
     overlap: r.overlap,
     mode: r.mode,
-    badge: r.mode === "exact" ? "точно" : "≈ оценка",
+    badge: r.mode === "exact" ? "exact" : "≈ estimate",
     tokens:
       r.mode === "exact"
         ? `${r.used}/${r.saved}`
         : r.overlap
-          ? `≈ ${r.used}/${r.saved} (перекрытие)`
+          ? `≈ ${r.used}/${r.saved} (overlap)`
           : `${r.used}/${r.saved}`,
   }));
 }
@@ -164,7 +164,7 @@ export function timelineRows(
     let text = e.text;
     if (e.type === "tokens") {
       const m = e.text.match(/used (\d+), saved (\d+)/);
-      if (m) text = `потрачено ${m[1]} · сэкономлено ${m[2]}`;
+      if (m) text = `spent ${m[1]} · saved ${m[2]}`;
     }
     return {
       key: `${e.source}-${e.ts}-${i}`,

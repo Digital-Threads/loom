@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   // рендера, чтобы App видел полный список. Ошибки загрузки не валят запуск.
   const errs = await loadDynamicPlugins();
   if (errs.length) {
-    console.error("Loom: проблемы загрузки плагинов:\n" + errs.join("\n"));
+    console.error("Loom: plugin load problems:\n" + errs.join("\n"));
   }
 
   const app = render(<App />);

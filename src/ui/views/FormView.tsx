@@ -45,7 +45,7 @@ export function FormView() {
 
   function save(plugin: LoomPlugin, field: SettingField, value: unknown) {
     const ok = plugin.settings!.write(ctx, { [field.key]: value });
-    setStatus(ok ? `сохранено: ${field.key}=${String(value)}` : "ошибка записи");
+    setStatus(ok ? `saved: ${field.key}=${String(value)}` : "write failed");
     setVersion((v) => v + 1);
   }
 
@@ -53,19 +53,19 @@ export function FormView() {
     if (editBuffer !== null) {
       if (key.escape) {
         setEditBuffer(null);
-        setStatus("отмена");
+        setStatus("cancelled");
         return;
       }
       if (key.return) {
         if (editBuffer === "") {
           setEditBuffer(null);
-          setStatus("отмена");
+          setStatus("cancelled");
           return;
         }
         const num = Number(editBuffer);
         if (Number.isNaN(num)) {
           setEditBuffer(null);
-          setStatus("отмена");
+          setStatus("cancelled");
           return;
         }
         if (entry) save(entry.plugin, entry.field, num);
@@ -96,7 +96,7 @@ export function FormView() {
       const field = entry.field;
       const current = readValue(entry.plugin, field);
       if (field.readonly) {
-        setStatus("поле только для чтения: правьте файл настроек");
+        setStatus("read-only field: edit the settings file");
       } else if (field.type === "boolean") {
         save(entry.plugin, field, !current);
       } else if (field.type === "enum") {
@@ -108,14 +108,14 @@ export function FormView() {
       } else if (field.type === "number") {
         setEditBuffer(current === undefined || current === null ? "" : String(current));
       } else {
-        setStatus("строковые поля: правьте файл настроек");
+        setStatus("string fields: edit the settings file");
       }
     }
   });
 
   return (
     <Box flexDirection="column">
-      <Text bold>Настройки</Text>
+      <Text bold>Settings</Text>
 
       {list.map((p) => {
         const fields = p.settings?.schema.fields ?? [];
@@ -123,7 +123,7 @@ export function FormView() {
           <Box key={p.id} flexDirection="column" marginTop={1}>
             <Text bold>{p.title}</Text>
             {fields.length === 0 ? (
-              <Text dimColor>нет настраиваемых параметров (запись через действия)</Text>
+              <Text dimColor>no configurable options (write via actions)</Text>
             ) : (
               fields.map((f) => {
                 const idx = editable.findIndex(
@@ -147,7 +147,7 @@ export function FormView() {
 
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>
-          ↑/↓ выбор · Enter изменить/toggle · цифры+Enter число · Backspace · Escape отмена
+          ↑/↓ select · Enter edit/toggle · digits+Enter number · Backspace · Escape cancel
         </Text>
         <Text dimColor>{status}</Text>
       </Box>

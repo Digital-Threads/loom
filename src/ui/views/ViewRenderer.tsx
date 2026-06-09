@@ -125,7 +125,7 @@ function runAction(
   extra: Record<string, unknown> = {},
 ): { status: string; handover?: () => unknown | Promise<unknown> } {
   const action = plugin?.actions?.find((x) => x.id === binding.actionId);
-  if (!action) return { status: `действие не найдено: ${binding.actionId}` };
+  if (!action) return { status: `action not found: ${binding.actionId}` };
   const args: Record<string, unknown> = {};
   for (const [k, bind] of Object.entries(binding.args ?? {})) {
     args[k] = resolveBind(bind, ctx);
@@ -133,7 +133,7 @@ function runAction(
   Object.assign(args, extra); // typed prompt-значения дополняют/перекрывают статические
   const res = action.run({ projectRoot: process.cwd() }, args);
   return {
-    status: res.ok ? "готово (обновится при перезапуске)" : `ошибка: ${res.error ?? ""}`,
+    status: res.ok ? "done (updates on restart)" : `error: ${res.error ?? ""}`,
     handover: res.handover,
   };
 }
@@ -181,7 +181,7 @@ export function ViewRenderer({ plugin, spec, data }: ViewRendererProps) {
           const ctx: BindContext = { data, idParam: frame.idParam, derivations: allDerivations() };
           applyAction(runAction(binding, ctx, plugin));
         } else {
-          dispatch({ type: "setStatus", text: "отмена" });
+          dispatch({ type: "setStatus", text: "cancelled" });
         }
       } else if (input === "n" || key.escape) {
         dispatch({ type: "confirmNo" });

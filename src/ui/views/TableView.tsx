@@ -32,12 +32,12 @@ export function TableView({
   const sep = " ".repeat(spec.gap ?? 2);
 
   if (rows.length === 0) {
-    return <Text dimColor>{spec.empty ?? "Нет данных"}</Text>;
+    return <Text dimColor>{spec.empty ?? "No data"}</Text>;
   }
 
   return (
     <Box flexDirection="column">
-      {spec.selectable && <Text dimColor>↑/↓ — выбрать · Enter — открыть</Text>}
+      {spec.selectable && <Text dimColor>↑/↓ select · Enter open</Text>}
       {hasHeader && (
         <Text bold>
           {spec.columns

@@ -26,7 +26,7 @@ const pluginTabs = buildPluginTabs(loomRegistry.list());
 // Порядок: Обзор, Каталог, Задачи и токены, Лента, Config, [плагинные вкладки по слоям], Настройки, Плагины.
 // "Каталог", "Задачи и токены", "Лента", "Config" и "Плагины" — host-экраны. "Каталог"/"Config"/"Плагины" —
 // отдельные панели; "Задачи и токены"/"Лента" — кросс-слойные ViewSpec (тот же ViewRenderer).
-const TABS = ["Обзор", "Каталог", "Задачи и токены", "Лента", "Config", ...pluginTabs.map((t) => t.title), "Настройки", "Плагины"];
+const TABS = ["Overview", "Catalog", "Tasks & Tokens", "Timeline", "Config", ...pluginTabs.map((t) => t.title), "Settings", "Plugins"];
 
 // Индекс host-вкладки каталога (сразу после «Обзора»).
 const CATALOG_TAB = 1;
@@ -99,7 +99,7 @@ export function App() {
       <Tabs tabs={TABS} active={active} />
       <Box marginTop={1} flexDirection="column">
         {data === null ? (
-          <Text dimColor>Загрузка…</Text>
+          <Text dimColor>Loading…</Text>
         ) : active === 0 && isWorkspaceEmpty(data) ? (
           // Пустой старт: на «Обзоре» вместо нулей показываем онбординг.
           // Прочие вкладки (Плагины/Настройки) работают как обычно — туда можно уйти.
@@ -125,11 +125,11 @@ export function App() {
           // key={active} → смена вкладки перемонтирует ViewRenderer (сброс стека/курсора).
           <ViewRenderer key={active} plugin={view.plugin} spec={view.spec} data={data} />
         ) : (
-          <Text dimColor>Нет данных</Text>
+          <Text dimColor>No data</Text>
         )}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>←/→ или 1-9 вкладки · q выход</Text>
+        <Text dimColor>←/→ or 1-9 tabs · q quit</Text>
       </Box>
     </Box>
     </InputModeContext.Provider>

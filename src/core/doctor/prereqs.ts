@@ -7,10 +7,10 @@ export interface PrereqReport { ok: boolean; tools: ToolStatus[]; missing: strin
 
 // Единый список пререк-инструментов экосистемы (LP2; LP5 doctor переиспользует — НЕ дублировать).
 export const REQUIRED_TOOLS: { name: string; hint: string }[] = [
-  { name: "node", hint: "нужен Node.js: https://nodejs.org" },
-  { name: "npm", hint: "нужен npm (идёт с Node.js): https://nodejs.org" },
-  { name: "cargo", hint: "сборка из исходников: нужен Rust ≥ 1.88 (https://rustup.rs), займёт несколько минут; основной путь — готовый бинарник" },
-  { name: "claude", hint: "нужен Claude Code CLI: https://claude.com/claude-code" },
+  { name: "node", hint: "Node.js required: https://nodejs.org" },
+  { name: "npm", hint: "npm required (ships with Node.js): https://nodejs.org" },
+  { name: "cargo", hint: "building from source: Rust ≥ 1.88 required (https://rustup.rs), takes a few minutes; the main path is a prebuilt binary" },
+  { name: "claude", hint: "Claude Code CLI required: https://claude.com/claude-code" },
 ];
 
 // Проверяет наличие инструментов через which/where (resolveProbeCmd). Инъекция run — для тестов.

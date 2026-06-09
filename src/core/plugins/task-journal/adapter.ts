@@ -214,7 +214,7 @@ export const plugin: LoomPlugin<{
   title: "task-journal",
   category: "memory",
   capabilities: { install: false, data: true, settings: false, actions: true },
-  tabs: [{ id: "tasks", title: "Задачи" }],
+  tabs: [{ id: "tasks", title: "Tasks" }],
   load: (ctx) => {
     const taskEvents = loadTaskEvents(ctx.projectRoot);
     return { taskEvents, tasks: tasksFromEvents(taskEvents) };
@@ -227,19 +227,19 @@ export const plugin: LoomPlugin<{
   actions: [
     {
       id: "openTask",
-      label: "Открыть задачу",
+      label: "Open task",
       prompt: [
-        { key: "title", label: "Заголовок задачи" },
-        { key: "goal", label: "Цель (необязательно)" },
+        { key: "title", label: "Task title" },
+        { key: "goal", label: "Goal (optional)" },
       ],
       run: (ctx, args) => {
         const id = openTask(ctx.projectRoot, String(args?.title ?? ""), args?.goal as string | undefined);
-        return id ? { ok: true } : { ok: false, error: "не удалось создать" };
+        return id ? { ok: true } : { ok: false, error: "failed to create" };
       },
     },
     {
       id: "closeTask",
-      label: "Закрыть задачу",
+      label: "Close task",
       confirm: true,
       run: (ctx, args) => {
         const ok = closeTask(
@@ -247,12 +247,12 @@ export const plugin: LoomPlugin<{
           String(args?.taskId ?? ""),
           (args?.opts as CloseTaskOptions) ?? { outcomeTag: "done" },
         );
-        return { ok, error: ok ? undefined : "ошибка закрытия" };
+        return { ok, error: ok ? undefined : "close failed" };
       },
     },
     {
       id: "writeTokenMetric",
-      label: "Записать токен-метрику",
+      label: "Write token metric",
       confirm: true,
       run: (ctx, args) => {
         const ok = writeTokenMetric(
@@ -260,7 +260,7 @@ export const plugin: LoomPlugin<{
           String(args?.taskId ?? ""),
           (args?.tokens as TaskTokens) ?? { used: 0, saved: 0 },
         );
-        return { ok, error: ok ? undefined : "ошибка записи" };
+        return { ok, error: ok ? undefined : "write failed" };
       },
     },
   ],
@@ -274,7 +274,7 @@ export const plugin: LoomPlugin<{
       rowKey: "id",
       gap: 2,
       selectable: true,
-      empty: "Нет задач",
+      empty: "No tasks",
       onSelect: { openView: "taskDetail", passId: "id" },
       actions: [{ key: "o", actionId: "openTask" }],
       columns: [
@@ -289,22 +289,22 @@ export const plugin: LoomPlugin<{
       idParam: "taskId",
       title: { fn: "taskTitle", args: ["taskId"] },
       sections: [
-        { label: "Решения", items: { fn: "taskDecisions", args: ["taskId"] }, itemText: "text" },
-        { label: "Находки", items: { fn: "taskFindings", args: ["taskId"] }, itemText: "text" },
-        { label: "Отвергнутое", items: { fn: "taskRejections", args: ["taskId"] }, itemText: "text" },
+        { label: "Decisions", items: { fn: "taskDecisions", args: ["taskId"] }, itemText: "text" },
+        { label: "Findings", items: { fn: "taskFindings", args: ["taskId"] }, itemText: "text" },
+        { label: "Rejected", items: { fn: "taskRejections", args: ["taskId"] }, itemText: "text" },
         {
-          label: "Вероятно связанные сессии",
-          note: "(эвристика по времени)",
+          label: "Likely related sessions",
+          note: "(time-based heuristic)",
           items: { fn: "relatedSessionLines", args: ["taskId"] },
           itemText: "text",
         },
         {
-          label: "Токены задачи",
+          label: "Task tokens",
           hideCount: true,
           lead: { fn: "taskTokensSummary", args: ["taskId"] },
           items: { fn: "taskTokenBreakdownLines", args: ["taskId"] },
           itemText: "text",
-          empty: "нет данных по токенам в окне задачи",
+          empty: "no token data in task window",
           trailer: { fn: "taskRecordedMetricLine", args: ["taskId"] },
         },
       ],
@@ -312,15 +312,15 @@ export const plugin: LoomPlugin<{
         {
           key: "c",
           actionId: "closeTask",
-          label: "закрыть",
-          confirmPrompt: "Закрыть задачу? (y/n)",
+          label: "close",
+          confirmPrompt: "Close task? (y/n)",
           args: { taskId: "taskId" },
         },
         {
           key: "t",
           actionId: "writeTokenMetric",
-          label: "записать токены",
-          confirmPrompt: "Записать метрику токенов в журнал? (y/n)",
+          label: "write tokens",
+          confirmPrompt: "Write token metric to journal? (y/n)",
           args: { taskId: "taskId", tokens: { fn: "tokensForTask", args: ["taskId"] } },
         },
       ],

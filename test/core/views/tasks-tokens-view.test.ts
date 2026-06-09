@@ -16,9 +16,9 @@ describe("tasksTokensView", () => {
     expect((tasksTokensView as any).onSelect).toEqual({ openView: "taskDetail", passId: "id" });
   });
   it("carries a dim estimate note (honest about accuracy)", () => {
-    expect(JSON.stringify(tasksTokensView)).toMatch(/оценк|время/i);
+    expect(JSON.stringify(tasksTokensView)).toMatch(/estimate|time-based/i);
   });
   it("warns about overlap (double-count) so number is not read as fact", () => {
-    expect(JSON.stringify(tasksTokensView)).toMatch(/перекрыт|наложен/i);
+    expect(JSON.stringify(tasksTokensView)).toMatch(/overlap|double-count/i);
   });
 });

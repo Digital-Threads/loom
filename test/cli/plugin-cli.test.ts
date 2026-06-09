@@ -88,7 +88,7 @@ describe("runPluginCli list", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["list"], deps);
     expect(res.code).toBe(0);
-    expect(res.lines.join("\n")).toContain("нет установленных");
+    expect(res.lines.join("\n")).toContain("no installed plugins");
   });
 
   it("после установки показывает плагин", () => {
@@ -118,7 +118,7 @@ describe("runPluginCli add", () => {
     // ничего не установлено
     expect(existsSync(join(deps.dataDir, "plugins.json"))).toBe(false);
     const list = runPluginCli(["list"], deps);
-    expect(list.lines.join("\n")).toContain("нет установленных");
+    expect(list.lines.join("\n")).toContain("no installed plugins");
   });
 
   it("--yes устанавливает local-плагин end-to-end", () => {
@@ -126,7 +126,7 @@ describe("runPluginCli add", () => {
     const src = makeLocalPlugin(baseManifest());
     const res = runPluginCli(["add", src, "--yes"], deps);
     expect(res.code).toBe(0);
-    expect(res.lines.join("\n")).toContain("✓ установлен demo@1.0.0");
+    expect(res.lines.join("\n")).toContain("✓ installed demo@1.0.0");
     // файлы скопированы
     expect(existsSync(join(deps.dataDir, "plugins", "demo", "1.0.0", "plugin.json"))).toBe(true);
     // реестр обновлён
@@ -141,14 +141,14 @@ describe("runPluginCli add", () => {
     // как npm-спеку через bare-имя, fetch не найдёт plugin.json.
     const res = runPluginCli(["add", "definitely-not-a-real-pkg-xyz"], deps);
     expect(res.code).toBe(1);
-    expect(res.lines.join("\n")).toContain("Ошибка");
+    expect(res.lines.join("\n")).toContain("Error");
   });
 
   it("без аргумента источника → code 1 + usage", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["add"], deps);
     expect(res.code).toBe(1);
-    expect(res.lines.join("\n")).toContain("Использование");
+    expect(res.lines.join("\n")).toContain("Usage");
   });
 
   it("claudePlugin → вызывает claude install при --yes", () => {
@@ -173,7 +173,7 @@ describe("runPluginCli add", () => {
     const { deps } = makeDeps();
     const r = runPluginCli(["add", src, "--yes"], deps);
     expect(r.code).toBe(0);
-    expect(r.lines.join("\n")).toMatch(/вручную/);
+    expect(r.lines.join("\n")).toMatch(/manually/);
     expect(r.lines.join("\n")).toContain("aimux auth login");
   });
 });
@@ -185,23 +185,23 @@ describe("runPluginCli remove", () => {
     runPluginCli(["add", src, "--yes"], deps);
     const res = runPluginCli(["remove", "demo"], deps);
     expect(res.code).toBe(0);
-    expect(res.lines.join("\n")).toContain("✓ удалён demo");
+    expect(res.lines.join("\n")).toContain("✓ removed demo");
     const list = runPluginCli(["list"], deps);
-    expect(list.lines.join("\n")).toContain("нет установленных");
+    expect(list.lines.join("\n")).toContain("no installed plugins");
   });
 
   it("удаление несуществующего → code 1", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["remove", "nope"], deps);
     expect(res.code).toBe(1);
-    expect(res.lines.join("\n")).toContain("Ошибка");
+    expect(res.lines.join("\n")).toContain("Error");
   });
 
   it("без имени → code 1 + usage", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["remove"], deps);
     expect(res.code).toBe(1);
-    expect(res.lines.join("\n")).toContain("Использование");
+    expect(res.lines.join("\n")).toContain("Usage");
   });
 });
 
@@ -210,7 +210,7 @@ describe("runPluginCli unknown", () => {
     const { deps } = makeDeps();
     const res = runPluginCli(["frobnicate"], deps);
     expect(res.code).toBe(1);
-    expect(res.lines.join("\n")).toContain("Использование");
+    expect(res.lines.join("\n")).toContain("Usage");
   });
 });
 
@@ -292,7 +292,7 @@ describe("runPluginCli detect", () => {
     runPluginCli(["add", src, "--yes"], deps);
     const r = runPluginCli(["detect", "demo"], deps);
     expect(r.code).toBe(0);
-    expect(r.lines.join("\n")).toContain("установлен demo");
+    expect(r.lines.join("\n")).toContain("installed demo");
   });
 
   it("detect несуществующего → code 1", () => {
@@ -322,6 +322,6 @@ describe("runPluginCli detect", () => {
     runPluginCli(["add", src, "--yes"], deps);
     const r = runPluginCli(["detect", "demo"], deps);
     expect(r.code).toBe(0);
-    expect(r.lines.join("\n")).toContain("установлен demo");
+    expect(r.lines.join("\n")).toContain("installed demo");
   });
 });

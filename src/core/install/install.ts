@@ -217,7 +217,7 @@ export function finalizeInstall(
   const pf = preflightRecipe(plan.recipe, { check: ctx.preflightCheck });
   if (!pf.ok) {
     return { ok: false, missing: pf.missing,
-      error: `не хватает инструментов: ${pf.missing.join(", ")}${pf.hint ? ` — ${pf.hint}` : ""}` };
+      error: `missing tools: ${pf.missing.join(", ")}${pf.hint ? ` — ${pf.hint}` : ""}` };
   }
 
   try {
@@ -260,7 +260,7 @@ export function installPlugin(
   if (!planned.ok || !planned.plan) return planned;
 
   if (!onConfirm(planned.plan)) {
-    return { ok: false, error: "отменено", plan: planned.plan };
+    return { ok: false, error: "cancelled", plan: planned.plan };
   }
 
   // Для local исходник = source.path; для npm/git staging уже скачан в fetchToStaging,

@@ -66,7 +66,7 @@ export function addSubscription(
 ): AddSubscriptionResult {
   try {
     const cfg = loadConfig();
-    if (!cfg) return { ok: false, error: "нет конфига aimux" };
+    if (!cfg) return { ok: false, error: "no aimux config" };
     const updated = addProfile(cfg, name, opts);
     saveConfig(updated);
     return { ok: true };
@@ -86,8 +86,8 @@ export const plugin: LoomPlugin<{
   category: "accounts",
   capabilities: { install: false, data: true, settings: false, actions: true },
   tabs: [
-    { id: "subscriptions", title: "Подписки" },
-    { id: "sessions", title: "Сессии" },
+    { id: "subscriptions", title: "Subscriptions" },
+    { id: "sessions", title: "Sessions" },
   ],
   load: (_ctx) => ({
     subscriptions: listSubscriptions(),
@@ -102,8 +102,8 @@ export const plugin: LoomPlugin<{
   actions: [
     {
       id: "addSubscription",
-      label: "Добавить подписку",
-      prompt: [{ key: "name", label: "Имя профиля" }],
+      label: "Add subscription",
+      prompt: [{ key: "name", label: "Profile name" }],
       run: (_ctx, args) =>
         addSubscription(
           String(args?.name ?? ""),
@@ -112,16 +112,16 @@ export const plugin: LoomPlugin<{
     },
     {
       id: "login",
-      label: "Логин (launchProfile)",
-      prompt: [{ key: "profile", label: "Профиль для логина" }],
+      label: "Login (launchProfile)",
+      prompt: [{ key: "profile", label: "Profile to log in" }],
       run: (_ctx, args) => {
         const profile = String(args?.profile ?? "").trim();
-        if (!profile) return { ok: false, error: "профиль не выбран" };
+        if (!profile) return { ok: false, error: "no profile selected" };
         return {
           ok: true,
           handover: () => {
             const cfg = loadConfig();
-            if (!cfg) throw new Error("нет конфига aimux");
+            if (!cfg) throw new Error("no aimux config");
             return launchProfile(cfg, profile);
           },
         };
@@ -129,16 +129,16 @@ export const plugin: LoomPlugin<{
     },
     {
       id: "switchProfile",
-      label: "Переключить активный профиль",
-      prompt: [{ key: "profile", label: "Активный профиль" }],
+      label: "Switch active profile",
+      prompt: [{ key: "profile", label: "Active profile" }],
       run: (_ctx, args) => {
         const profile = String(args?.profile ?? "").trim();
-        if (!profile) return { ok: false, error: "профиль не указан" };
+        if (!profile) return { ok: false, error: "no profile specified" };
         try {
           const cfg = loadConfig();
-          if (!cfg) return { ok: false, error: "нет конфига aimux" };
+          if (!cfg) return { ok: false, error: "no aimux config" };
           // getProfile бросает, если профиля нет → проверяем явно, чтобы вернуть понятную ошибку.
-          if (!cfg.profiles[profile]) return { ok: false, error: `профиль не найден: ${profile}` };
+          if (!cfg.profiles[profile]) return { ok: false, error: `profile not found: ${profile}` };
           getProfile(cfg, profile);
           saveActiveProfile(profile);
           return { ok: true };
@@ -156,7 +156,7 @@ export const plugin: LoomPlugin<{
       source: "subscriptions",
       rowKey: "name",
       gap: 1,
-      empty: "Нет подписок",
+      empty: "No subscriptions",
       actions: [
         { key: "a", actionId: "addSubscription" },
         { key: "l", actionId: "login" },
@@ -174,7 +174,7 @@ export const plugin: LoomPlugin<{
       source: { fn: "sessionRows" },
       rowKey: "sessionId",
       gap: 2,
-      empty: "Нет сессий",
+      empty: "No sessions",
       columns: [{ value: "idShort" }, { value: "profileTokens" }],
     } satisfies ViewSpec,
   },

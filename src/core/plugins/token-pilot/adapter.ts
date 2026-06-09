@@ -137,12 +137,12 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
 export function settingsSchema(): SettingsSchema {
   return {
     fields: [
-      { key: "hooks.mode", label: "Режим хуков", type: "enum", options: ["off", "advisory", "deny-enhanced"] },
-      { key: "hooks.denyThreshold", label: "Порог строк для deny", type: "number" },
-      { key: "sessionStart.enabled", label: "Напоминание при старте сессии", type: "boolean" },
-      { key: "smartRead.smallFileThreshold", label: "Порог малого файла (строк)", type: "number" },
-      { key: "cache.maxSizeMB", label: "Размер кэша (МБ)", type: "number" },
-      { key: "updates.checkOnStartup", label: "Проверять обновления при старте", type: "boolean" },
+      { key: "hooks.mode", label: "Hook mode", type: "enum", options: ["off", "advisory", "deny-enhanced"] },
+      { key: "hooks.denyThreshold", label: "Line threshold for deny", type: "number" },
+      { key: "sessionStart.enabled", label: "Reminder at session start", type: "boolean" },
+      { key: "smartRead.smallFileThreshold", label: "Small file threshold (lines)", type: "number" },
+      { key: "cache.maxSizeMB", label: "Cache size (MB)", type: "number" },
+      { key: "updates.checkOnStartup", label: "Check for updates on startup", type: "boolean" },
     ],
   };
 }
@@ -210,7 +210,7 @@ export const plugin: LoomPlugin<{
   title: "token-pilot",
   category: "efficiency",
   capabilities: { install: false, data: true, settings: true, actions: false },
-  tabs: [{ id: "tokens", title: "Токены" }],
+  tabs: [{ id: "tokens", title: "Tokens" }],
   load: (ctx) => ({
     tokens: tokenUsageBySession(ctx.projectRoot),
     tokenEvents: tokenEventsByTime(ctx.projectRoot),
@@ -227,14 +227,14 @@ export const plugin: LoomPlugin<{
     tokens: [
       {
         kind: "summary",
-        lines: [{ label: "Всего", value: { fn: "tokenTotalsLine" }, when: "tokens.length" }],
+        lines: [{ label: "Total", value: { fn: "tokenTotalsLine" }, when: "tokens.length" }],
       },
       {
         kind: "table",
         source: { fn: "tokenRows" },
         rowKey: "sessionId",
         gap: 2,
-        empty: "Нет данных о токенах",
+        empty: "No token data",
         columns: [
           { value: "idShort" },
           { value: "used", width: 8, align: "right" },

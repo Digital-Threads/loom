@@ -16,7 +16,7 @@ describe("LP10 timelineRows", () => {
     expect(typeof r.when).toBe("string");
     expect(r.source).toBe("token-pilot");
     expect(r.type).toBe("tokens");
-    expect(r.text).toContain("потрачено 5");
+    expect(r.text).toContain("spent 5");
   });
   it("порядок = buildTimeline (новые сверху)", () => {
     const rows = timelineRows(ws({ tokenEvents: [{ sessionId: "s", used: 0, saved: 0, ts: 3000, agentType: null }], sessions: [{ sessionId: "s2", profile: "p", lastUsedAtMs: 1000 }] }));

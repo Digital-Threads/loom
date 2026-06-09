@@ -65,8 +65,8 @@ describe("App: цифровые хоткеи вкладок", () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await waitForFrame(lastFrame, "Token Pilot"); // дождались каталога (пустой старт)
     stdin.write("1");
-    const frame = await waitForFrame(lastFrame, "Добро пожаловать в Loom");
-    expect(frame).toContain("Добро пожаловать в Loom");
+    const frame = await waitForFrame(lastFrame, "Welcome to Loom");
+    expect(frame).toContain("Welcome to Loom");
     unmount();
   });
 });

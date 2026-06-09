@@ -7,11 +7,11 @@
   "apiVersion": "1.0",
   "entry": "./dist/adapter.js",
   "provides": {
-    "tabs": [{ "id": "tasks", "title": "Задачи" }],
+    "tabs": [{ "id": "tasks", "title": "Tasks" }],
     "actions": [
-      { "id": "openTask", "label": "Открыть задачу" },
-      { "id": "closeTask", "label": "Закрыть задачу" },
-      { "id": "writeTokenMetric", "label": "Записать токен-метрику" }
+      { "id": "openTask", "label": "Open task" },
+      { "id": "closeTask", "label": "Close task" },
+      { "id": "writeTokenMetric", "label": "Write token metric" }
     ]
   },
   "install": {

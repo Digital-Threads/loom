@@ -35,15 +35,15 @@ describe("per-tab декларативный рендер через ViewRendere
       sessions: [{ sessionId: "s1", profile: "p1" }, { sessionId: "s2", profile: "p2" }],
     });
     const { lastFrame } = render(<ViewRenderer spec={overviewView} data={data} />);
-    expect(lastFrame()).toContain("Подписок: 1");
-    expect(lastFrame()).toContain("Сессий: 2");
+    expect(lastFrame()).toContain("Subscriptions: 1");
+    expect(lastFrame()).toContain("Sessions: 2");
   });
 
   it("Обзор: строка ошибок видна только при errors.length > 0", () => {
     const ok = render(<ViewRenderer spec={overviewView} data={makeData()} />);
-    expect(ok.lastFrame()).not.toContain("Ошибок загрузки");
+    expect(ok.lastFrame()).not.toContain("Load errors");
     const bad = render(<ViewRenderer spec={overviewView} data={makeData({ errors: ["boom"] })} />);
-    expect(bad.lastFrame()).toContain("Ошибок загрузки: 1");
+    expect(bad.lastFrame()).toContain("Load errors: 1");
   });
 
   it("Подписки: имя, маркер источника ★ и cli", () => {
@@ -89,7 +89,7 @@ describe("per-tab декларативный рендер через ViewRendere
       <ViewRenderer plugin={tokenPilot} spec={tokenPilot.views!.tokens} data={data} />,
     );
     const f = lastFrame()!;
-    expect(f).toContain("Всего: потрачено 150 · сэкономлено 15");
+    expect(f).toContain("Total: spent 150 · saved 15");
     expect(f).toContain("abcdef12");
     expect(f).toContain("100");
   });
@@ -99,8 +99,8 @@ describe("per-tab декларативный рендер через ViewRendere
       <ViewRenderer plugin={tokenPilot} spec={tokenPilot.views!.tokens} data={makeData()} />,
     );
     const f = lastFrame()!;
-    expect(f).toContain("Нет данных о токенах");
-    expect(f).not.toContain("Всего:");
+    expect(f).toContain("No token data");
+    expect(f).not.toContain("Total:");
   });
 
   it("Задачи: строка задачи + футер ↑/↓ — выбрать · Enter — открыть", () => {
@@ -114,7 +114,7 @@ describe("per-tab декларативный рендер через ViewRendere
       <ViewRenderer plugin={taskJournal} spec={taskJournal.views!.tasks} data={data} />,
     );
     const f = lastFrame()!;
-    expect(f).toContain("↑/↓ — выбрать · Enter — открыть");
+    expect(f).toContain("↑/↓ select · Enter open");
     expect(f).toContain("○ Открытая задача");
     expect(f).toContain("✓ Закрытая задача");
     expect(f).toContain("tj-1");
@@ -123,8 +123,8 @@ describe("per-tab декларативный рендер через ViewRendere
   it("Настройки: форма показывает поле token-pilot", () => {
     const { lastFrame } = render(<ViewRenderer spec={settingsView} data={makeData()} />);
     const f = lastFrame()!;
-    expect(f).toContain("Настройки");
-    expect(f).toContain("Режим хуков");
+    expect(f).toContain("Settings");
+    expect(f).toContain("Hook mode");
   });
 });
 
@@ -146,11 +146,11 @@ describe("list → detail: открытие задачи через ViewRenderer
     await tick();
     const f = lastFrame()!;
     expect(f).toContain("Открытая задача");
-    expect(f).toContain("Решения (1)");
+    expect(f).toContain("Decisions (1)");
     expect(f).toContain("Решили использовать X");
-    expect(f).toContain("Находки (1)");
-    expect(f).toContain("Токены задачи");
-    expect(f).toContain("c — закрыть · t — записать токены · Esc — назад");
+    expect(f).toContain("Findings (1)");
+    expect(f).toContain("Task tokens");
+    expect(f).toContain("c — close · t — write tokens · Esc — back");
   });
 
   it("taskDetail-spec резолвится и DetailView рисует секции на прямом маунте", async () => {
@@ -172,7 +172,7 @@ describe("list → detail: открытие задачи через ViewRenderer
     await tick();
     const f = lastFrame()!;
     expect(f).toContain("Девятая");
-    expect(f).toContain("Отвергнутое (1)");
+    expect(f).toContain("Rejected (1)");
     expect(f).toContain("Отвергли Y");
   });
 });

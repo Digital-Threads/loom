@@ -20,16 +20,16 @@ export function ConfigView({ reports, prereq, onApply, onDryRun }: {
     <Box flexDirection="column">
       {reports.map((r) => (
         <Box key={r.scope} flexDirection="column">
-          <Text>{r.ok ? "✓" : "✗"} {r.scope}{r.missingMcp.length ? `  · нет MCP: ${r.missingMcp.join(", ")}` : ""}{r.changedMcp.length ? `  · изменены: ${r.changedMcp.join(", ")}` : ""}{r.missingHookEvents.length ? `  · нет hooks: ${r.missingHookEvents.join(", ")}` : ""}</Text>
-          {r.hookCollisions.map((c, i) => (<Text key={i} dimColor>  ⚠ hook-коллизия {c.event}: {c.plugins.join(", ")}</Text>))}
-          {r.mcpCollisions.map((c, i) => (<Text key={i} dimColor>  ⚠ MCP-коллизия {c.server}: {c.plugins.join(", ")}</Text>))}
+          <Text>{r.ok ? "✓" : "✗"} {r.scope}{r.missingMcp.length ? `  · missing MCP: ${r.missingMcp.join(", ")}` : ""}{r.changedMcp.length ? `  · changed: ${r.changedMcp.join(", ")}` : ""}{r.missingHookEvents.length ? `  · missing hooks: ${r.missingHookEvents.join(", ")}` : ""}</Text>
+          {r.hookCollisions.map((c, i) => (<Text key={i} dimColor>  ⚠ hook collision {c.event}: {c.plugins.join(", ")}</Text>))}
+          {r.mcpCollisions.map((c, i) => (<Text key={i} dimColor>  ⚠ MCP collision {c.server}: {c.plugins.join(", ")}</Text>))}
         </Box>
       ))}
       <Box marginTop={1} flexDirection="column">
         <Text>Prerequisites:</Text>
         {prereq.tools.map((t) => (<Text key={t.name}>{t.found ? "✓" : "✗"} {t.name}{!t.found && t.hint ? ` — ${t.hint}` : ""}</Text>))}
       </Box>
-      <Box marginTop={1}><Text dimColor>d — dry-run · a — применить merge (с backup)</Text></Box>
+      <Box marginTop={1}><Text dimColor>d — dry-run · a — apply merge (with backup)</Text></Box>
     </Box>
   );
 }

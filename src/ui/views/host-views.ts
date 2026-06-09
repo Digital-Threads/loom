@@ -13,16 +13,16 @@ export const overviewView: ViewSpec[] = [
   {
     kind: "summary",
     lines: [
-      { label: "Подписок", value: "subscriptions.length" },
-      { label: "Сессий", value: "sessions.length" },
-      { label: "Ошибок загрузки", value: "errors.length", color: "red", when: "errors.length" },
+      { label: "Subscriptions", value: "subscriptions.length" },
+      { label: "Sessions", value: "sessions.length" },
+      { label: "Load errors", value: "errors.length", color: "red", when: "errors.length" },
     ],
   },
   {
     kind: "table",
     source: { fn: "layerSummaryLines" },
     rowKey: "text",
-    empty: "Слои не активны",
+    empty: "No active layers",
     columns: [{ value: "text" }],
   },
 ];
@@ -44,13 +44,13 @@ export const tasksTokensView: ViewSpec = {
   source: { fn: "tasksWithTokensRows" },
   rowKey: "id",
   empty:
-    "Нет задач (токены — оценка по времени, не точный учёт; при наложении задач — «≈ перекрытие», double-count)",
+    "No tasks (tokens are time-based estimates, not exact accounting; when tasks overlap — \"≈ overlap\", double-count)",
   selectable: true,
   onSelect: { openView: "taskDetail", passId: "id" },
   columns: [
     { value: "title", width: 50, marker: { when: "status", equals: "closed", truthy: "✓", falsy: "○" } },
-    { header: "Точность", value: "badge", width: 10 },
-    { header: "Токены (оценка)", value: "tokens", align: "right" },
+    { header: "Accuracy", value: "badge", width: 10 },
+    { header: "Tokens (est.)", value: "tokens", align: "right" },
   ],
 };
 
@@ -62,7 +62,7 @@ export const timelineView: ViewSpec = {
   source: { fn: "timelineRows" },
   rowKey: "key",
   gap: 2,
-  empty: "Лента пуста",
+  empty: "Timeline is empty",
   columns: [
     { value: "when" },
     { value: "source", width: 12 },

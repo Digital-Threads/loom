@@ -23,23 +23,23 @@ export async function runPackCli(args: string[], deps: PackCliDeps = {}): Promis
     const outIdx = args.indexOf("--out");
     if (outIdx !== -1) {
       const path = args[outIdx + 1];
-      if (!path) return { code: 1, lines: ["loom pack --out: укажите путь"] };
+      if (!path) return { code: 1, lines: ["loom pack --out: specify a path"] };
       (deps.writeFile ?? defaultWriteFile)(path, md);
-      return { code: 0, lines: [`pack записан: ${path}`] };
+      return { code: 0, lines: [`pack written: ${path}`] };
     }
     if (args.includes("--copy")) {
       try {
         (deps.copyToClipboard ?? defaultCopy)(md);
-        return { code: 0, lines: ["pack скопирован в буфер обмена"] };
+        return { code: 0, lines: ["pack copied to clipboard"] };
       } catch (e) {
-        return { code: 0, lines: [`⚠ буфер недоступен (${(e as Error).message}); вывод ниже:`, "", ...md.split("\n")] };
+        return { code: 0, lines: [`⚠ clipboard unavailable (${(e as Error).message}); output below:`, "", ...md.split("\n")] };
       }
     }
     if (args.some((a) => a.startsWith("--") && a !== "--out" && a !== "--copy")) {
-      return { code: 1, lines: ["loom pack: неизвестный флаг", "usage: loom pack [--out <file>] [--copy]"] };
+      return { code: 1, lines: ["loom pack: unknown flag", "usage: loom pack [--out <file>] [--copy]"] };
     }
     return { code: 0, lines: md.split("\n") };
   } catch (err) {
-    return { code: 1, lines: [`Ошибка pack: ${(err as Error).message}`] };
+    return { code: 1, lines: [`Pack error: ${(err as Error).message}`] };
   }
 }

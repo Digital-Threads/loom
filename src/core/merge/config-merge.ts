@@ -171,11 +171,11 @@ export function diffSettings(
 
   const lines: string[] = [];
   for (const name of addedMcp) lines.push(`+ mcp: ${name}`);
-  for (const name of changedMcp) lines.push(`~ mcp: ${name} (изменён)`);
+  for (const name of changedMcp) lines.push(`~ mcp: ${name} (changed)`);
   for (const event of hookEventsTouched) lines.push(`~ hooks: ${event}`);
   if (statuslineChanged) lines.push(`~ statusLine`);
 
-  const text = lines.length > 0 ? lines.join("\n") : "нет изменений";
+  const text = lines.length > 0 ? lines.join("\n") : "no changes";
 
   return { addedMcp, changedMcp, hookEventsTouched, statuslineChanged, text };
 }

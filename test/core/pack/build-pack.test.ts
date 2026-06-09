@@ -19,7 +19,7 @@ describe("buildPack каркас", () => {
   });
   it("заканчивается footer-нотой про оценку токенов по времени", () => {
     const md = buildPack({ data: emptyData(), config: {} });
-    expect(md).toMatch(/оценка по врем|double-count/i);
+    expect(md).toMatch(/time-based estimate|double-count/i);
   });
   it("детерминирован (один вход → один текст)", () => {
     const a = buildPack({ data: emptyData(), config: { projectName: "x" } });
@@ -39,11 +39,11 @@ describe("sectionProfile", () => {
       { sessionId: "s2", profile: "new", lastUsedAtMs: 200 },
     ] } as any;
     const md = buildPack({ data, config: {} });
-    expect(md).toMatch(/## Active profile\n\nnew \(эвристика/);
+    expect(md).toMatch(/## Active profile\n\nnew \(heuristic/);
   });
   it("недоступно когда нет ни config, ни сессий", () => {
     const md = buildPack({ data: emptyData(), config: {} });
-    expect(md).toContain("## Active profile\n\n_недоступно");
+    expect(md).toContain("## Active profile\n\n_unavailable");
   });
   it("детерминированный tie-break по sessionId при равном lastUsedAtMs", () => {
     const data = { ...emptyData(), sessions: [
@@ -63,15 +63,15 @@ describe("sectionTask", () => {
   });
   it("эвристика: первая открытая когда config пуст", () => {
     const md = buildPack({ data: { ...emptyData(), tasks } as any, config: {} });
-    expect(md).toMatch(/## Active task\n\ntj-1 — Alpha \[open\] \(эвристика/);
+    expect(md).toMatch(/## Active task\n\ntj-1 — Alpha \[open\] \(heuristic/);
   });
   it("id из config, но нет в tasks → (нет в журнале)", () => {
     const md = buildPack({ data: { ...emptyData(), tasks } as any, config: { activeTaskId: "tj-X" } });
-    expect(md).toContain("tj-X — (нет в журнале)");
+    expect(md).toContain("tj-X — (not in journal)");
   });
   it("недоступно когда нет задач", () => {
     const md = buildPack({ data: emptyData(), config: {} });
-    expect(md).toContain("## Active task\n\n_недоступно");
+    expect(md).toContain("## Active task\n\n_unavailable");
   });
 });
 
@@ -95,14 +95,14 @@ describe("sectionDecisions/Rejections", () => {
   });
   it("нет решений → честная заглушка", () => {
     const md = buildPack({ data: { ...emptyData(), tasks: [{ id:"tj-9", title:"E", status:"open" }] } as any, config: { activeTaskId: "tj-9" } });
-    expect(md).toMatch(/## Recent decisions\n\n_нет записанных решений_/);
+    expect(md).toMatch(/## Recent decisions\n\n_no recorded decisions_/);
   });
 });
 
 describe("sectionTokenUsage", () => {
   it("недоступно когда нет токенов", () => {
     const md = buildPack({ data: emptyData(), config: {} });
-    expect(md).toContain("## Token usage\n\n_недоступно: нет данных о токенах_");
+    expect(md).toContain("## Token usage\n\n_unavailable: no token data_");
   });
   it("project total + active task (оценка по времени)", () => {
     const data = {
@@ -116,8 +116,8 @@ describe("sectionTokenUsage", () => {
       tasks: [{ id: "tj-1", title: "Alpha", status: "open" }],
     } as any;
     const md = buildPack({ data, config: { activeTaskId: "tj-1" } });
-    expect(md).toMatch(/Project total: потрачено 100 · сэкономлено 20/);
-    expect(md).toMatch(/Active task: потрачено 100 · сэкономлено 20 \(оценка по времени\)/);
+    expect(md).toMatch(/Project total: spent 100 · saved 20/);
+    expect(md).toMatch(/Active task: spent 100 · saved 20 \(time-based estimate\)/);
   });
 });
 
@@ -130,16 +130,16 @@ describe("sectionMcpHealth", () => {
   it("проблемы когда broken/missing/conflicts не пусты", () => {
     const data = { ...emptyData(), health: [{ profile: "work", valid: [], broken: ["x"], missing: ["y"], orphaned: [], conflicts: ["z"] }] } as any;
     const md = buildPack({ data, config: {} });
-    expect(md).toMatch(/- work: проблемы — broken 1, missing 1, conflicts 1/);
+    expect(md).toMatch(/- work: problems — broken 1, missing 1, conflicts 1/);
   });
   it("показывает ошибки загрузки слоёв", () => {
     const data = { ...emptyData(), errors: ["aimux: boom"] } as any;
     const md = buildPack({ data, config: {} });
-    expect(md).toContain("Ошибки загрузки слоёв:");
+    expect(md).toContain("Layer load errors:");
     expect(md).toContain("- aimux: boom");
   });
   it("всё чисто → все слои отдали данные без ошибок", () => {
     const md = buildPack({ data: emptyData(), config: {} });
-    expect(md).toContain("все слои отдали данные без ошибок");
+    expect(md).toContain("all layers returned data without errors");
   });
 });

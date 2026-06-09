@@ -21,7 +21,7 @@ export interface ConfigCliDeps {
 }
 
 const USAGE = [
-  "Usage (использование): loom config <doctor|merge>",
+  "Usage: loom config <doctor|merge>",
   "  loom config doctor",
   "  loom config merge [--scope user|project|local] [--dry-run|--apply]",
 ];
@@ -47,9 +47,9 @@ function formatDoctorScope(r: DoctorReport): string[] {
   if (r.missingHookEvents.length)
     lines.push(`    missing hooks: ${r.missingHookEvents.join(", ")}`);
   for (const c of r.mcpCollisions)
-    lines.push(`    ⚠ коллизия mcp ${c.server}: ${c.plugins.join(", ")}`);
+    lines.push(`    ⚠ mcp collision ${c.server}: ${c.plugins.join(", ")}`);
   for (const c of r.hookCollisions)
-    lines.push(`    ⚠ коллизия hook ${c.event}: ${c.plugins.join(", ")}`);
+    lines.push(`    ⚠ hook collision ${c.event}: ${c.plugins.join(", ")}`);
   return lines;
 }
 
@@ -102,12 +102,12 @@ function mergeCmd(rest: string[], deps: ConfigCliDeps): CliResult {
   const lines: string[] = [`Config merge (scope=${scope}, ${apply ? "apply" : "dry-run"}):`];
   if (result.diff.text) lines.push(result.diff.text);
   if (result.collisions.length)
-    for (const c of result.collisions) lines.push(`⚠ коллизия: ${c}`);
+    for (const c of result.collisions) lines.push(`⚠ collision: ${c}`);
   if (result.applied) {
-    lines.push("Изменения применены (записано на диск).");
+    lines.push("Changes applied (written to disk).");
     if (result.backupPath) lines.push(`backup: ${result.backupPath}`);
   } else {
-    lines.push("Dry-run: ничего не записано. Запусти с --apply, чтобы применить.");
+    lines.push("Dry-run: nothing written. Run with --apply to apply.");
   }
   return { code: 0, lines };
 }
@@ -122,9 +122,9 @@ export function runConfigCli(args: string[], deps: ConfigCliDeps): CliResult {
       case "merge":
         return mergeCmd(rest, deps);
       default:
-        return { code: 1, lines: [`Неизвестная подкоманда: ${sub ?? "(нет)"}`, ...USAGE] };
+        return { code: 1, lines: [`Unknown subcommand: ${sub ?? "(none)"}`, ...USAGE] };
     }
   } catch (err) {
-    return { code: 1, lines: [`Внутренняя ошибка CLI: ${(err as Error).message}`] };
+    return { code: 1, lines: [`Internal CLI error: ${(err as Error).message}`] };
   }
 }

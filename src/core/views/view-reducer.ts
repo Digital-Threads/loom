@@ -71,7 +71,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
         return { ...state, mode: "nav", confirmKey: null };
       case "confirmNo":
       case "esc":
-        return { ...state, mode: "nav", confirmKey: null, status: "отмена" };
+        return { ...state, mode: "nav", confirmKey: null, status: "cancelled" };
       case "setStatus":
         return { ...state, mode: "nav", confirmKey: null, status: event.text };
       default:
@@ -83,7 +83,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
   if (state.mode === "editNumber") {
     switch (event.type) {
       case "esc":
-        return { ...state, mode: "nav", editBuffer: "", status: "отмена" };
+        return { ...state, mode: "nav", editBuffer: "", status: "cancelled" };
       case "backspace":
         return { ...state, editBuffer: state.editBuffer.slice(0, -1) };
       case "char":
@@ -94,7 +94,7 @@ export function viewReducer(state: ViewState, event: ViewEvent, opts: ViewReduce
       case "enter":
         // Пустой буфер → отмена. Иначе слой читает editBuffer и пишет значение.
         if (state.editBuffer === "") {
-          return { ...state, mode: "nav", status: "отмена" };
+          return { ...state, mode: "nav", status: "cancelled" };
         }
         return { ...state, mode: "nav", editBuffer: "" };
       case "setStatus":

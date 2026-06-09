@@ -31,7 +31,7 @@ describe("dashboard derivations", () => {
     const rows = derivations.tasksWithTokensRows(overlapping) as any[];
     const a = rows.find((r) => r.id === "A");
     expect(a.overlap).toBe(true);
-    expect(a.tokens).toMatch(/≈|перекрыт/);
+    expect(a.tokens).toMatch(/≈|overlap/);
     expect(a.tokens).not.toBe(`${a.used}/${a.saved}`);
   });
 
@@ -48,13 +48,13 @@ describe("dashboard derivations", () => {
     const rows = derivations.tasksWithTokensRows(exact) as any[];
     const a = rows.find((r) => r.id === "A");
     expect(a.mode).toBe("exact");
-    expect(a.badge).toMatch(/точно/);
+    expect(a.badge).toMatch(/exact/);
     expect(a.tokens).toBe("10/2"); // exact → точное число, без ≈
   });
 
   it("layerSummaryLines returns one line per present layer in LAYER_ORDER", () => {
     const lines = derivations.layerSummaryLines(data) as Array<{ text: string }>;
-    expect(lines[0].text).toMatch(/Доступ/);
-    expect(lines.some((l) => /Память/.test(l.text))).toBe(true);
+    expect(lines[0].text).toMatch(/Access/);
+    expect(lines.some((l) => /Memory/.test(l.text))).toBe(true);
   });
 });

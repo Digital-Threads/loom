@@ -7,7 +7,7 @@
   "apiVersion": "1.0",
   "entry": "./dist/adapter.js",
   "provides": {
-    "tabs": [{ "id": "tokens", "title": "Токены" }],
+    "tabs": [{ "id": "tokens", "title": "Tokens" }],
     "settings": true
   },
   "install": {

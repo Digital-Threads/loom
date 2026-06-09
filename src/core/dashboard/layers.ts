@@ -21,15 +21,15 @@ export function layerOf(plugin: Pick<LoomPlugin, "id"> & { category?: string }):
 
 export function layerLabel(layer: Layer): string {
   const map: Record<Layer, string> = {
-    accounts: "Доступ / аккаунты",
-    efficiency: "Эффективность / токены",
-    memory: "Память / задачи",
-    learning: "Обучение",
-    knowledge: "Знания",
-    quality: "Качество",
-    automation: "Автоматизация",
-    observability: "Наблюдаемость",
-    undefined: "Прочее",
+    accounts: "Access / accounts",
+    efficiency: "Efficiency / tokens",
+    memory: "Memory / tasks",
+    learning: "Learning",
+    knowledge: "Knowledge",
+    quality: "Quality",
+    automation: "Automation",
+    observability: "Observability",
+    undefined: "Other",
   };
   return map[layer];
 }
@@ -63,11 +63,11 @@ export function layerSummary(data: WorkspaceData): Array<{ text: string }> {
   const lines: Array<{ text: string }> = [];
   const subs = data.subscriptions?.length ?? 0;
   const sess = data.sessions?.length ?? 0;
-  if (subs > 0 || sess > 0) lines.push({ text: `${layerLabel("accounts")}: Подписок ${subs} · Сессий ${sess}` });
+  if (subs > 0 || sess > 0) lines.push({ text: `${layerLabel("accounts")}: Subscriptions ${subs} · Sessions ${sess}` });
   const used = (data.tokenEvents ?? []).reduce((s, e: any) => s + (e.used ?? 0), 0);
   const saved = (data.tokenEvents ?? []).reduce((s, e: any) => s + (e.saved ?? 0), 0);
-  if (used > 0 || saved > 0) lines.push({ text: `${layerLabel("efficiency")}: Потрачено ${used} · Сэкономлено ${saved}` });
+  if (used > 0 || saved > 0) lines.push({ text: `${layerLabel("efficiency")}: Spent ${used} · Saved ${saved}` });
   const taskN = data.tasks?.length ?? 0;
-  if (taskN > 0) lines.push({ text: `${layerLabel("memory")}: Задач ${taskN}` });
+  if (taskN > 0) lines.push({ text: `${layerLabel("memory")}: Tasks ${taskN}` });
   return lines;
 }

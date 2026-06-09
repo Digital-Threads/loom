@@ -34,7 +34,7 @@ export async function loadPlugins(
     // apiVersion semver-совместимость до загрузки кода.
     if (!isApiCompatible(manifest.apiVersion, LOOM_CONTRACT_VERSION)) {
       errors.push(
-        `${name}: apiVersion ${manifest.apiVersion} несовместим с host ${LOOM_CONTRACT_VERSION}`,
+        `${name}: apiVersion ${manifest.apiVersion} is incompatible with host ${LOOM_CONTRACT_VERSION}`,
       );
       continue;
     }

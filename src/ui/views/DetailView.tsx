@@ -63,14 +63,14 @@ export function DetailView({
 
       {confirmBinding && (
         <Text color="yellow">
-          {confirmBinding.confirmPrompt ?? `Подтвердить действие "${confirmKey}"? (y/n)`}
+          {confirmBinding.confirmPrompt ?? `Confirm action "${confirmKey}"? (y/n)`}
         </Text>
       )}
 
       {spec.actions && spec.actions.length > 0 && (
         <Text dimColor>
           {"\n"}
-          {spec.actions.map((a) => `${a.key} — ${a.label ?? a.actionId}`).join(" · ")} · Esc — назад
+          {spec.actions.map((a) => `${a.key} — ${a.label ?? a.actionId}`).join(" · ")} · Esc — back
         </Text>
       )}
 

@@ -48,10 +48,10 @@ describe("UI-паритет: снапшоты ключевых видов", () =
   it("Обзор рендерится стабильно", () => {
     const { lastFrame } = render(<ViewRenderer spec={overviewView} data={fixture} />);
     expect(lastFrame()).toMatchInlineSnapshot(`
-      "Подписок: 2
-      Сессий: 1
-      Доступ / аккаунты: Подписок 2 · Сессий 1
-      Память / задачи: Задач 2"
+      "Subscriptions: 2
+      Sessions: 1
+      Access / accounts: Subscriptions 2 · Sessions 1
+      Memory / tasks: Tasks 2"
     `);
   });
 
@@ -63,33 +63,33 @@ describe("UI-паритет: снапшоты ключевых видов", () =
   it("Настройки рендерятся стабильно", () => {
     const { lastFrame } = render(<ViewRenderer spec={settingsView} data={fixture} />);
     expect(lastFrame()).toMatchInlineSnapshot(`
-      "[1mНастройки[22m
+      "[1mSettings[22m
 
       [1maimux[22m
-      [2mнет настраиваемых параметров (запись через действия)[22m
+      [2mno configurable options (write via actions)[22m
 
       [1mtoken-pilot[22m
-      [7m► Режим хуков: —[27m
-        Порог строк для deny: —
-        Напоминание при старте сессии: —
-        Порог малого файла (строк): —
-        Размер кэша (МБ): —
-        Проверять обновления при старте: —
+      [7m► Hook mode: —[27m
+        Line threshold for deny: —
+        Reminder at session start: —
+        Small file threshold (lines): —
+        Cache size (MB): —
+        Check for updates on startup: true
 
       [1mtask-journal[22m
-      [2mнет настраиваемых параметров (запись через действия)[22m
+      [2mno configurable options (write via actions)[22m
 
-      [2m↑/↓ выбор · Enter изменить/toggle · цифры+Enter число · Backspace · Escape отмена[22m"
+      [2m↑/↓ select · Enter edit/toggle · digits+Enter number · Backspace · Escape cancel[22m"
     `);
   });
 
   it("Задачи и токены рендерятся стабильно", () => {
     const { lastFrame } = render(<ViewRenderer spec={tasksTokensView} data={fixture} />);
     expect(lastFrame()).toMatchInlineSnapshot(`
-      "[2m↑/↓ — выбрать · Enter — открыть[22m
-      [1m                                                    Точность    Токены (оценка)[22m
-      [7m○ Сборка дашборда                                     ≈ оценка    0/0[27m
-      ✓ Релиз LP12                                          ≈ оценка    0/0"
+      "[2m↑/↓ select · Enter open[22m
+      [1m                                                    Accuracy    Tokens (est.)[22m
+      [7m○ Сборка дашборда                                     ≈ estimate  0/0[27m
+      ✓ Релиз LP12                                          ≈ estimate  0/0"
     `);
   });
 });
