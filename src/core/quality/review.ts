@@ -17,6 +17,41 @@ export interface ReviewPass {
   run(): Promise<Finding[]>;
 }
 
+/** Prompt for a review pass — the skill drives the lens; JSON findings out. */
+export function reviewPrompt(passKey: string, target: string): string {
+  return [
+    `Review the work using the "${passKey}" lens.`,
+    'Return ONLY a JSON array of findings: [{ "severity": "bug|warn|info", "message": "...", "file": "..."? }].',
+    "Empty array if nothing. No prose.",
+    "",
+    "TARGET:",
+    target,
+  ].join("\n");
+}
+
+/** Parse a review agent's JSON output into Findings (defensive; bad → []). */
+export function parseFindings(passKey: string, text: string): Finding[] {
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(m[0]);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: Finding[] = [];
+  for (const raw of arr) {
+    if (!raw || typeof raw !== "object") continue;
+    const f = raw as Record<string, unknown>;
+    const sev = f.severity;
+    if (sev !== "bug" && sev !== "warn" && sev !== "info") continue;
+    if (typeof f.message !== "string") continue;
+    out.push({ pass: passKey, severity: sev, message: f.message, file: typeof f.file === "string" ? f.file : undefined });
+  }
+  return out;
+}
+
 /** Dedupe by severity+file+message (the same issue found by two passes). */
 export function dedupeFindings(findings: Finding[]): Finding[] {
   const seen = new Set<string>();

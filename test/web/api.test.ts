@@ -154,6 +154,32 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  // ── quality (L6) ──
+  it("GET /api/flow-config/:stage returns the resolved passes (L6)", async () => {
+    const app2 = createApi(db);
+    expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["normal", "simplify"] });
+  });
+
+  it("POST /review/run aggregates findings + decides action (L6)", async () => {
+    const app2 = createApi(db, {
+      reviewPass: (key) => ({ key, run: async () => (key === "adversarial" ? [{ pass: key, severity: "bug" as const, message: "leak" }] : []) }),
+    });
+    const clean = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: "{}" })).json()) as { result: { passed: boolean }; action: string };
+    expect(clean.result.passed).toBe(true);
+    expect(clean.action).toBe("accept");
+    const bug = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: JSON.stringify({ passes: ["adversarial"], mode: "triage" }) })).json()) as { result: { passed: boolean }; action: string };
+    expect(bug.result.passed).toBe(false);
+    expect(bug.action).toBe("return");
+  });
+
+  it("POST /qa/run runs the injected checks (L6)", async () => {
+    const app2 = createApi(db, {
+      qaChecks: () => [{ key: "tests", async run() { return { ok: true }; } }, { key: "build", async run() { return { ok: false, output: "err" }; } }],
+    });
+    const r = (await (await app2.request("/api/tasks/t1/qa/run", { method: "POST", body: "{}" })).json()) as { result: { passed: boolean } };
+    expect(r.result.passed).toBe(false);
+  });
+
   // ── dialog stages (L12) ──
   it("analysis/brainstorm/spec endpoints drive the dialog stages (L12.5)", async () => {
     let n = 0;

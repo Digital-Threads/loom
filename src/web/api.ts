@@ -39,6 +39,10 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
+import { resolveFlow } from "../core/quality/flow-config.js";
+import { runReview, reviewAction } from "../core/quality/review-runner.js";
+import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
+import { reviewPrompt, parseFindings, type ReviewPass } from "../core/quality/review.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -58,6 +62,10 @@ export interface ApiDeps {
   recall?: (query: string) => RecallHit[];
   /** Agent for the dialog stages (default: aimux cheap one-shot). */
   stageAgent?: StageAgent;
+  /** Build a review pass for a key/target (default: aimux agent + parseFindings). */
+  reviewPass?: (key: string, target: string) => ReviewPass;
+  /** Build QA checks for the resolved keys (default: none until configured). */
+  qaChecks?: (keys: string[]) => QaCheck[];
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -78,6 +86,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, id);
     return t?.description || t?.title || id;
   };
+  const reviewPass =
+    deps.reviewPass ??
+    ((key: string, target: string): ReviewPass => ({
+      key,
+      run: async () => parseFindings(key, await stageAgent(reviewPrompt(key, target))),
+    }));
+  const qaChecks = deps.qaChecks ?? (() => [] as QaCheck[]);
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
@@ -268,6 +283,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const spec = acceptSpec(db, id);
     return spec ? c.json({ spec }) : c.json({ error: "no spec" }, 404);
+  });
+
+  // ─── quality: review / qa (L6) ────────────────────────────────────────────────
+  app.get("/api/flow-config/:stage", (c) => c.json({ passes: resolveFlow(c.req.param("stage")) }));
+  app.post("/api/tasks/:id/review/run", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { mode?: unknown; passes?: unknown };
+    const override = Array.isArray(body.passes) ? { passes: body.passes as string[] } : undefined;
+    const keys = resolveFlow("review", undefined, override);
+    const result = await runReview(keys, (key) => reviewPass(key, taskSpec(id)));
+    const mode = body.mode === "autofix" ? "autofix" : "triage";
+    return c.json({ result, action: reviewAction(result, mode) });
+  });
+  app.post("/api/tasks/:id/qa/run", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { checks?: unknown };
+    const override = Array.isArray(body.checks) ? { passes: body.checks as string[] } : undefined;
+    const keys = resolveFlow("qa", undefined, override);
+    return c.json({ result: await runQa(qaChecks(keys)) });
   });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
