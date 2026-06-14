@@ -35,6 +35,24 @@ export interface ProcLimits {
   timeoutMs?: number;
 }
 
+/** D3.4 — sandbox limits by project type (from the project registry). Web/build
+ *  jobs get longer budgets; unknown types get a safe default. */
+export function limitsForType(type?: string): ProcLimits {
+  switch (type) {
+    case "web":
+    case "app":
+      return { timeoutMs: 15 * 60_000 };
+    case "api":
+    case "service":
+      return { timeoutMs: 10 * 60_000 };
+    case "lib":
+    case "cli":
+      return { timeoutMs: 5 * 60_000 };
+    default:
+      return { timeoutMs: 10 * 60_000 };
+  }
+}
+
 /** Run an async unit under a wall-clock limit. Rejects with a timeout error if
  *  it overruns (the caller turns that into a failed step). No limit → passthrough. */
 export async function runWithLimits<T>(fn: () => Promise<T>, limits: ProcLimits = {}): Promise<T> {

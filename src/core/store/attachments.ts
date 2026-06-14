@@ -29,3 +29,12 @@ export function getAttachments(db: Database.Database, taskId: string): Attachmen
     .prepare("SELECT * FROM attachments WHERE task_id = ? ORDER BY created_at ASC, rowid ASC")
     .all(taskId) as AttachmentRow[];
 }
+
+/** D6.6 — render a task's attachments as prompt lines for the agent (files by
+ *  path, links by url). Empty string when none. */
+export function attachmentsPrompt(db: Database.Database, taskId: string): string {
+  const rows = getAttachments(db, taskId);
+  if (rows.length === 0) return "";
+  const lines = rows.map((a) => `- ${a.kind === "link" ? "link" : "file"}: ${a.name} (${a.path_or_url})`);
+  return `\n\nAttachments:\n${lines.join("\n")}`;
+}
