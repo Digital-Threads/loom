@@ -186,6 +186,14 @@ export function createClient(base = "", f: Fetcher = fetch) {
     prRun: (id: string) =>
       postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, {}, f).then((d) => d.pr),
     doneRun: (id: string) => postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/done/run`, {}, f),
+    // D5 — connectors (MCP)
+    mcpList: () => getJson<{ servers: McpServer[] }>(`${base}/api/connectors/mcp`, f).then((d) => d.servers),
+    mcpAdd: (s: { id: string; command: string; args?: string[] }) =>
+      postJson<{ server: McpServer }>(`${base}/api/connectors/mcp`, s, f).then((d) => d.server),
+    mcpToggle: (id: string, enabled: boolean) =>
+      postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/toggle`, { enabled }, f),
+    mcpRemove: (id: string) => postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/remove`, {}, f),
+    mcpTest: (id: string) => postJson<{ ok: boolean; error?: string }>(`${base}/api/connectors/mcp/${id}/test`, {}, f),
     // D6 — settings / attachments
     settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
     saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),
@@ -197,6 +205,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
 }
 
 export interface Attachment { id: string; kind: string; name: string; path_or_url: string }
+export interface McpServer { id: string; command: string; args?: string[]; enabled: boolean }
 
 export interface LayerInfo {
   id: string;

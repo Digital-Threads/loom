@@ -183,6 +183,17 @@ describe("web api", () => {
     expect(closed).toBe(true);
   });
 
+  // ── connectors MCP (D5) ──
+  it("MCP add/list/toggle/test via /api/connectors/mcp (D5)", async () => {
+    const app2 = createApi(db, { mcpProbe: () => ({ code: 0 }) });
+    expect((await app2.request("/api/connectors/mcp", { method: "POST", body: JSON.stringify({ id: "fs", command: "mcp-fs" }) })).status).toBe(201);
+    const list = (await (await app2.request("/api/connectors/mcp")).json()) as { servers: { id: string }[] };
+    expect(list.servers.map((s) => s.id)).toContain("fs");
+    expect((await app2.request("/api/connectors/mcp/fs/toggle", { method: "POST", body: JSON.stringify({ enabled: false }) })).status).toBe(200);
+    expect(await (await app2.request("/api/connectors/mcp/fs/test", { method: "POST" })).json()).toMatchObject({ ok: true });
+    await app2.request("/api/connectors/mcp/fs/remove", { method: "POST" });
+  });
+
   // ── settings / attachments (D6) ──
   it("settings round-trip via /api/settings (D6)", async () => {
     const app2 = createApi(db);
