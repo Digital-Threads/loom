@@ -19,8 +19,9 @@
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build:host": "tsc -p tsconfig.json",
+    "build:web": "vite build web",
     "copy:manifests": "node scripts/copy-manifests.mjs",
-    "build": "tsc -p tsconfig.json && bun run copy:manifests",
+    "build": "tsc -p tsconfig.json && bun run build:web && bun run copy:manifests",
     "start": "bun dist/cli.js",
     "test": "vitest run",
     "prepublishOnly": "bun run build"
