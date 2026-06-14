@@ -485,6 +485,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ runId });
   });
 
+  // Inject stdin into a live run (loom-isd.13 — intervene in the session).
+  app.post("/api/runs/:runId/stdin", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { data?: unknown };
+    const data = typeof b.data === "string" ? b.data : "";
+    const ok = rm.sendInput(c.req.param("runId"), data);
+    return ok ? c.json({ ok: true }) : c.json({ error: "run not accepting input" }, 404);
+  });
+
   // Run snapshot (fallback polling): status + events + output.
   app.get("/api/runs/:runId", (c) => {
     const rec = rm.get(c.req.param("runId"));

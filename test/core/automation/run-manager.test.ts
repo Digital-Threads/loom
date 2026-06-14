@@ -38,6 +38,32 @@ describe("run-manager (L4.3)", () => {
     await Promise.all([rm.wait(parent), rm.wait(child1), rm.wait(child2)]);
     expect(rm.childrenOf(parent).map((r) => r.runId).sort()).toEqual([child1, child2].sort());
   });
+
+  it("delivers injected stdin to the registered onInput handler (loom-isd.13)", async () => {
+    const rm = createRunManager();
+    const received: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const runId = rm.start({ projectId: "p1", toBus: false }, async (ctx) => {
+      ctx.onInput((data) => received.push(data));
+      await gate; // keep the run live so input can be injected
+      return received.length;
+    });
+    expect(rm.sendInput(runId, "y\n")).toBe(true);
+    expect(rm.sendInput(runId, "approve\n")).toBe(true);
+    release();
+    const rec = await rm.wait(runId);
+    expect(received).toEqual(["y\n", "approve\n"]);
+    expect(rec.result).toBe(2);
+  });
+
+  it("sendInput returns false for an unknown run or one without a handler", async () => {
+    const rm = createRunManager();
+    expect(rm.sendInput("run_deadbeefdeadbeef", "x")).toBe(false);
+    const runId = rm.start({ projectId: "p1", toBus: false }, async () => 0);
+    await rm.wait(runId); // settled → handler cleaned up
+    expect(rm.sendInput(runId, "x")).toBe(false);
+  });
 });
 
 describe("retryingExecutor (L4.8)", () => {

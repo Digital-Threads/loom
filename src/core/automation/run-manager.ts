@@ -35,6 +35,9 @@ export interface StartOptions {
 export interface RunContext {
   emit: LoomEventSink;
   appendOutput: (chunk: string) => void;
+  /** loom-isd.13 — register a handler for input injected into the live session
+   *  (e.g. write to the agent process's stdin). The host calls sendInput(). */
+  onInput: (handler: (data: string) => void) => void;
 }
 
 export interface RunManager {
@@ -44,6 +47,9 @@ export interface RunManager {
   childrenOf(parentRunId: string): RunRecord[];
   /** Resolves when the run settles — for tests / synchronous callers. */
   wait(runId: string): Promise<RunRecord>;
+  /** Inject stdin into a live run (loom-isd.13). Returns false if the run is
+   *  unknown or never registered an input handler. */
+  sendInput(runId: string, data: string): boolean;
 }
 
 function newRunId(): string {
@@ -53,6 +59,7 @@ function newRunId(): string {
 export function createRunManager(): RunManager {
   const runs = new Map<string, RunRecord>();
   const settled = new Map<string, Promise<RunRecord>>();
+  const inputHandlers = new Map<string, (data: string) => void>();
 
   return {
     start(opts, task) {
@@ -74,6 +81,7 @@ export function createRunManager(): RunManager {
           bus?.(e);
         },
         appendOutput: (chunk) => rec.output.push(chunk),
+        onInput: (handler) => inputHandlers.set(runId, handler),
       };
 
       settled.set(
@@ -88,7 +96,8 @@ export function createRunManager(): RunManager {
             rec.status = "failed";
             rec.error = e instanceof Error ? e.message : String(e);
             return rec;
-          }),
+          })
+          .finally(() => inputHandlers.delete(runId)),
       );
       return runId;
     },
@@ -96,6 +105,12 @@ export function createRunManager(): RunManager {
     list: () => [...runs.values()],
     childrenOf: (parentRunId) => [...runs.values()].filter((r) => r.parentRunId === parentRunId),
     wait: (runId) => settled.get(runId) ?? Promise.reject(new Error(`unknown run ${runId}`)),
+    sendInput: (runId, data) => {
+      const handler = inputHandlers.get(runId);
+      if (!handler) return false;
+      handler(data);
+      return true;
+    },
   };
 }
 
