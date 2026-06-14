@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, ProjectEntry } from "../api";
+import { DirectoryPicker } from "./DirectoryPicker";
 
 // D3.5 — project registry: list projects, add by path, switch the active one.
 export function Projects({ client, onSwitched }: { client: LoomClient; onSwitched?: () => void }) {
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [root, setRoot] = useState("");
+  const [picking, setPicking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,8 +35,12 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     <div className="panel">
       <div className="row" style={{ gap: 8 }}>
         <input className="inp" placeholder="/path/to/repo" value={root} onChange={(e) => setRoot(e.target.value)} />
+        <button className="btn" onClick={() => setPicking(true)}>Browse…</button>
         <button className="btn acc" disabled={busy} onClick={add}>Add project</button>
       </div>
+      {picking ? (
+        <DirectoryPicker client={client} onCancel={() => setPicking(false)} onPick={(p) => { setRoot(p); setPicking(false); }} />
+      ) : null}
       {projects.length === 0 ? (
         <div className="empty">No projects yet — add a repo path above.</div>
       ) : (

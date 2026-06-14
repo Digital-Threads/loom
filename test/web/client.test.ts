@@ -98,6 +98,29 @@ describe("web api client", () => {
     expect(await c.startRun("t1", "rd")).toBe("run_x");
     expect(createClient("/base").runStreamUrl("run_x")).toBe("/base/api/runs/run_x/stream");
   });
+
+  it("fsList() lists a directory (with and without a path query)", async () => {
+    const listing = { path: "/home", parent: "/", entries: [{ name: "repo", path: "/home/repo", isGitRepo: true }] };
+    const c = createClient("", fakeFetch({ "/api/fs/list": listing, "/api/fs/list?path=%2Fhome": listing }));
+    expect((await c.fsList()).entries[0].isGitRepo).toBe(true);
+    expect((await c.fsList("/home")).path).toBe("/home");
+  });
+
+  it("sendStdin() posts data to the run; prRun() passes the connector flag", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    const fetchSpy = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = (typeof input === "string" ? input : input.toString()).replace(/^https?:\/\/[^/]+/, "");
+      calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const payload = path.endsWith("/stdin") ? { ok: true } : { pr: { description: "d", created: true, url: "u" } };
+      return new Response(JSON.stringify(payload), { status: 200 });
+    }) as typeof fetch;
+    const c = createClient("", fetchSpy);
+    await c.sendStdin("run_1", "y\n");
+    const pr = await c.prRun("t1", { connector: true });
+    expect(calls[0]).toEqual({ path: "/api/runs/run_1/stdin", body: { data: "y\n" } });
+    expect(calls[1]).toEqual({ path: "/api/tasks/t1/pr/run", body: { connector: true } });
+    expect(pr.created).toBe(true);
+  });
 });
 
 describe("web ui helpers", () => {

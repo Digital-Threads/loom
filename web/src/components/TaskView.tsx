@@ -19,6 +19,7 @@ export function TaskView({
   const [active, setActive] = useState<string>("analysis");
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
+  const [stdin, setStdin] = useState("");
 
   async function runStage() {
     setLive([]);
@@ -51,7 +52,7 @@ export function TaskView({
   return (
     <div className="task">
       <div className="rail">
-        <div className="gh">Этапы · {taskId}</div>
+        <div className="gh">Stages · {taskId}</div>
         <div className="steps">
           {detail.stages.map((s) => (
             <button
@@ -112,6 +113,22 @@ export function TaskView({
                   <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>
                     {live.length ? live.join("\n") : "starting…"}
                   </pre>
+                  <div className="fld-row" style={{ gap: 8, marginTop: 8 }}>
+                    <input
+                      value={stdin}
+                      onChange={(e) => setStdin(e.target.value)}
+                      placeholder="Intervene — type input for the live agent…"
+                      style={{ flex: 1 }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    />
+                    <button
+                      className="btn"
+                      disabled={!stdin}
+                      onClick={async () => { await client.sendStdin(runId, stdin + "\n"); setStdin(""); }}
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
               ) : null}
               {stageSteps.length ? (

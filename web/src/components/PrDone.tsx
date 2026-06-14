@@ -7,11 +7,12 @@ export function PrDone({ client, taskId, stage, onChanged }: { client: LoomClien
   const [pr, setPr] = useState<{ description: string; created: boolean; url?: string } | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [connector, setConnector] = useState(false);
 
   async function run() {
     setBusy(true);
     try {
-      if (stage === "pr") setPr(await client.prRun(taskId));
+      if (stage === "pr") setPr(await client.prRun(taskId, { connector }));
       else { await client.doneRun(taskId); setDone(true); onChanged?.(); }
     } finally {
       setBusy(false);
@@ -28,7 +29,11 @@ export function PrDone({ client, taskId, stage, onChanged }: { client: LoomClien
 
   return (
     <div>
-      <button className="btn acc" disabled={busy} onClick={run}>▶ Generate PR</button>
+      <label className="fld-check" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+        <input type="checkbox" checked={connector} onChange={(e) => setConnector(e.target.checked)} />
+        <span>Push branch & open PR on GitHub (gh)</span>
+      </label>
+      <button className="btn acc" disabled={busy} onClick={run}>{connector ? "▶ Create PR" : "▶ Generate description"}</button>
       {pr ? (
         <>
           <div className="kv" style={{ marginTop: 10 }}>
