@@ -41,13 +41,15 @@ function emptyProc(): ProcLike {
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
-  const spawnSession: SpawnSession = ({ sessionId, resume, cwd }) => {
+  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv }) => {
     const cfg = load();
     const profile = deps.profile ?? listSubscriptions()[0]?.name;
     if (!cfg || !profile) return emptyProc();
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
     const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...sessionArgs] });
-    const child = spawn(cli, args, { cwd, env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
+    // attribute their telemetry to this task — exact cost without a separate counter.
+    const child = spawn(cli, args, { cwd, env: { ...process.env, ...env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });
     return child as unknown as ProcLike;
   };
   return createLiveSessionLauncher({ spawn: spawnSession });
