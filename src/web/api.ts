@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, setStageGate } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -24,7 +24,9 @@ import {
 import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { startSpecRun } from "../core/automation/start-run.js";
-import { buildSpineIds } from "../core/spine/ids.js";
+import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
+import { recordRunCost } from "../core/observability/cost-recorder.js";
+import { tokenEventsByTime } from "../core/plugins/token-pilot/adapter.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
@@ -130,13 +132,30 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (t?.repo && isGitRepo(t.repo)) return ensureWorktree(t.repo, id).path;
     return t?.repo || undefined;
   };
+  // Refresh per-task cost after a stage: token-pilot's own used/saved stats
+  // (spine-tagged via LOOM_TASK_ID) + the live session's exact $ spent. No
+  // separate counter — we read what token-pilot already tracks.
+  const recordSessionCost = (id: string, repoRoot: string) => {
+    try {
+      const sid = getTaskSession(db, id).sessionId;
+      const spent = sid ? (sessionLauncher as { costOf?: (s: string) => number }).costOf?.(sid) : undefined;
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent });
+    } catch {
+      /* cost is best-effort */
+    }
+  };
   // Send a stage instruction into the task's ONE session (tests inject a one-shot
-  // deps.stageAgent). All stages share the session + the task worktree cwd.
-  const sessionSend = (id: string, stage: string, prompt: string): Promise<string> => {
+  // deps.stageAgent). All stages share the session + the task worktree cwd, and
+  // the spine env so plugin telemetry attributes to this task.
+  const sessionSend = async (id: string, stage: string, prompt: string): Promise<string> => {
     if (deps.stageAgent) return deps.stageAgent(prompt);
-    return createTaskSession(db, id, { launcher: sessionLauncher })
-      .send(prompt, { stage, cwd: taskCwd(id) })
-      .then((r) => r.text);
+    const t = getTask(db, id);
+    const repoRoot = t?.repo || process.cwd();
+    const ids = buildSpineIds({ repoRoot, taskId: id });
+    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher })
+      .send(prompt, { stage, cwd: taskCwd(id), env: spineEnv(ids) });
+    recordSessionCost(id, repoRoot);
+    return text;
   };
   const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
   const taskSpec = (id: string) => {

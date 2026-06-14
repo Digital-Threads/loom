@@ -488,6 +488,23 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  it("injects spine env (LOOM_TASK_ID) into the session and records cost", async () => {
+    createTask(database, { id: "cst", title: "Cost" });
+    let seenEnv: Record<string, string> | undefined;
+    const sessionLauncher = {
+      run: async (_p: string, opts: { env?: Record<string, string> }) => {
+        seenEnv = opts.env;
+        return { text: '{"class":"feature","route":["analysis"]}' };
+      },
+      costOf: () => 0.05,
+    };
+    const a = createApi(database, { sessionLauncher });
+    await a.request("/api/tasks/cst/analysis/run", { method: "POST", body: "{}" });
+    expect(seenEnv?.LOOM_TASK_ID).toBe("cst"); // telemetry attributes to this task
+    const detail = (await (await a.request("/api/tasks/cst")).json()) as { costs: { source: string; metric: string }[] };
+    expect(detail.costs.some((c) => c.source === "token-pilot")).toBe(true); // used/saved pulled from token-pilot stats
+  });
+
   it("dialog stages run through ONE persistent task session (create → resume)", async () => {
     createTask(database, { id: "sx", title: "Sess" });
     const calls: Array<{ resume: boolean; sessionId: string }> = [];
