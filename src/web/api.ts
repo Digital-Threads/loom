@@ -42,6 +42,8 @@ import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions } from "../core/pipeline/pr-done.js";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
+import { getAllSettings, setSetting } from "../core/store/settings.js";
+import { addAttachment, getAttachments } from "../core/store/attachments.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
@@ -350,6 +352,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const spec = acceptSpec(db, id);
     return spec ? c.json({ spec }) : c.json({ error: "no spec" }, 404);
+  });
+
+  // ─── settings / attachments (D6) ──────────────────────────────────────────────
+  app.get("/api/settings", (c) => c.json(getAllSettings(db)));
+  app.post("/api/settings", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { key?: unknown; value?: unknown };
+    if (typeof body.key !== "string") return c.json({ error: "key required" }, 400);
+    setSetting(db, body.key, body.value);
+    return c.json({ ok: true });
+  });
+  app.get("/api/tasks/:id/attachments", (c) => c.json({ attachments: getAttachments(db, c.req.param("id")) }));
+  app.post("/api/tasks/:id/attachments", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const b = (await c.req.json().catch(() => ({}))) as { kind?: unknown; name?: unknown; pathOrUrl?: unknown };
+    const kind = b.kind === "link" ? "link" : "file";
+    const name = typeof b.name === "string" ? b.name : "";
+    const pathOrUrl = typeof b.pathOrUrl === "string" ? b.pathOrUrl : "";
+    if (!name || !pathOrUrl) return c.json({ error: "name and pathOrUrl required" }, 400);
+    return c.json({ attachment: addAttachment(db, { id: `att-${randomUUID().slice(0, 8)}`, taskId: id, kind, name, pathOrUrl }) }, 201);
   });
 
   // ─── extensibility: layers / skills (L11) ─────────────────────────────────────

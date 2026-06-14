@@ -186,8 +186,17 @@ export function createClient(base = "", f: Fetcher = fetch) {
     prRun: (id: string) =>
       postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, {}, f).then((d) => d.pr),
     doneRun: (id: string) => postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/done/run`, {}, f),
+    // D6 — settings / attachments
+    settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
+    saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),
+    attachments: (id: string) =>
+      getJson<{ attachments: Attachment[] }>(`${base}/api/tasks/${id}/attachments`, f).then((d) => d.attachments),
+    addAttachment: (id: string, a: { kind: "file" | "link"; name: string; pathOrUrl: string }) =>
+      postJson<{ attachment: Attachment }>(`${base}/api/tasks/${id}/attachments`, a, f).then((d) => d.attachment),
   };
 }
+
+export interface Attachment { id: string; kind: string; name: string; path_or_url: string }
 
 export interface LayerInfo {
   id: string;
