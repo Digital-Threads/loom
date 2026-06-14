@@ -14,6 +14,19 @@ export function TaskView({
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<string>("analysis");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [live, setLive] = useState<string[]>([]);
+
+  async function runStage() {
+    setLive([]);
+    setRunId(null);
+    const id = await client.startRun(taskId, active);
+    setRunId(id);
+    const es = new EventSource(client.runStreamUrl(id));
+    es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
+    es.addEventListener("status", () => { es.close(); onChanged?.(); });
+    es.addEventListener("error", () => es.close());
+  }
 
   useEffect(() => {
     client
@@ -80,7 +93,18 @@ export function TaskView({
         <div className="pb">
           {active === "rd" || active === "impl" ? (
             <>
-              <div className="kv"><b>Steps (R&D / DAG)</b></div>
+              <div className="kv">
+                <b>Steps (R&D / DAG)</b>
+                <button className="btn acc" style={{ marginLeft: "auto" }} onClick={runStage}>▶ Run</button>
+              </div>
+              {runId ? (
+                <div className="live">
+                  <div className="grp">Live · {runId}</div>
+                  <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>
+                    {live.length ? live.join("\n") : "starting…"}
+                  </pre>
+                </div>
+              ) : null}
               {stageSteps.length ? (
                 stageSteps.map((step) => (
                   <div className="kv" key={step.id}>

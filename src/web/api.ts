@@ -20,6 +20,10 @@ import {
   setActiveProject,
   type ProjectEntry,
 } from "../core/workspace/projects.js";
+import { streamSSE } from "hono/streaming";
+import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
+import { startSpecRun } from "../core/automation/start-run.js";
+import { buildSpineIds } from "../core/spine/ids.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -30,6 +34,9 @@ export interface ApiDeps {
   addProject?: (root: string) => ProjectEntry;
   setActiveProject?: (id: string) => boolean;
   activeProject?: () => ProjectEntry | null;
+  runManager?: RunManager;
+  /** Start a run for a task stage; returns the runId. Override for tests. */
+  startRun?: (taskId: string, stageKey: string) => string;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -42,6 +49,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectAdd = deps.addProject ?? ((root: string) => addProject(root));
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
+  const rm = deps.runManager ?? createRunManager();
+  const startRun =
+    deps.startRun ??
+    ((taskId: string) => {
+      const task = getTask(db, taskId);
+      const spec = task?.description || task?.title || taskId;
+      const ids = buildSpineIds({ repoRoot: task?.repo || process.cwd(), taskId });
+      return startSpecRun(rm, db, taskId, spec, ids);
+    });
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
@@ -157,6 +173,50 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
   app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
+
+  // ─── runs (L4.4) ────────────────────────────────────────────────────────────
+
+  // Start a stage run (async). Returns { runId } immediately; progress streams
+  // via /api/runs/:runId/stream.
+  app.post("/api/tasks/:id/stages/:key/run", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const runId = startRun(id, c.req.param("key"));
+    return c.json({ runId });
+  });
+
+  // Run snapshot (fallback polling): status + events + output.
+  app.get("/api/runs/:runId", (c) => {
+    const rec = rm.get(c.req.param("runId"));
+    if (!rec) return c.json({ error: "not found" }, 404);
+    return c.json({ runId: rec.runId, status: rec.status, events: rec.events, output: rec.output, error: rec.error });
+  });
+
+  // Live stream: emit events as they accrue, then a final status, then close.
+  app.get("/api/runs/:runId/stream", (c) => {
+    const runId = c.req.param("runId");
+    return streamSSE(c, async (stream) => {
+      let cursor = 0;
+      // Stream until the run settles (or the client disconnects).
+      for (;;) {
+        const rec = rm.get(runId);
+        if (!rec) {
+          await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "unknown run" }) });
+          return;
+        }
+        while (cursor < rec.events.length) {
+          await stream.writeSSE({ event: "event", data: JSON.stringify(rec.events[cursor]) });
+          cursor += 1;
+        }
+        if (rec.status !== "running") {
+          await stream.writeSSE({ event: "status", data: JSON.stringify({ status: rec.status, error: rec.error }) });
+          return;
+        }
+        if (stream.aborted) return;
+        await stream.sleep(100);
+      }
+    });
+  });
 
   return app;
 }

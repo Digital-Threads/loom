@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { type LoomClient, type BoardColumn, STAGE_LABELS } from "../api";
 import { statusLabel, statusClass } from "../ui";
 
@@ -13,10 +13,22 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
   if (err) return <div className="empty">Can’t reach the core: {err}</div>;
   if (!cols) return <div className="empty">Loading…</div>;
 
+  // DnD: drag a card onto a column → trigger that stage's run for the task.
+  function onDrop(stageKey: string, e: DragEvent) {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/plain");
+    if (taskId) client.startRun(taskId, stageKey).catch(() => {});
+  }
+
   return (
     <div className="board">
       {cols.map((col) => (
-        <div className="col" key={col.stageKey}>
+        <div
+          className="col"
+          key={col.stageKey}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => onDrop(col.stageKey, e)}
+        >
           <h2>
             {STAGE_LABELS[col.stageKey] ?? col.stageKey}
             <span className="n">{col.cards.length}</span>
@@ -24,7 +36,13 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
           <div className="stack">
             {col.cards.length ? (
               col.cards.map((card) => (
-                <div className={`card ${statusClass(card.status)}`} key={card.id} onClick={() => onOpen(card.id)}>
+                <div
+                  className={`card ${statusClass(card.status)}`}
+                  key={card.id}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
+                  onClick={() => onOpen(card.id)}
+                >
                   <div className="t">{card.title}</div>
                   <div className="meta">
                     <span className={`chip ${statusClass(card.status)}`}>

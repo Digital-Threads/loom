@@ -4,7 +4,7 @@
 
 import type Database from "better-sqlite3";
 import { completeStage } from "../pipeline/engine.js";
-import { runDag, type StepExecutor, type DagResult } from "./exec-loop.js";
+import { runDag, type StepExecutor, type DagResult, type LoomEventSink } from "./exec-loop.js";
 import type { SpineIds } from "../spine/ids.js";
 
 export interface StageRunResult {
@@ -24,8 +24,9 @@ export async function executeImplStage(
   taskId: string,
   ids: SpineIds,
   cwd?: string,
+  emit?: LoomEventSink,
 ): Promise<StageRunResult> {
-  const dag = await runDag(db, executor, taskId, ids, cwd);
+  const dag = await runDag(db, executor, taskId, ids, cwd, emit);
   if (dag.ok) {
     completeStage(db, taskId, "impl");
     return { dag, advanced: true };
