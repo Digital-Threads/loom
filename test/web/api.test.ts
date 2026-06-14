@@ -488,6 +488,24 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  it("dialog stages run through ONE persistent task session (create → resume)", async () => {
+    createTask(database, { id: "sx", title: "Sess" });
+    const calls: Array<{ resume: boolean; sessionId: string }> = [];
+    const sessionLauncher = {
+      run: async (_p: string, opts: { resume: boolean; sessionId: string }) => {
+        calls.push({ resume: opts.resume, sessionId: opts.sessionId });
+        return { text: '{"class":"feature","route":["analysis","spec"]}' };
+      },
+    };
+    const a = createApi(database, { sessionLauncher });
+    await a.request("/api/tasks/sx/analysis/run", { method: "POST", body: "{}" });
+    await a.request("/api/tasks/sx/spec/draft", { method: "POST", body: "{}" });
+    expect(calls).toHaveLength(2);
+    expect(calls[0].resume).toBe(false); // first stage creates the session
+    expect(calls[1].resume).toBe(true); //  next stage resumes it
+    expect(calls[0].sessionId).toBe(calls[1].sessionId); // same session across stages
+  });
+
   it("GET /favicon.ico returns 204 (no console 404)", async () => {
     const a = createApi(database);
     expect((await a.request("/favicon.ico")).status).toBe(204);

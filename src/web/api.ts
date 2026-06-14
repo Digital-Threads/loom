@@ -39,6 +39,8 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
+import { createTaskSession, type SessionLauncher } from "../core/automation/task-session.js";
+import { createAimuxSessionLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
@@ -82,6 +84,9 @@ export interface ApiDeps {
   search?: (query: string) => RecallHit[];
   /** Agent for the dialog stages (default: aimux cheap one-shot). */
   stageAgent?: StageAgent;
+  /** Launcher for the per-task Claude session (default: aimux session launcher).
+   *  When deps.stageAgent is set it wins (one-shot, for tests). */
+  sessionLauncher?: SessionLauncher;
   /** Build a review pass for a key/target (default: aimux agent + parseFindings). */
   reviewPass?: (key: string, target: string) => ReviewPass;
   /** Build QA checks for the resolved keys (default: none until configured). */
@@ -115,6 +120,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const search =
     deps.search ?? ((query: string) => askSearch(resolveProjectRoot(process.cwd()), query));
   const stageAgent = deps.stageAgent ?? createAimuxStageAgent();
+  // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
+  // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
+  // analysis → brainstorm → spec share accumulating context.
+  const sessionLauncher = deps.sessionLauncher ?? createAimuxSessionLauncher();
+  const stageAgentFor = (taskId: string, stage: string): StageAgent => {
+    if (deps.stageAgent) return deps.stageAgent;
+    const session = createTaskSession(db, taskId, { launcher: sessionLauncher });
+    return (prompt: string) => session.send(prompt, { stage }).then((r) => r.text);
+  };
   const taskSpec = (id: string) => {
     const t = getTask(db, id);
     return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
@@ -171,9 +185,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   }
   const doneProjectId = () => projectActive()?.projectId ?? "default";
   const defaultRunners: RunnerRegistry = {
-    analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgent); return { ok: true }; },
+    analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
     brainstorm: async () => ({ ok: true }), // human-driven via StageDialog
-    spec: async (_d, id) => { await draftSpec(db, id, stageAgent); acceptSpec(db, id); return { ok: true }; },
+    spec: async (_d, id) => { await draftSpec(db, id, stageAgentFor(id, "spec")); acceptSpec(db, id); return { ok: true }; },
     rd: async (_d, id) => runImplStage(id),
     impl: async (_d, id) => runImplStage(id),
     review: async (_d, id) => {
@@ -420,7 +434,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/analysis/run", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json(await runAnalysis(db, id, taskSpec(id), stageAgent));
+    return c.json(await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")));
   });
   app.get("/api/tasks/:id/brainstorm/messages", (c) =>
     c.json({ messages: getChatMessages(db, c.req.param("id"), "brainstorm") }),
@@ -430,12 +444,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { message?: unknown };
     const message = typeof body.message === "string" ? body.message : undefined;
-    return c.json({ question: await brainstormTurn(db, id, stageAgent, message) });
+    return c.json({ question: await brainstormTurn(db, id, stageAgentFor(id, "brainstorm"), message) });
   });
   app.post("/api/tasks/:id/brainstorm/done", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json({ summary: await summarizeBrainstorm(db, id, stageAgent) });
+    return c.json({ summary: await summarizeBrainstorm(db, id, stageAgentFor(id, "brainstorm")) });
   });
   app.get("/api/tasks/:id/spec", (c) =>
     c.json({ spec: latestArtifact(db, c.req.param("id"), "spec-md") ?? null }),
@@ -443,14 +457,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/spec/draft", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json({ spec: await draftSpec(db, id, stageAgent) });
+    return c.json({ spec: await draftSpec(db, id, stageAgentFor(id, "spec")) });
   });
   app.post("/api/tasks/:id/spec/return", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { comment?: unknown };
     const comment = typeof body.comment === "string" ? body.comment : "";
-    return c.json({ spec: await reviseSpec(db, id, comment, stageAgent) });
+    return c.json({ spec: await reviseSpec(db, id, comment, stageAgentFor(id, "spec")) });
   });
   app.post("/api/tasks/:id/spec/accept", (c) => {
     const id = c.req.param("id");
