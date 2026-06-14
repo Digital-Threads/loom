@@ -6,6 +6,7 @@ import { openStore, createTask } from "../../src/core/store/db.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { startTask } from "../../src/core/pipeline/engine.js";
 import { createApi } from "../../src/web/api.js";
+import { createRunManager } from "../../src/core/automation/run-manager.js";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 
@@ -119,6 +120,43 @@ describe("web api", () => {
     await app2.request("/api/workspace?project=p1");
     await app2.request("/api/workspace");
     expect(roots).toEqual(["/repoA", undefined]);
+  });
+
+  // ── runs (L4.4) ──
+  it("POST /api/tasks/:id/stages/:key/run starts a run (L4.4)", async () => {
+    const calls: [string, string][] = [];
+    const app2 = createApi(db, { startRun: (id, key) => { calls.push([id, key]); return "run_abc"; } });
+    const res = await app2.request("/api/tasks/t1/stages/rd/run", { method: "POST" });
+    expect(await res.json()).toEqual({ runId: "run_abc" });
+    expect(calls).toEqual([["t1", "rd"]]);
+    const nf = await app2.request("/api/tasks/zzz/stages/rd/run", { method: "POST" });
+    expect(nf.status).toBe(404);
+  });
+
+  it("GET /api/runs/:runId returns a snapshot (L4.4)", async () => {
+    const rm = createRunManager();
+    const runId = rm.start({ projectId: "p1", toBus: false }, async (ctx) => { ctx.appendOutput("hi"); return 1; });
+    await rm.wait(runId);
+    const app2 = createApi(db, { runManager: rm });
+    const body = (await (await app2.request(`/api/runs/${runId}`)).json()) as { status: string; output: string[] };
+    expect(body.status).toBe("done");
+    expect(body.output).toEqual(["hi"]);
+    expect((await app2.request("/api/runs/nope")).status).toBe(404);
+  });
+
+  it("GET /api/runs/:runId/stream streams events then a final status (L4.4)", async () => {
+    const rm = createRunManager();
+    const runId = rm.start({ projectId: "p1", toBus: false }, async (ctx) => {
+      ctx.emit({ schema: "loom.event.v1", ts: 1, source: "loom", projectId: "p1", type: "run.started" });
+      return 1;
+    });
+    await rm.wait(runId);
+    const app2 = createApi(db, { runManager: rm });
+    const res = await app2.request(`/api/runs/${runId}/stream`);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("run.started");
+    expect(text).toContain('"status":"done"');
   });
 
   it("GET /api/board returns 9 columns with the task in analysis", async () => {
