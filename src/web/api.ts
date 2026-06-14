@@ -44,6 +44,7 @@ import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } fr
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments } from "../core/store/attachments.js";
+import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
@@ -77,6 +78,8 @@ export interface ApiDeps {
   closeTask?: (taskId: string) => void;
   /** Stage runner registry for the conductor (default: wired to L4/L6/L12/L14). */
   runners?: RunnerRegistry;
+  /** Probe for MCP connector tests (default: none → test reports unconfigured). */
+  mcpProbe?: McpProbe;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -353,6 +356,22 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const spec = acceptSpec(db, id);
     return spec ? c.json({ spec }) : c.json({ error: "no spec" }, 404);
   });
+
+  // ─── connectors: MCP (D5) ─────────────────────────────────────────────────────
+  app.get("/api/connectors/mcp", (c) => c.json({ servers: listMcp() }));
+  app.post("/api/connectors/mcp", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { id?: unknown; command?: unknown; args?: unknown };
+    if (typeof b.id !== "string" || typeof b.command !== "string") return c.json({ error: "id and command required" }, 400);
+    const args = Array.isArray(b.args) ? (b.args as string[]) : undefined;
+    return c.json({ server: addMcp({ id: b.id, command: b.command, args }) }, 201);
+  });
+  app.post("/api/connectors/mcp/:id/toggle", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { enabled?: unknown };
+    const ok = toggleMcp(c.req.param("id"), b.enabled !== false);
+    return ok ? c.json({ ok: true }) : c.json({ error: "unknown server" }, 404);
+  });
+  app.post("/api/connectors/mcp/:id/remove", (c) => { removeMcp(c.req.param("id")); return c.json({ ok: true }); });
+  app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe })));
 
   // ─── settings / attachments (D6) ──────────────────────────────────────────────
   app.get("/api/settings", (c) => c.json(getAllSettings(db)));

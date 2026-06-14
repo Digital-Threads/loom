@@ -13,6 +13,7 @@ import { Knowledge } from "./components/Knowledge";
 import { Layers } from "./components/Layers";
 import { Skills } from "./components/Skills";
 import { Settings } from "./components/Settings";
+import { Connectors } from "./components/Connectors";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -96,6 +97,8 @@ export function App() {
             <Skills client={client} />
           ) : view === "settings" ? (
             <Settings client={client} />
+          ) : view === "connectors" ? (
+            <Connectors client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}
