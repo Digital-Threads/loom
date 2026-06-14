@@ -4,11 +4,24 @@
 // its failure rate, so the router's "cheapest" pick favors reliable + cheap.
 
 import type { RouteCandidate } from "../automation/router.js";
+import type { LoomEvent } from "../spine/event.js";
 
 export interface RunOutcome {
   profile: string;
   model?: string;
   success: boolean;
+}
+
+/** Derive run outcomes from the event stream (L8.1): each run.completed with a
+ *  profile is a data point — success when nothing failed. Feeds computePriors. */
+export function outcomesFromEvents(events: LoomEvent[]): RunOutcome[] {
+  const out: RunOutcome[] = [];
+  for (const e of events) {
+    if (e.type !== "run.completed" || !e.profileId) continue;
+    const success = (e.metrics?.failed ?? 0) === 0 && e.severity !== "error";
+    out.push({ profile: e.profileId, success });
+  }
+  return out;
 }
 
 export interface Prior {
