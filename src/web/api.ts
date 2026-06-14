@@ -40,7 +40,15 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
-import { runPr, runDone, type PrOptions } from "../core/pipeline/pr-done.js";
+import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
+import { buildQaChecks } from "../core/quality/default-qa-checks.js";
+import { commitWorktree } from "../core/automation/auto-commit.js";
+import { worktreeBranch, removeWorktree } from "../core/security/sandbox.js";
+import { browseDir } from "../core/workspace/fs-browse.js";
+import type { RunSpecResult } from "../core/automation/orchestrate.js";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join as pathJoin } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting } from "../core/store/settings.js";
@@ -117,17 +125,40 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       key,
       run: async () => parseFindings(key, await stageAgent(reviewPrompt(key, target))),
     }));
-  const qaChecks = deps.qaChecks ?? (() => [] as QaCheck[]);
+  const isGitRepo = (p: string) => existsSync(pathJoin(p, ".git"));
+  const realSh: Sh = (cmd, args, cwd) => {
+    try {
+      const stdout = execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      return { code: 0, stdout };
+    } catch (e) {
+      const err = e as { status?: number; stdout?: string };
+      return { code: err.status ?? 1, stdout: err.stdout ?? "" };
+    }
+  };
+  /** QA checks for a task: explicit override, else real tests/build in its repo. */
+  const qaChecksFor = (taskId: string): QaCheck[] => {
+    const keys = resolveFlow("qa");
+    if (deps.qaChecks) return deps.qaChecks(keys);
+    const t = getTask(db, taskId);
+    return buildQaChecks(keys, { repoRoot: t?.repo || process.cwd() });
+  };
 
   // L13 — default stage runners: wire each pipeline stage to its layer. Override
   // via deps.runners for tests. Interactive stages (brainstorm/spec) are driven
   // by the UI; the conductor auto-runs them best-effort here for autopilot.
+  // The impl stage runs in an isolated git worktree (sandbox) when the task's
+  // repo is a git repo; the agent's edits are auto-committed onto branch
+  // loom/<taskId> so the PR stage has content to push.
   async function runImplStage(taskId: string): Promise<StageOutcome> {
     const t = getTask(db, taskId);
-    const ids = buildSpineIds({ repoRoot: t?.repo || process.cwd(), taskId });
-    const runId = startSpecRun(rm, db, taskId, taskSpec(taskId), ids);
+    const repoRoot = t?.repo;
+    const useSandbox = !!repoRoot && isGitRepo(repoRoot);
+    const ids = buildSpineIds({ repoRoot: repoRoot || process.cwd(), taskId });
+    if (useSandbox) removeWorktree(repoRoot!, taskId); // clear any stale worktree from a prior run
+    const runId = startSpecRun(rm, db, taskId, taskSpec(taskId), ids, useSandbox ? { sandbox: { repoRoot: repoRoot! } } : {});
     const rec = await rm.wait(runId);
-    const result = rec.result as { exec?: { dag?: { ok?: boolean } } } | undefined;
+    const result = rec.result as RunSpecResult | undefined;
+    if (useSandbox && result?.cwd) commitWorktree(result.cwd, `loom: ${t?.title ?? taskId}`);
     return { ok: rec.status === "done" && (result?.exec?.dag?.ok ?? true) };
   }
   const doneProjectId = () => projectActive()?.projectId ?? "default";
@@ -141,8 +172,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
       return { ok: res.passed, needsAttention: !res.passed };
     },
-    qa: async () => {
-      const res = await runQa(qaChecks(resolveFlow("qa")));
+    qa: async (_d, id) => {
+      const res = await runQa(qaChecksFor(id));
       return { ok: res.passed, needsAttention: !res.passed };
     },
     pr: async (_d, id) => { runPr(db, id, deps.prOptions?.(id) ?? {}); return { ok: true }; },
@@ -331,11 +362,30 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
 
   // ─── PR / Done (L14) ──────────────────────────────────────────────────────────
-  app.post("/api/tasks/:id/pr/run", (c) => {
+  // Body: { connector?: boolean, base?: string }. With connector=true the PR
+  // stage pushes branch loom/<id> and opens a PR via gh (irreversible — opt-in).
+  app.post("/api/tasks/:id/pr/run", async (c) => {
     const id = c.req.param("id");
-    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json({ pr: runPr(db, id, deps.prOptions?.(id) ?? {}) });
+    const t = getTask(db, id);
+    if (!t) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { connector?: unknown; base?: unknown };
+    let opts: PrOptions = deps.prOptions?.(id) ?? {};
+    if (body.connector === true) {
+      if (!t.repo) return c.json({ error: "task has no repo to push from" }, 400);
+      opts = {
+        ...opts,
+        connector: true,
+        repoRoot: t.repo,
+        branch: opts.branch ?? worktreeBranch(id),
+        base: typeof body.base === "string" ? body.base : opts.base ?? t.branch ?? "main",
+        sh: opts.sh ?? realSh,
+      };
+    }
+    return c.json({ pr: runPr(db, id, opts) });
   });
+
+  // ─── filesystem browse (folder pickers) ───────────────────────────────────────
+  app.get("/api/fs/list", (c) => c.json(browseDir(c.req.query("path"))));
   app.post("/api/tasks/:id/done/run", (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
@@ -467,11 +517,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.post("/api/tasks/:id/qa/run", async (c) => {
     const id = c.req.param("id");
-    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const t = getTask(db, id);
+    if (!t) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { checks?: unknown };
     const override = Array.isArray(body.checks) ? { passes: body.checks as string[] } : undefined;
     const keys = resolveFlow("qa", undefined, override);
-    return c.json({ result: await runQa(qaChecks(keys)) });
+    const checks = deps.qaChecks ? deps.qaChecks(keys) : buildQaChecks(keys, { repoRoot: t.repo || process.cwd() });
+    return c.json({ result: await runQa(checks) });
   });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
