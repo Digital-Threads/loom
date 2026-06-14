@@ -39,6 +39,7 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
+import { runPr, runDone, type PrOptions } from "../core/pipeline/pr-done.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
@@ -67,6 +68,10 @@ export interface ApiDeps {
   reviewPass?: (key: string, target: string) => ReviewPass;
   /** Build QA checks for the resolved keys (default: none until configured). */
   qaChecks?: (keys: string[]) => QaCheck[];
+  /** PR options for the PR stage (default: description-only, no connector). */
+  prOptions?: (taskId: string) => PrOptions;
+  /** Close the task in task-journal at Done (default: no-op). */
+  closeTask?: (taskId: string) => void;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -241,6 +246,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const q = c.req.query("q") ?? "";
     const hits = q ? recall(q) : [];
     return c.json({ hits, ...partitionHits(hits) });
+  });
+
+  // ─── PR / Done (L14) ──────────────────────────────────────────────────────────
+  app.post("/api/tasks/:id/pr/run", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json({ pr: runPr(db, id, deps.prOptions?.(id) ?? {}) });
+  });
+  app.post("/api/tasks/:id/done/run", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    runDone(db, id, { projectId: resolveProjectId(c), closeTask: () => deps.closeTask?.(id) });
+    return c.json({ ok: true });
   });
 
   // ─── dialog stages (L12) ─────────────────────────────────────────────────────
