@@ -1,0 +1,18 @@
+{
+  "$comment": "D2.4 BOOKMARK (v2, post-MVP). Desktop shell config scaffold — NOT built yet. v1 ships as a local server + browser (loom serve). v2: a Tauri shell that boots the Bun host as a sidecar (the loom serve process) and points a webview at http://localhost:<port>/. Wire `beforeDevCommand`/`externalBin` to the host binary when implementing.",
+  "productName": "Loom",
+  "version": "0.1.0",
+  "identifier": "com.digital-threads.loom",
+  "build": {
+    "frontendDist": "../web/dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "Loom", "width": 1280, "height": 800 }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "$comment": "active:false — bundling disabled until the v2 desktop work; the host is run via `loom serve` in v1."
+  }
+}
