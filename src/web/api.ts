@@ -238,7 +238,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { ok: res.passed, needsAttention: !res.passed };
     },
     pr: async (_d, id) => { runPr(db, id, deps.prOptions?.(id) ?? {}); return { ok: true }; },
-    done: async (_d, id) => { runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) }); return { ok: true }; },
+    done: async (_d, id) => {
+      runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
+      const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
+      if (sid) (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid);
+      return { ok: true };
+    },
   };
   const runners = deps.runners ?? defaultRunners;
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
