@@ -183,6 +183,21 @@ describe("web api", () => {
     expect(closed).toBe(true);
   });
 
+  // ── settings / attachments (D6) ──
+  it("settings round-trip via /api/settings (D6)", async () => {
+    const app2 = createApi(db);
+    await app2.request("/api/settings", { method: "POST", body: JSON.stringify({ key: "run_mode", value: "autopilot" }) });
+    expect(await (await app2.request("/api/settings")).json()).toMatchObject({ run_mode: "autopilot" });
+  });
+  it("attachments add + list, validation (D6)", async () => {
+    const app2 = createApi(db);
+    const created = await app2.request("/api/tasks/t1/attachments", { method: "POST", body: JSON.stringify({ kind: "link", name: "spec", pathOrUrl: "https://x" }) });
+    expect(created.status).toBe(201);
+    const list = (await (await app2.request("/api/tasks/t1/attachments")).json()) as { attachments: unknown[] };
+    expect(list.attachments).toHaveLength(1);
+    expect((await app2.request("/api/tasks/t1/attachments", { method: "POST", body: "{}" })).status).toBe(400);
+  });
+
   // ── extensibility (L11) ──
   it("GET /api/layers lists registered plugins with capabilities (L11)", async () => {
     const app2 = createApi(db);

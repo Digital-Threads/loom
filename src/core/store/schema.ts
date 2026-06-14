@@ -94,4 +94,21 @@ export const CREATE_TABLES = `
     content     TEXT NOT NULL,
     created_at  INTEGER NOT NULL
   );
+
+  -- D6 — per-project settings (run_mode/gates/flow defaults/token-pilot/notify)
+  CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,          -- JSON-encoded
+    updated_at  INTEGER NOT NULL
+  );
+
+  -- D6 — task attachments (files/screens/links), passed to the agent in sandbox
+  CREATE TABLE IF NOT EXISTS attachments (
+    id          TEXT PRIMARY KEY,
+    task_id     TEXT NOT NULL REFERENCES tasks(id),
+    kind        TEXT NOT NULL,          -- file | link
+    name        TEXT NOT NULL,
+    path_or_url TEXT NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
 `;
