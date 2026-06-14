@@ -198,6 +198,10 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ plan: string | null }>(`${base}/api/tasks/${id}/rd`, f).then((d) => d.plan),
     implGet: (id: string) =>
       getJson<{ report: string | null }>(`${base}/api/tasks/${id}/impl`, f).then((d) => d.report),
+    permissions: (id: string) =>
+      getJson<{ denials: string[]; allowed: string[] }>(`${base}/api/tasks/${id}/permissions`, f),
+    permissionAllow: (id: string, tool: string) =>
+      postJson<{ allowed: string[] }>(`${base}/api/tasks/${id}/permissions/allow`, { tool }, f),
     // L11 — extensibility
     layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
     skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),

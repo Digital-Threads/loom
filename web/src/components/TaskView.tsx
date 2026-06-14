@@ -4,6 +4,7 @@ import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { StageDialog } from "./StageDialog";
 import { ReviewQA } from "./ReviewQA";
 import { PrDone } from "./PrDone";
+import { Approvals } from "./Approvals";
 
 export function TaskView({
   client,
@@ -113,6 +114,7 @@ export function TaskView({
           ) : null}
         </div>
         <div className="pb">
+          <Approvals client={client} taskId={taskId} onChanged={onChanged} />
           {active === "rd" || active === "impl" ? (
             <>
               <div className="kv">

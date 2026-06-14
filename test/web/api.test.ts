@@ -488,6 +488,27 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  it("manual: safe allowlist passed, denials surfaced, approve widens the allowlist", async () => {
+    createTask(database, { id: "pm", title: "Perm", run_mode: "manual" });
+    let seenAllowed: string[] | undefined;
+    const sessionLauncher = {
+      run: async (_p: string, opts: { allowedTools?: string[] }) => { seenAllowed = opts.allowedTools; return { text: "{}" }; },
+      denialsOf: () => ["Bash"],
+    };
+    const a = createApi(database, { sessionLauncher });
+    await a.request("/api/tasks/pm/analysis/run", { method: "POST", body: "{}" });
+    expect(seenAllowed).toContain("Read");
+    expect(seenAllowed).toContain("Bash(git *)");
+
+    const p1 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { denials: string[]; allowed: string[] };
+    expect(p1.denials).toContain("Bash"); // agent tried Bash → blocked, awaiting approval
+
+    await a.request("/api/tasks/pm/permissions/allow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: "Bash" }) });
+    const p2 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { denials: string[]; allowed: string[] };
+    expect(p2.allowed).toContain("Bash"); // approved → in the allowlist
+    expect(p2.denials).not.toContain("Bash"); // no longer pending
+  });
+
   it("autopilot tasks bypass permissions; manual/gated do not", async () => {
     const bypass: Record<string, boolean | undefined> = {};
     const mk = (id: string, run_mode: string) => {

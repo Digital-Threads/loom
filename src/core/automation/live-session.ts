@@ -23,6 +23,7 @@ export interface SpawnSessionOpts {
   cwd?: string;
   env?: Record<string, string>; // spine env (LOOM_TASK_ID …) so plugin telemetry attributes to the task
   bypassPermissions?: boolean; // autopilot only — full access, user-warned at task creation
+  allowedTools?: string[]; // manual/gated — safe set auto-allowed; the rest is denied (surfaced for approval)
 }
 export type SpawnSession = (opts: SpawnSessionOpts) => ProcLike;
 
@@ -33,7 +34,18 @@ interface Live {
   buf: string;
   pending: ((text: string) => void) | null;
   cost: number;
+  denials: string[];
   onChunk?: (chunk: string) => void;
+}
+
+/** Extract a readable tool label from a permission_denials entry. */
+function denialLabel(d: unknown): string {
+  if (typeof d === "string") return d;
+  if (d && typeof d === "object") {
+    const o = d as { tool_name?: string; tool?: string; name?: string };
+    return o.tool_name ?? o.tool ?? o.name ?? JSON.stringify(d);
+  }
+  return String(d);
 }
 
 function userMessage(text: string): string {
@@ -48,6 +60,8 @@ export interface LiveLauncherDeps {
 export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLauncher & {
   /** Cost accumulated for a session (sum of per-turn total_cost_usd). */
   costOf(sessionId: string): number;
+  /** Tools the agent tried to use but were denied (await user approval). */
+  denialsOf(sessionId: string): string[];
   /** Stop a session's process (e.g. on task done). */
   stop(sessionId: string): void;
 } {
@@ -61,7 +75,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
         const line = l.buf.slice(0, i);
         l.buf = l.buf.slice(i + 1);
         if (!line.trim()) continue;
-        let ev: { type?: string; result?: string; total_cost_usd?: number; message?: { content?: unknown } };
+        let ev: { type?: string; result?: string; total_cost_usd?: number; permission_denials?: unknown[]; message?: { content?: unknown } };
         try {
           ev = JSON.parse(line);
         } catch {
@@ -70,6 +84,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
         if (ev.type === "assistant" && l.onChunk) l.onChunk(extractText(ev.message?.content));
         if (ev.type === "result") {
           if (typeof ev.total_cost_usd === "number") l.cost += ev.total_cost_usd;
+          for (const d of ev.permission_denials ?? []) { const t = denialLabel(d); if (!l.denials.includes(t)) l.denials.push(t); }
           const resolve = l.pending;
           l.pending = null;
           resolve?.(ev.result ?? "");
@@ -80,12 +95,12 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
     l.proc.on("error", () => live.delete(sessionId));
   }
 
-  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined): Live {
+  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined, allowedTools: string[] | undefined): Live {
     const existing = live.get(sessionId);
     if (existing) return existing;
     // No live process: create (resume=false) or recover (resume=true).
-    const proc = deps.spawn({ sessionId, resume, cwd, env, bypassPermissions });
-    const l: Live = { proc, buf: "", pending: null, cost: 0 };
+    const proc = deps.spawn({ sessionId, resume, cwd, env, bypassPermissions, allowedTools });
+    const l: Live = { proc, buf: "", pending: null, cost: 0, denials: [] };
     live.set(sessionId, l);
     attach(sessionId, l);
     return l;
@@ -93,7 +108,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
 
   return {
     async run(prompt, opts) {
-      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions);
+      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions, opts.allowedTools);
       l.onChunk = opts.onChunk;
       const text = await new Promise<string>((resolve) => {
         l.pending = resolve;
@@ -102,6 +117,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
       return { text };
     },
     costOf: (sessionId) => live.get(sessionId)?.cost ?? 0,
+    denialsOf: (sessionId) => live.get(sessionId)?.denials ?? [],
     stop: (sessionId) => {
       const l = live.get(sessionId);
       if (l) {
