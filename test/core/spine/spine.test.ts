@@ -7,6 +7,9 @@ import {
   readSpineIds,
   spineEnv,
   deriveProjectId,
+  resolveProjectRoot,
+  buildSpineIds,
+  newWorkflowId,
   type SpineIds,
 } from "../../../src/core/spine/ids.js";
 import { makeEvent } from "../../../src/core/spine/event.js";
@@ -38,6 +41,37 @@ describe("spine/ids", () => {
 
   it("readSpineIds ignores env without spine vars", () => {
     expect(readSpineIds({ PATH: "/bin" })).toEqual({});
+  });
+});
+
+describe("spine/ids buildSpineIds (F0.2)", () => {
+  it("derives projectId from repoRoot and carries profile/task ids", () => {
+    const ids = buildSpineIds({ repoRoot: "/home/u/proj", profileId: "work", taskId: "tj-9" });
+    expect(ids.projectId).toBe(deriveProjectId(resolveProjectRoot("/home/u/proj")));
+    expect(ids.profileId).toBe("work");
+    expect(ids.taskId).toBe("tj-9");
+  });
+
+  it("generates a fresh workflowId when none is given", () => {
+    const ids = buildSpineIds({ repoRoot: "/home/u/proj" });
+    expect(ids.workflowId).toMatch(/^wf_[0-9a-f]{16}$/);
+  });
+
+  it("passes through an explicit workflowId", () => {
+    const ids = buildSpineIds({ repoRoot: "/home/u/proj", workflowId: "wf_fixed" });
+    expect(ids.workflowId).toBe("wf_fixed");
+  });
+
+  it("newWorkflowId is unique across calls", () => {
+    expect(newWorkflowId()).not.toBe(newWorkflowId());
+  });
+
+  it("buildSpineIds → spineEnv yields all four LOOM_* vars", () => {
+    const env = spineEnv(buildSpineIds({ repoRoot: "/home/u/proj", profileId: "main", taskId: "tj-1" }));
+    expect(env[SPINE_ENV.projectId]).toMatch(/^[0-9a-f]{16}$/);
+    expect(env[SPINE_ENV.profileId]).toBe("main");
+    expect(env[SPINE_ENV.taskId]).toBe("tj-1");
+    expect(env[SPINE_ENV.workflowId]).toMatch(/^wf_[0-9a-f]{16}$/);
   });
 });
 

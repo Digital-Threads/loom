@@ -9,9 +9,12 @@ import {
   waves,
   runStep,
   runDag,
+  busSink,
   type StepExecutor,
   type ExecResult,
 } from "../../../src/core/automation/exec-loop.js";
+import { loadLoomEvents } from "../../../src/core/spine/event-bus.js";
+import type { LoomEvent } from "../../../src/core/spine/event.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -104,5 +107,67 @@ describe("runDag", () => {
     expect(result.failed).toBe(1);
     expect(result.ok).toBe(false);
     expect(ex.calls).toEqual(["s1"]); // s2 never launched
+  });
+});
+
+describe("exec-loop event emission (F0.3)", () => {
+  it("emits run/step lifecycle events in order with spine ids", async () => {
+    createStep(db, { id: "s1", taskId: "t1", title: "tests" });
+    createStep(db, { id: "s2", taskId: "t1", title: "impl", dependsOn: ["s1"] });
+    const events: LoomEvent[] = [];
+    await runDag(db, mockExecutor(), "t1", { projectId: "p1", workflowId: "wf1", taskId: "tj-1" }, undefined, (e) =>
+      events.push(e),
+    );
+    expect(events.map((e) => e.type)).toEqual([
+      "run.started",
+      "step.started",
+      "step.completed",
+      "step.started",
+      "step.completed",
+      "run.completed",
+    ]);
+    for (const e of events) {
+      expect(e).toMatchObject({ schema: "loom.event.v1", source: "loom", projectId: "p1", workflowId: "wf1", taskId: "tj-1" });
+    }
+  });
+
+  it("step.completed carries exitCode metric; run.completed carries ran/failed", async () => {
+    createStep(db, { id: "s1", taskId: "t1", title: "x" });
+    const events: LoomEvent[] = [];
+    await runDag(db, mockExecutor({ s1: 2 }), "t1", { projectId: "p1" }, undefined, (e) => events.push(e));
+    const stepDone = events.find((e) => e.type === "step.completed")!;
+    expect(stepDone.metrics?.exitCode).toBe(2);
+    expect(stepDone.severity).toBe("error");
+    const runDone = events.find((e) => e.type === "run.completed")!;
+    expect(runDone.metrics).toMatchObject({ ran: 1, failed: 1 });
+    expect(runDone.severity).toBe("error");
+  });
+
+  it("default emit is a no-op (no throw without a sink)", async () => {
+    createStep(db, { id: "s1", taskId: "t1", title: "x" });
+    const result = await runDag(db, mockExecutor(), "t1", { projectId: "p1" });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("busSink → event bus (F0.3)", () => {
+  let prevXdg: string | undefined;
+  let busDir: string;
+  beforeEach(() => {
+    prevXdg = process.env.XDG_DATA_HOME;
+    busDir = mkdtempSync(join(tmpdir(), "loom-bus-"));
+    process.env.XDG_DATA_HOME = busDir;
+  });
+  afterEach(() => {
+    if (prevXdg === undefined) delete process.env.XDG_DATA_HOME;
+    else process.env.XDG_DATA_HOME = prevXdg;
+    rmSync(busDir, { recursive: true, force: true });
+  });
+
+  it("appends emitted events to the project's bus log", async () => {
+    createStep(db, { id: "s1", taskId: "t1", title: "x" });
+    await runDag(db, mockExecutor(), "t1", { projectId: "pbus", workflowId: "wf9" }, undefined, busSink("pbus"));
+    const types = loadLoomEvents("pbus").map((e) => e.type);
+    expect(types).toEqual(["run.started", "step.started", "step.completed", "run.completed"]);
   });
 });
