@@ -443,3 +443,67 @@ describe("web api mutations", () => {
     expect((await post("/api/tasks/ghost/start")).status).toBe(404);
   });
 });
+
+describe("web api — fs browse + PR connector", () => {
+  let d: string;
+  let database: Database.Database;
+
+  beforeEach(() => {
+    d = mkdtempSync(join(tmpdir(), "loom-api2-"));
+    database = openStore(join(d, "test.db"));
+  });
+  afterEach(() => {
+    database.close();
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it("GET /api/fs/list lists sub-directories of a path", async () => {
+    const a = createApi(database);
+    const res = await a.request(`/api/fs/list?path=${encodeURIComponent(d)}`);
+    const body = (await res.json()) as { path: string; parent: string | null; entries: unknown[] };
+    expect(res.status).toBe(200);
+    expect(body.path).toBe(d);
+    expect(Array.isArray(body.entries)).toBe(true);
+  });
+
+  it("POST /api/tasks/:id/pr/run with connector pushes the branch and opens a PR", async () => {
+    createTask(database, { id: "p1", title: "Ship it", repo: "/repo", branch: "main" });
+    const calls: Array<[string, string[]]> = [];
+    const sh = (cmd: string, args: string[]) => {
+      calls.push([cmd, args]);
+      return { code: 0, stdout: "https://github.com/x/y/pull/1\n" };
+    };
+    const a = createApi(database, { prOptions: () => ({ sh }) });
+    const res = await a.request("/api/tasks/p1/pr/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ connector: true }),
+    });
+    const body = (await res.json()) as { pr: { created: boolean; url?: string } };
+    expect(body.pr.created).toBe(true);
+    expect(body.pr.url).toBe("https://github.com/x/y/pull/1");
+    expect(calls[0]).toEqual(["git", ["push", "-u", "origin", "loom/p1"]]);
+    expect(calls[1][0]).toBe("gh");
+    expect(calls[1][1]).toContain("--head");
+    expect(calls[1][1]).toContain("loom/p1");
+  });
+
+  it("PR connector without a repo → 400", async () => {
+    createTask(database, { id: "p2", title: "No repo" });
+    const a = createApi(database);
+    const res = await a.request("/api/tasks/p2/pr/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ connector: true }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PR without connector stays description-only (no push)", async () => {
+    createTask(database, { id: "p3", title: "Draft only", repo: "/repo" });
+    const a = createApi(database);
+    const res = await a.request("/api/tasks/p3/pr/run", { method: "POST", body: "{}" });
+    const body = (await res.json()) as { pr: { created: boolean } };
+    expect(body.pr.created).toBe(false);
+  });
+});
