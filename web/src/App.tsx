@@ -8,6 +8,7 @@ import { Accounts } from "./components/Accounts";
 import { Tokens } from "./components/Tokens";
 import { Memory } from "./components/Memory";
 import { Projects } from "./components/Projects";
+import { Timeline } from "./components/Timeline";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -80,6 +81,8 @@ export function App() {
             <Tokens client={client} />
           ) : view === "memory" ? (
             <Memory client={client} />
+          ) : view === "timeline" ? (
+            <Timeline client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}

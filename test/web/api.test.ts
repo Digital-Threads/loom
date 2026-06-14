@@ -144,6 +144,25 @@ describe("web api", () => {
     expect((await app2.request("/api/runs/nope")).status).toBe(404);
   });
 
+  it("GET /api/timeline returns the project events time-ordered (L9.4)", async () => {
+    const e = (ts: number, type: string) => ({ schema: "loom.event.v1", ts, source: "loom", projectId: "p1", type });
+    const app2 = createApi(db, {
+      activeProject: () => ({ projectId: "p1", root: "/r", name: "r", addedAt: 0 }),
+      loadEvents: () => [e(3, "c") as never, e(1, "a") as never, e(2, "b") as never],
+    });
+    const body = (await (await app2.request("/api/timeline")).json()) as { events: { type: string }[] };
+    expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
+  });
+
+  it("GET /api/metrics/board sums token totals (L9.2)", async () => {
+    const tp = (used: number, saved: number) => ({ schema: "loom.event.v1", ts: 1, source: "token-pilot", projectId: "p1", type: "tokens", metrics: { used, saved } });
+    const app2 = createApi(db, {
+      activeProject: () => ({ projectId: "p1", root: "/r", name: "r", addedAt: 0 }),
+      loadEvents: () => [tp(10, 2) as never, tp(5, 1) as never],
+    });
+    expect(await (await app2.request("/api/metrics/board")).json()).toMatchObject({ used: 15, saved: 3 });
+  });
+
   it("GET /api/runs/:runId/stream streams events then a final status (L4.4)", async () => {
     const rm = createRunManager();
     const runId = rm.start({ projectId: "p1", toBus: false }, async (ctx) => {

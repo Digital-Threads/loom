@@ -14,6 +14,9 @@ import { liveCandidates } from "./router-live.js";
 import type { RouteCandidate } from "./router.js";
 import type { GitRunner } from "../security/sandbox.js";
 import { secureExecutor } from "../security/secure-executor.js";
+import { recordRunCost } from "../observability/cost-recorder.js";
+import { tokenEventsByTime, type TokenEvent } from "../plugins/token-pilot/adapter.js";
+import { resolveProjectRoot } from "../workspace/project-id.js";
 
 export interface StartSpecRunOptions {
   /** Override the orchestrate deps (decomposer/executor) — for tests. */
@@ -24,6 +27,8 @@ export interface StartSpecRunOptions {
   maxRetries?: number;
   /** Run in an isolated worktree (security L10). */
   sandbox?: { repoRoot: string; base?: string; git?: GitRunner };
+  /** Token events source for cost recording (default: token-pilot adapter). */
+  loadTokenEvents?: () => TokenEvent[];
 }
 
 export function startSpecRun(
@@ -43,8 +48,17 @@ export function startSpecRun(
       }),
     };
   const candidates = opts.candidates ?? liveCandidates();
+  const loadTokenEvents =
+    opts.loadTokenEvents ??
+    (() => tokenEventsByTime(opts.sandbox?.repoRoot ?? resolveProjectRoot(process.cwd())));
 
-  return rm.start<RunSpecResult>({ projectId: ids.projectId }, (ctx) =>
-    runSpec(db, deps, taskId, spec, candidates, ids, { emit: ctx.emit, sandbox: opts.sandbox }),
-  );
+  return rm.start<RunSpecResult>({ projectId: ids.projectId }, async (ctx) => {
+    const result = await runSpec(db, deps, taskId, spec, candidates, ids, {
+      emit: ctx.emit,
+      sandbox: opts.sandbox,
+    });
+    // provод 4 — record cost on completion (exact via spine task_id tagging).
+    if (ids.taskId) recordRunCost(db, ids.taskId, { tokenEvents: loadTokenEvents() });
+    return result;
+  });
 }

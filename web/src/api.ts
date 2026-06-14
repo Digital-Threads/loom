@@ -144,8 +144,26 @@ export function createClient(base = "", f: Fetcher = fetch) {
     startRun: (taskId: string, stageKey: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${taskId}/stages/${stageKey}/run`, {}, f).then((d) => d.runId),
     runStreamUrl: (runId: string) => `${base}/api/runs/${runId}/stream`,
+    // L9 — observability
+    timeline: () => getJson<{ events: TimelineEvent[] }>(`${base}/api/timeline`, f).then((d) => d.events),
+    boardMetrics: () => getJson<{ used: number; saved: number; events: number }>(`${base}/api/metrics/board`, f),
+    agentMetrics: () =>
+      getJson<{ agents: AgentPerf[]; failures: FailureReason[] }>(`${base}/api/metrics/agents`, f),
   };
 }
+
+export interface TimelineEvent {
+  ts: number;
+  source: string;
+  type: string;
+  taskId?: string;
+  profileId?: string;
+  severity?: string;
+  message?: string;
+  metrics?: Record<string, number>;
+}
+export interface AgentPerf { profile: string; runs: number; failures: number; durationMs: number }
+export interface FailureReason { message: string; count: number }
 
 export interface ProjectEntry {
   projectId: string;

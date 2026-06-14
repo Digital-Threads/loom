@@ -24,6 +24,9 @@ import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { startSpecRun } from "../core/automation/start-run.js";
 import { buildSpineIds } from "../core/spine/ids.js";
+import { loadLoomEvents } from "../core/spine/event-bus.js";
+import type { LoomEvent } from "../core/spine/event.js";
+import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -37,6 +40,8 @@ export interface ApiDeps {
   runManager?: RunManager;
   /** Start a run for a task stage; returns the runId. Override for tests. */
   startRun?: (taskId: string, stageKey: string) => string;
+  /** Load the project's event stream (default: file bus). */
+  loadEvents?: (projectId: string) => LoomEvent[];
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -49,6 +54,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectAdd = deps.addProject ?? ((root: string) => addProject(root));
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
+  const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
+  const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
+    c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
   const startRun =
     deps.startRun ??
@@ -173,6 +181,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
   app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
+
+  // ─── observability (L9) ──────────────────────────────────────────────────────
+  // Unified timeline: the project's LoomEvent stream, time-ordered.
+  app.get("/api/timeline", (c) => {
+    const events = [...loadEvents(resolveProjectId(c))].sort((a, b) => a.ts - b.ts);
+    return c.json({ events });
+  });
+  // Board-wide token totals (provenance shown per cost row on the task view).
+  app.get("/api/metrics/board", (c) => c.json(boardTotals(loadEvents(resolveProjectId(c)))));
+  // Agent performance + failure reasons (L9.3).
+  app.get("/api/metrics/agents", (c) => {
+    const events = loadEvents(resolveProjectId(c));
+    return c.json({ agents: agentPerformance(events), failures: failureReasons(events) });
+  });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
 
