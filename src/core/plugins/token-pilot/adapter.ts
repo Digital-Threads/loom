@@ -65,6 +65,9 @@ interface RawHookEvent {
   estTokens?: unknown;
   savedTokens?: unknown;
   ts?: unknown;
+  // Loom spine — present only when token-pilot ran in a Loom-launched session
+  // (LOOM_TASK_ID set). Absent otherwise; events stay backward-compatible.
+  task_id?: unknown;
 }
 
 // reads and line-by-line parses all hook-events*.jsonl from all .token-pilot
@@ -117,6 +120,10 @@ export interface TokenEvent {
   saved: number;
   ts: number;
   agentType: string | null;
+  // Loom spine link — set when the event carries a task_id (Loom-launched
+  // session); null/absent for standalone token-pilot events. Optional so
+  // existing TokenEvent literals stay valid. Enables exact per-task cost.
+  taskId?: string | null;
 }
 
 export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
@@ -128,7 +135,8 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
     const used = typeof ev.estTokens === "number" ? ev.estTokens : 0;
     const saved = typeof ev.savedTokens === "number" ? ev.savedTokens : 0;
     const agentType = typeof ev.agent_type === "string" ? ev.agent_type : null;
-    events.push({ sessionId, used, saved, ts, agentType });
+    const taskId = typeof ev.task_id === "string" ? ev.task_id : null;
+    events.push({ sessionId, used, saved, ts, agentType, taskId });
   }
 
   return events.sort((a, b) => a.ts - b.ts);

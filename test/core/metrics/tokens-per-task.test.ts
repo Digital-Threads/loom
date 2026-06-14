@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tokensForTask } from "../../../src/core/metrics/tokens-per-task.js";
+import { tokensForTask, tokensForTaskExact, taskCost } from "../../../src/core/metrics/tokens-per-task.js";
 import type { TjEvent } from "../../../src/core/plugins/task-journal/adapter.js";
 import type { TokenEvent } from "../../../src/core/plugins/token-pilot/adapter.js";
 
@@ -67,5 +67,32 @@ describe("tokensForTask — token correlation by task window", () => {
 
   it("returns {used:0,saved:0} for empty tokenEvents", () => {
     expect(tokensForTask(events, "tj-x", [])).toEqual({ used: 0, saved: 0 });
+  });
+});
+
+describe("tokensForTaskExact + taskCost — exact spine cost via task_id", () => {
+  function tagged(ts: number, used: number, saved: number, taskId: string): TokenEvent {
+    return { sessionId: "s1", used, saved, ts, agentType: null, taskId };
+  }
+
+  it("sums only token events tagged with the task_id", () => {
+    const te: TokenEvent[] = [
+      tagged(1, 100, 10, "tj-x"),
+      tagged(2, 200, 20, "tj-x"),
+      tagged(3, 999, 99, "tj-other"),
+      tk("s3", 4, 5, 1), // untagged
+    ];
+    expect(tokensForTaskExact(te, "tj-x")).toEqual({ used: 300, saved: 30 });
+  });
+
+  it("taskCost prefers exact (ignores time window) when events carry the task_id", () => {
+    // ts is far OUTSIDE the tj-x window — exact path must still count it.
+    const te: TokenEvent[] = [tagged(START_MS - 9_999_999, 100, 10, "tj-x")];
+    expect(taskCost(events, "tj-x", te)).toEqual({ used: 100, saved: 10, exact: true });
+  });
+
+  it("taskCost falls back to time-window estimate when nothing is tagged", () => {
+    const te: TokenEvent[] = [tk("s1", ms("2026-06-07T11:00:00.000Z"), 100, 10)];
+    expect(taskCost(events, "tj-x", te)).toEqual({ used: 100, saved: 10, exact: false });
   });
 });
