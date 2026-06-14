@@ -16,11 +16,11 @@ export interface AimuxLiveLauncherDeps {
   model?: string;
 }
 
-// NOTE: a git worktree is a plain host directory, NOT an isolation boundary —
-// running the agent with --dangerously-skip-permissions here would grant full
-// host access (file/network/exec). It was removed pending real isolation
-// (bubblewrap/Docker/VM) or a narrow non-interactive trust (--add-dir /
-// --permission-mode). See .docs deferred-features plan.
+// manual/gated: normal Claude permissions (approvals surfaced to the Loom UI).
+// autopilot: bypassPermissions adds --dangerously-skip-permissions = FULL host
+// access — the user is warned at task creation that autopilot means full access.
+// (A git worktree is NOT an isolation boundary; real isolation is a deferred
+// hardening — see .docs deferred-features plan.)
 const STREAM_FLAGS = ["-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json"];
 
 /** A ProcLike that yields one empty result then closes — used when there is no
@@ -46,12 +46,13 @@ function emptyProc(): ProcLike {
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
-  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv }) => {
+  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions }) => {
     const cfg = load();
     const profile = deps.profile ?? listSubscriptions()[0]?.name;
     if (!cfg || !profile) return emptyProc();
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
-    const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...sessionArgs] });
+    const permArgs = bypassPermissions ? ["--dangerously-skip-permissions"] : []; // autopilot only (user-warned)
+    const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
     // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
     // attribute their telemetry to this task — exact cost without a separate counter.
     const child = spawn(cli, args, { cwd, env: { ...process.env, ...env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });

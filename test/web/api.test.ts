@@ -488,6 +488,21 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  it("autopilot tasks bypass permissions; manual/gated do not", async () => {
+    const bypass: Record<string, boolean | undefined> = {};
+    const mk = (id: string, run_mode: string) => {
+      createTask(database, { id, title: id, run_mode });
+      const sessionLauncher = {
+        run: async (_p: string, opts: { bypassPermissions?: boolean }) => { bypass[id] = opts.bypassPermissions; return { text: "{}" }; },
+      };
+      return createApi(database, { sessionLauncher });
+    };
+    await mk("auto1", "autopilot").request("/api/tasks/auto1/analysis/run", { method: "POST", body: "{}" });
+    await mk("man1", "manual").request("/api/tasks/man1/analysis/run", { method: "POST", body: "{}" });
+    expect(bypass.auto1).toBe(true); // autopilot = full access (user-warned)
+    expect(bypass.man1).toBe(false); // manual = normal permissions
+  });
+
   it("injects spine env (LOOM_TASK_ID) into the session and records cost", async () => {
     createTask(database, { id: "cst", title: "Cost" });
     let seenEnv: Record<string, string> | undefined;

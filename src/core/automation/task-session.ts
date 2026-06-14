@@ -14,7 +14,7 @@ import { getTaskSession, setTaskSession } from "../store/db.js";
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; cwd?: string; env?: Record<string, string>; onChunk?: (chunk: string) => void },
+    opts: { sessionId: string; resume: boolean; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; onChunk?: (chunk: string) => void },
   ): Promise<{ text: string }>;
 }
 
@@ -66,6 +66,7 @@ export interface SendOptions {
   stage?: string;
   cwd?: string;
   env?: Record<string, string>;
+  bypassPermissions?: boolean;
   onChunk?: (chunk: string) => void;
 }
 
@@ -105,7 +106,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
 
       const body = stageInstruction(opts.stage, instruction);
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
-      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, onChunk: opts.onChunk });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, onChunk: opts.onChunk });
 
       if (!resume) setTaskSession(db, taskId, sessionId); // created → next send resumes
       turns += 1;
