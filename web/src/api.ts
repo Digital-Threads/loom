@@ -155,6 +155,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
         `${base}/api/knowledge/recall?q=${encodeURIComponent(q)}`,
         f,
       ),
+    knowledgeGraph: (q: string) =>
+      getJson<{ nodes: unknown[]; edges: unknown[] }>(`${base}/api/knowledge/graph?q=${encodeURIComponent(q)}`, f),
     // L12 — dialog stages
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
