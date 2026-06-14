@@ -174,8 +174,20 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ result: ReviewResult; action: string }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
+    // L11 — extensibility
+    layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
+    skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),
   };
 }
+
+export interface LayerInfo {
+  id: string;
+  title: string;
+  category: string | null;
+  executes: boolean;
+  slots: { stage: string; skill: string }[];
+}
+export interface SkillSlot { plugin: string; stage: string; skill: string }
 
 export interface ReviewFinding { pass: string; severity: string; message: string; file?: string }
 export interface ReviewResult { findings: ReviewFinding[]; counts: Record<string, number>; passed: boolean }

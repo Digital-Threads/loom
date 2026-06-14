@@ -10,6 +10,8 @@ import { Memory } from "./components/Memory";
 import { Projects } from "./components/Projects";
 import { Timeline } from "./components/Timeline";
 import { Knowledge } from "./components/Knowledge";
+import { Layers } from "./components/Layers";
+import { Skills } from "./components/Skills";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -87,6 +89,10 @@ export function App() {
             <Timeline client={client} />
           ) : view === "knowledge" ? (
             <Knowledge client={client} />
+          ) : view === "layers" ? (
+            <Layers client={client} />
+          ) : view === "skills" ? (
+            <Skills client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}

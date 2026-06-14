@@ -39,6 +39,7 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
+import { loomRegistry } from "../core/plugins/index.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
@@ -284,6 +285,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const spec = acceptSpec(db, id);
     return spec ? c.json({ spec }) : c.json({ error: "no spec" }, 404);
   });
+
+  // ─── extensibility: layers / skills (L11) ─────────────────────────────────────
+  app.get("/api/layers", (c) =>
+    c.json({
+      layers: loomRegistry.list().map((p) => ({
+        id: p.id,
+        title: p.title,
+        category: p.category ?? null,
+        executes: typeof p.execute === "function",
+        slots: p.slots ?? [],
+        capabilities: p.capabilities ?? null,
+      })),
+    }),
+  );
+  app.get("/api/skills", (c) =>
+    c.json({
+      slots: loomRegistry
+        .list()
+        .flatMap((p) => (p.slots ?? []).map((s) => ({ plugin: p.id, stage: s.stage, skill: s.skill }))),
+    }),
+  );
 
   // ─── quality: review / qa (L6) ────────────────────────────────────────────────
   app.get("/api/flow-config/:stage", (c) => c.json({ passes: resolveFlow(c.req.param("stage")) }));
