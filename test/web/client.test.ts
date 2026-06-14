@@ -1,0 +1,54 @@
+import { describe, it, expect } from "vitest";
+import { createClient } from "../../web/src/api";
+import { statusLabel, statusClass, stageStateClass, stageIcon } from "../../web/src/ui";
+
+function fakeFetch(routes: Record<string, unknown>): typeof fetch {
+  return (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    const path = url.replace(/^https?:\/\/[^/]+/, "");
+    if (!(path in routes)) return new Response("nf", { status: 404 });
+    return new Response(JSON.stringify(routes[path]), { status: 200 });
+  }) as typeof fetch;
+}
+
+describe("web api client", () => {
+  it("board() unwraps columns", async () => {
+    const c = createClient("", fakeFetch({ "/api/board": { columns: [{ stageKey: "analysis", cards: [] }] } }));
+    expect(await c.board()).toEqual([{ stageKey: "analysis", cards: [] }]);
+  });
+
+  it("attention() and tasks() unwrap their fields", async () => {
+    const c = createClient(
+      "",
+      fakeFetch({ "/api/attention": { items: [{ taskId: "t1", title: "T", stageKey: "spec" }] }, "/api/tasks": { tasks: [{ id: "t1" }] } }),
+    );
+    expect((await c.attention())[0].taskId).toBe("t1");
+    expect((await c.tasks())[0].id).toBe("t1");
+  });
+
+  it("task(id) returns the detail object", async () => {
+    const detail = { task: { id: "t1" }, stages: [], steps: [], costs: [] };
+    const c = createClient("", fakeFetch({ "/api/tasks/t1": detail }));
+    expect((await c.task("t1")).task.id).toBe("t1");
+  });
+
+  it("throws on non-ok response", async () => {
+    const c = createClient("", fakeFetch({}));
+    await expect(c.board()).rejects.toThrow(/404/);
+  });
+});
+
+describe("web ui helpers", () => {
+  it("statusLabel maps known statuses", () => {
+    expect(statusLabel("running")).toBe("идёт");
+    expect(statusLabel("done")).toBe("готово");
+    expect(statusLabel("zzz")).toBe("zzz");
+  });
+  it("statusClass + stage helpers", () => {
+    expect(statusClass("active")).toBe("run");
+    expect(stageStateClass("done")).toBe("done");
+    expect(stageStateClass("active")).toBe("active2");
+    expect(stageIcon("done")).toBe("✓");
+    expect(stageIcon("pending")).toBe("!");
+  });
+});

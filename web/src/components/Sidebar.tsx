@@ -1,0 +1,56 @@
+import { useEffect, useState } from "react";
+import type { LoomClient, AttentionItem } from "../api";
+
+const NAV = [
+  { key: "board", label: "Доска", icon: "▦" },
+  { key: "accounts", label: "Аккаунты", icon: "◷", group: "Подключения" },
+  { key: "connectors", label: "Коннекторы", icon: "⇄" },
+  { key: "skills", label: "Скилы", icon: "✦", group: "Возможности" },
+  { key: "layers", label: "Слои", icon: "▤" },
+  { key: "timeline", label: "Таймлайн", icon: "≡", group: "Прочее" },
+  { key: "settings", label: "Настройки", icon: "⚙" },
+] as const;
+
+export function Sidebar({
+  client,
+  view,
+  onNav,
+  open,
+}: {
+  client: LoomClient;
+  view: string;
+  onNav: (v: string) => void;
+  open: boolean;
+}) {
+  const [attn, setAttn] = useState<AttentionItem[]>([]);
+  useEffect(() => {
+    client.attention().then(setAttn).catch(() => setAttn([]));
+  }, [client, view]);
+
+  return (
+    <aside className={`side ${open ? "open" : ""}`}>
+      <div className="brand">
+        <span className="dot" /> Loom
+      </div>
+      <nav className="nav">
+        {NAV.map((n) => (
+          <div key={n.key}>
+            {"group" in n && n.group ? <div className="grp">{n.group}</div> : null}
+            <button className={view === n.key ? "active" : ""} onClick={() => onNav(n.key)}>
+              <span style={{ width: 16, textAlign: "center" }}>{n.icon}</span> {n.label}
+            </button>
+          </div>
+        ))}
+      </nav>
+      <div className="spacer" />
+      <div className="attn" onClick={() => onNav("board")}>
+        <div className="h">
+          🔔 Требует внимания {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
+        </div>
+        <div className="b">
+          {attn.length ? attn.map((a) => `${a.taskId}: ${a.stageKey}`).join(" · ") : "пусто"}
+        </div>
+      </div>
+    </aside>
+  );
+}
