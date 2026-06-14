@@ -20,6 +20,13 @@ export function TaskView({
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
   const [stdin, setStdin] = useState("");
+  const [planText, setPlanText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (active === "rd") client.rdGet(taskId).then(setPlanText).catch(() => {});
+    else if (active === "impl") client.implGet(taskId).then(setPlanText).catch(() => {});
+    else setPlanText(null);
+  }, [client, taskId, active]);
 
   async function runStage() {
     setLive([]);
@@ -53,6 +60,11 @@ export function TaskView({
     <div className="task">
       <div className="rail">
         <div className="gh">Stages · {taskId}</div>
+        {detail.task.session_id ? (
+          <div className="muted" style={{ fontSize: 11, padding: "0 9px 6px" }} title="One live Claude session for the whole task">
+            session {detail.task.session_id.slice(0, 8)}
+          </div>
+        ) : null}
         <div className="steps">
           {detail.stages.map((s) => (
             <button
@@ -104,9 +116,14 @@ export function TaskView({
           {active === "rd" || active === "impl" ? (
             <>
               <div className="kv">
-                <b>Steps (R&D / DAG)</b>
+                <b>{active === "rd" ? "Plan (subtasks / DAG)" : "Implementation report"}</b>
                 <button className="btn acc" style={{ marginLeft: "auto" }} onClick={runStage}>▶ Run</button>
               </div>
+              {planText ? (
+                <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto" }}>{planText}</pre>
+              ) : (
+                <div className="muted">{active === "rd" ? "No plan yet — run R&D to decompose the task." : "Not implemented yet — run Implementation."}</div>
+              )}
               {runId ? (
                 <div className="live">
                   <div className="grp">Live · {runId}</div>
