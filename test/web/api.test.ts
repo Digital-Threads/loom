@@ -154,6 +154,21 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  // ── conductor (L13) ──
+  it("POST /advance drives the task through its route via injected runners (L13)", async () => {
+    // fresh autopilot task with a short route
+    const { createTask } = await import("../../src/core/store/db.js");
+    const { startTask } = await import("../../src/core/pipeline/engine.js");
+    createTask(db, { id: "tc", title: "C", route: ["analysis", "impl", "done"], run_mode: "autopilot" });
+    startTask(db, "tc");
+    const ran: string[] = [];
+    const mk = (k: string) => async () => { ran.push(k); return { ok: true }; };
+    const app2 = createApi(db, { runners: { analysis: mk("analysis"), impl: mk("impl"), done: mk("done") } });
+    const r = (await (await app2.request("/api/tasks/tc/advance", { method: "POST" })).json()) as { ran: string[]; stoppedAt: string | null };
+    expect(r.ran).toEqual(["analysis", "impl", "done"]);
+    expect(r.stoppedAt).toBeNull();
+  });
+
   // ── PR / Done (L14) ──
   it("POST /pr/run returns a description; /done/run finalizes (L14)", async () => {
     let closed = false;

@@ -177,6 +177,11 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // L11 — extensibility
     layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
     skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),
+    // L13 — conductor
+    advance: (id: string) =>
+      postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/advance`, {}, f),
+    runStageNext: (id: string) =>
+      postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/run-stage`, {}, f),
     // L14 — PR / Done
     prRun: (id: string) =>
       postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, {}, f).then((d) => d.pr),

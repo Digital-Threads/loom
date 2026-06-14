@@ -92,6 +92,12 @@ export function TaskView({
               ✓ Accept
             </button>
           ) : null}
+          {detail.task.status !== "created" && detail.task.status !== "done" ? (
+            <>
+              <button className="btn" style={{ marginLeft: 8 }} onClick={async () => { await client.runStageNext(taskId); onChanged?.(); }}>▶ Run stage</button>
+              <button className="btn" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
+            </>
+          ) : null}
         </div>
         <div className="pb">
           {active === "rd" || active === "impl" ? (
