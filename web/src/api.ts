@@ -149,7 +149,20 @@ export function createClient(base = "", f: Fetcher = fetch) {
     boardMetrics: () => getJson<{ used: number; saved: number; events: number }>(`${base}/api/metrics/board`, f),
     agentMetrics: () =>
       getJson<{ agents: AgentPerf[]; failures: FailureReason[] }>(`${base}/api/metrics/agents`, f),
+    // L7 — knowledge
+    recall: (q: string) =>
+      getJson<{ hits: RecallHit[]; decisions: RecallHit[]; rejections: RecallHit[] }>(
+        `${base}/api/knowledge/recall?q=${encodeURIComponent(q)}`,
+        f,
+      ),
   };
+}
+
+export interface RecallHit {
+  taskId: string;
+  eventType: string;
+  text: string;
+  score: number;
 }
 
 export interface TimelineEvent {
