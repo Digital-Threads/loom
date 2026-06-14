@@ -154,6 +154,18 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  // ── extensibility (L11) ──
+  it("GET /api/layers lists registered plugins with capabilities (L11)", async () => {
+    const app2 = createApi(db);
+    const body = (await (await app2.request("/api/layers")).json()) as { layers: { id: string }[] };
+    expect(body.layers.map((l) => l.id).sort()).toEqual(["aimux", "task-journal", "token-pilot"]);
+  });
+  it("GET /api/skills lists slot contributions (L11)", async () => {
+    const app2 = createApi(db);
+    const body = (await (await app2.request("/api/skills")).json()) as { slots: unknown[] };
+    expect(Array.isArray(body.slots)).toBe(true);
+  });
+
   // ── quality (L6) ──
   it("GET /api/flow-config/:stage returns the resolved passes (L6)", async () => {
     const app2 = createApi(db);

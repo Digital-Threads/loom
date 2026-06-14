@@ -10,7 +10,8 @@ export type AuditKind =
   | "command.warned"
   | "secret.found"
   | "worktree.created"
-  | "worktree.removed";
+  | "worktree.removed"
+  | "plugin.verify";
 
 export interface AuditEntry {
   projectId: string;
