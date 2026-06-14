@@ -58,7 +58,7 @@ export interface CreateTaskInput {
   description?: string;
 }
 
-const STAGE_KEYS = [
+export const STAGE_KEYS = [
   "analysis",
   "brainstorm",
   "spec",
