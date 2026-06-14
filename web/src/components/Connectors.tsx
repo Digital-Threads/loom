@@ -33,7 +33,9 @@ export function Connectors({ client }: { client: LoomClient }) {
         <input className="inp" placeholder="id" value={id} onChange={(e) => setId(e.target.value)} />
         <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
         <button className="btn acc" onClick={add}>Add MCP</button>
+        <button className="btn" onClick={async () => { const r = await client.importTracker(); setStatus((m) => ({ ...m, import: `imported ${r.created}` })); }}>Import from beads</button>
       </div>
+      {status.import ? <div className="muted">{status.import}</div> : null}
       {servers.length === 0 ? (
         <div className="empty">No MCP servers yet.</div>
       ) : (

@@ -46,6 +46,8 @@ import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
+import { beadsConnector } from "../core/connectors/beads.js";
+import type { TaskDraft } from "../core/connectors/connector.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
@@ -84,6 +86,8 @@ export interface ApiDeps {
   runners?: RunnerRegistry;
   /** Probe for MCP connector tests (default: none → test reports unconfigured). */
   mcpProbe?: McpProbe;
+  /** Tracker import drafts (default: beads connector). */
+  importDrafts?: () => TaskDraft[];
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -397,6 +401,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.post("/api/connectors/mcp/:id/remove", (c) => { removeMcp(c.req.param("id")); return c.json({ ok: true }); });
   app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe })));
+  // D5.4/5.5 — import open tracker items as tasks on the board.
+  app.post("/api/connectors/import", (c) => {
+    const drafts = (deps.importDrafts ?? (() => beadsConnector().import()))();
+    let created = 0;
+    for (const d of drafts) {
+      createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description });
+      created += 1;
+    }
+    return c.json({ created });
+  });
 
   // ─── settings / attachments (D6) ──────────────────────────────────────────────
   app.get("/api/settings", (c) => c.json(getAllSettings(db)));
