@@ -13,11 +13,13 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
   if (err) return <div className="empty">Can’t reach the core: {err}</div>;
   if (!cols) return <div className="empty">Loading…</div>;
 
-  // DnD: drag a card onto a column → trigger that stage's run for the task.
+  // DnD: drag a card onto a column → move the task to that stage and refresh.
+  // Repositions only (no run started); start the stage from the task view.
   function onDrop(stageKey: string, e: DragEvent) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
-    if (taskId) client.startRun(taskId, stageKey).catch(() => {});
+    if (!taskId) return;
+    client.moveTask(taskId, stageKey).then(() => client.board().then(setCols)).catch(() => {});
   }
 
   return (

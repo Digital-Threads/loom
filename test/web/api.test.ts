@@ -432,6 +432,20 @@ describe("web api mutations", () => {
     expect((await post("/api/tasks/m1/stages/analysis/accept")).body.next).toBe("brainstorm");
   });
 
+  it("POST move repositions the task to a stage column", async () => {
+    await post("/api/tasks", { id: "mv1", title: "Move" });
+    await post("/api/tasks/mv1/start");
+    expect((await post("/api/tasks/mv1/move", { stageKey: "spec" })).body.current).toBe("spec");
+    const board = (await json("/api/board")).body;
+    const spec = board.columns.find((c: { stageKey: string }) => c.stageKey === "spec");
+    expect(spec.cards.some((c: { id: string }) => c.id === "mv1")).toBe(true);
+  });
+
+  it("POST move with an unknown stage → 400", async () => {
+    await post("/api/tasks", { id: "mv2", title: "Move2" });
+    expect((await post("/api/tasks/mv2/move", { stageKey: "nope" })).status).toBe(400);
+  });
+
   it("POST gate toggles the stage gate", async () => {
     await post("/api/tasks", { id: "m2", title: "M2" });
     await post("/api/tasks/m2/stages/spec/gate", { gate: false });
