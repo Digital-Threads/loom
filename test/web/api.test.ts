@@ -63,6 +63,15 @@ describe("web api", () => {
     expect(await res.json()).toEqual({ health: [{ profile: "work", ok: true }] });
   });
 
+  it("POST /api/accounts/subscription adds via aimux (D5.1)", async () => {
+    const added: string[] = [];
+    const app2 = createApi(db, { addSubscription: (name) => { added.push(name); return { ok: true }; } });
+    const ok = await app2.request("/api/accounts/subscription", { method: "POST", body: JSON.stringify({ name: "work" }) });
+    expect(await ok.json()).toMatchObject({ ok: true });
+    expect(added).toEqual(["work"]);
+    expect((await app2.request("/api/accounts/subscription", { method: "POST", body: "{}" })).status).toBe(400);
+  });
+
   it("POST /api/accounts/active swaps the active profile (F1.5)", async () => {
     const swapped: string[] = [];
     const app2 = createApi(db, { setActiveProfile: (p) => swapped.push(p) });

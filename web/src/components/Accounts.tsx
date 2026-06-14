@@ -7,10 +7,23 @@ export function Accounts({ client }: { client: LoomClient }) {
   const [ws, setWs] = useState<WorkspaceData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [newSub, setNewSub] = useState("");
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
   }, [client]);
+
+  async function addSub() {
+    if (!newSub.trim()) return;
+    setBusy(true);
+    try {
+      await client.addSubscription(newSub.trim());
+      setNewSub("");
+      setWs(await client.workspace());
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (err) return <div className="empty">Can’t reach the core: {err}</div>;
   if (!ws) return <div className="empty">Loading…</div>;
@@ -43,7 +56,11 @@ export function Accounts({ client }: { client: LoomClient }) {
     <div className="panel">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <h2>Subscriptions</h2>
-        <button className="btn" disabled={busy} onClick={checkHealth}>Check health</button>
+        <span className="row" style={{ gap: 6 }}>
+          <input className="inp" placeholder="new profile name" value={newSub} onChange={(e) => setNewSub(e.target.value)} />
+          <button className="btn acc" disabled={busy || !newSub.trim()} onClick={addSub}>Add subscription</button>
+          <button className="btn" disabled={busy} onClick={checkHealth}>Check health</button>
+        </span>
       </div>
       <table className="tbl">
         <thead><tr><th>Profile</th><th>Health</th><th></th></tr></thead>

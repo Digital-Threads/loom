@@ -13,6 +13,7 @@ import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile } from "@digital-threads/aimux/core";
+import { addSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import {
   listProjects,
   addProject,
@@ -54,6 +55,7 @@ import { reviewPrompt, parseFindings, type ReviewPass } from "../core/quality/re
 export interface ApiDeps {
   loadWorkspace?: (root?: string) => Promise<WorkspaceData>;
   setActiveProfile?: (profileId: string) => void;
+  addSubscription?: (name: string, opts: { cli?: string; model?: string }) => AddSubscriptionResult;
   memoryTask?: (id: string) => unknown;
   listProjects?: () => ProjectEntry[];
   addProject?: (root: string) => ProjectEntry;
@@ -86,6 +88,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
   const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
+  const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
   const memoryTask =
     deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
   const projectsList = deps.listProjects ?? (() => listProjects());
@@ -260,6 +263,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!profileId) return c.json({ error: "profileId required" }, 400);
     setActiveProfile(profileId);
     return c.json({ active: profileId });
+  });
+
+  // Add an aimux subscription (D5.1). Body: { name, cli?, model? }.
+  app.post("/api/accounts/subscription", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: unknown; cli?: unknown; model?: unknown };
+    if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
+    const res = addSub(b.name, { cli: typeof b.cli === "string" ? b.cli : undefined, model: typeof b.model === "string" ? b.model : undefined });
+    return res.ok ? c.json(res) : c.json(res, 400);
   });
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
