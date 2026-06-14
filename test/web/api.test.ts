@@ -471,6 +471,28 @@ describe("web api — fs browse + PR connector", () => {
     rmSync(d, { recursive: true, force: true });
   });
 
+  it("review/qa results persist and re-display via GET (stage history)", async () => {
+    createTask(database, { id: "h1", title: "History" });
+    const a = createApi(database, {
+      reviewPass: (key) => ({ key, run: async () => [] }),
+      qaChecks: () => [{ key: "tests", run: async () => ({ ok: true, output: "ok" }) }],
+    });
+    // initially nothing stored
+    expect(((await (await a.request("/api/tasks/h1/review")).json()) as { result: unknown }).result).toBeNull();
+    // run → persisted
+    await a.request("/api/tasks/h1/review/run", { method: "POST", body: "{}" });
+    await a.request("/api/tasks/h1/qa/run", { method: "POST", body: "{}" });
+    const review = (await (await a.request("/api/tasks/h1/review")).json()) as { result: { passed: boolean } | null };
+    const qa = (await (await a.request("/api/tasks/h1/qa")).json()) as { result: { passed: boolean } | null };
+    expect(review.result?.passed).toBe(true);
+    expect(qa.result?.passed).toBe(true);
+  });
+
+  it("GET /favicon.ico returns 204 (no console 404)", async () => {
+    const a = createApi(database);
+    expect((await a.request("/favicon.ico")).status).toBe(204);
+  });
+
   it("GET /api/fs/list lists sub-directories of a path", async () => {
     const a = createApi(database);
     const res = await a.request(`/api/fs/list?path=${encodeURIComponent(d)}`);

@@ -7,6 +7,7 @@ import type Database from "better-sqlite3";
 import {
   STAGE_KEYS,
   getStages,
+  getTask,
   listTasks,
   updateStageStatus,
   updateTaskStatus,
@@ -69,7 +70,10 @@ export function moveToStage(db: Database.Database, taskId: string, stageKey: str
     else if (s.status === "skipped") continue;
     else updateStageStatus(db, taskId, s.stage_key, STAGE_KEYS.indexOf(s.stage_key as (typeof STAGE_KEYS)[number]) < targetIdx ? "done" : "pending");
   }
-  updateTaskStatus(db, taskId, "running");
+  // Repositioning doesn't start work: a fresh task stays "created", a finished
+  // task moved back re-opens to "running"; an in-progress task is left as-is.
+  const task = getTask(db, taskId);
+  if (task?.status === "done") updateTaskStatus(db, taskId, "running");
   return stageKey;
 }
 

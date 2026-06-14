@@ -171,6 +171,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // L12 — dialog stages
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
+    analysisGet: (id: string) =>
+      getJson<{ result: { class: string; route: string[] } | null }>(`${base}/api/tasks/${id}/analysis`, f).then((d) => d.result),
     brainstormMessages: (id: string) =>
       getJson<{ messages: ChatMessage[] }>(`${base}/api/tasks/${id}/brainstorm/messages`, f).then((d) => d.messages),
     brainstormMessage: (id: string, message?: string) =>
@@ -185,8 +187,12 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // L6 — quality
     reviewRun: (id: string, opts?: { mode?: string; passes?: string[] }) =>
       postJson<{ result: ReviewResult; action: string }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
+    reviewGet: (id: string) =>
+      getJson<{ result: ReviewResult | null; action?: string }>(`${base}/api/tasks/${id}/review`, f),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
+    qaGet: (id: string) =>
+      getJson<{ result: QaResult | null }>(`${base}/api/tasks/${id}/qa`, f).then((d) => d.result),
     // L11 — extensibility
     layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
     skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),

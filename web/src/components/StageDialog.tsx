@@ -23,6 +23,7 @@ export function StageDialog({
 function Analysis({ client, taskId, onChanged }: { client: LoomClient; taskId: string; onChanged?: () => void }) {
   const [res, setRes] = useState<{ class: string; route: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => { client.analysisGet(taskId).then((r) => r && setRes(r)).catch(() => {}); }, [client, taskId]);
   async function run() {
     setBusy(true);
     try { setRes(await client.analysisRun(taskId)); onChanged?.(); } finally { setBusy(false); }
