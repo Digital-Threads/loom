@@ -28,7 +28,7 @@ import { buildSpineIds } from "../core/spine/ids.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
-import { recallPrior, partitionHits, buildGraph, type RecallHit } from "../core/knowledge/recall.js";
+import { recallPrior, partitionHits, buildGraph, askSearch, type RecallHit } from "../core/knowledge/recall.js";
 import {
   runAnalysis,
   brainstormTurn,
@@ -68,6 +68,8 @@ export interface ApiDeps {
   loadEvents?: (projectId: string) => LoomEvent[];
   /** Recall prior reasoning for a query (default: task-journal recall --json). */
   recall?: (query: string) => RecallHit[];
+  /** Semantic search this project (default: task-journal ask --json). */
+  search?: (query: string) => RecallHit[];
   /** Agent for the dialog stages (default: aimux cheap one-shot). */
   stageAgent?: StageAgent;
   /** Build a review pass for a key/target (default: aimux agent + parseFindings). */
@@ -98,6 +100,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
   const recall =
     deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
+  const search =
+    deps.search ?? ((query: string) => askSearch(resolveProjectRoot(process.cwd()), query));
   const stageAgent = deps.stageAgent ?? createAimuxStageAgent();
   const taskSpec = (id: string) => {
     const t = getTask(db, id);
@@ -296,6 +300,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const q = c.req.query("q") ?? "";
     const hits = q ? recall(q) : [];
     return c.json({ hits, ...partitionHits(hits) });
+  });
+  // L7.2 — semantic search over this project's memory.
+  app.get("/api/knowledge/search", (c) => {
+    const q = c.req.query("q") ?? "";
+    return c.json({ hits: q ? search(q) : [] });
   });
   // L7.3 — problem→solution graph derived from recall hits.
   app.get("/api/knowledge/graph", (c) => {
