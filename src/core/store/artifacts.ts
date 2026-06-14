@@ -83,6 +83,6 @@ export function appendChatMessage(
 
 export function getChatMessages(db: Database.Database, taskId: string, stage: string): ChatMessageRow[] {
   return db
-    .prepare("SELECT * FROM chat_messages WHERE task_id = ? AND stage = ? ORDER BY created_at ASC, id ASC")
+    .prepare("SELECT * FROM chat_messages WHERE task_id = ? AND stage = ? ORDER BY rowid ASC")
     .all(taskId, stage) as ChatMessageRow[];
 }

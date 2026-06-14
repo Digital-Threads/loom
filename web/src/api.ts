@@ -155,8 +155,25 @@ export function createClient(base = "", f: Fetcher = fetch) {
         `${base}/api/knowledge/recall?q=${encodeURIComponent(q)}`,
         f,
       ),
+    // L12 — dialog stages
+    analysisRun: (id: string) =>
+      postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
+    brainstormMessages: (id: string) =>
+      getJson<{ messages: ChatMessage[] }>(`${base}/api/tasks/${id}/brainstorm/messages`, f).then((d) => d.messages),
+    brainstormMessage: (id: string, message?: string) =>
+      postJson<{ question: string }>(`${base}/api/tasks/${id}/brainstorm/message`, { message }, f).then((d) => d.question),
+    brainstormDone: (id: string) =>
+      postJson<{ summary: Artifact }>(`${base}/api/tasks/${id}/brainstorm/done`, {}, f).then((d) => d.summary),
+    specGet: (id: string) => getJson<{ spec: Artifact | null }>(`${base}/api/tasks/${id}/spec`, f).then((d) => d.spec),
+    specDraft: (id: string) => postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/draft`, {}, f).then((d) => d.spec),
+    specReturn: (id: string, comment: string) =>
+      postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/return`, { comment }, f).then((d) => d.spec),
+    specAccept: (id: string) => postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/accept`, {}, f).then((d) => d.spec),
   };
 }
+
+export interface ChatMessage { id: string; role: string; content: string }
+export interface Artifact { id: string; kind: string; content: string; version: number; status: string }
 
 export interface RecallHit {
   taskId: string;
