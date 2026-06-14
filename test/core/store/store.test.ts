@@ -11,6 +11,8 @@ import {
   getStages,
   updateStageStatus,
   setStageGate,
+  setTaskSession,
+  getTaskSession,
 } from "../../../src/core/store/db.js";
 import type Database from "better-sqlite3";
 
@@ -28,6 +30,18 @@ afterEach(() => {
 });
 
 describe("core-store", () => {
+  it("a new task has no session yet (created on first stage call)", () => {
+    createTask(db, { id: "ts0", title: "Sess" });
+    expect(getTaskSession(db, "ts0")).toEqual({ sessionId: null, started: false });
+  });
+
+  it("setTaskSession stores the id and flips started → resume from then on", () => {
+    createTask(db, { id: "ts1", title: "Sess" });
+    setTaskSession(db, "ts1", "11111111-2222-3333-4444-555555555555");
+    expect(getTaskSession(db, "ts1")).toEqual({ sessionId: "11111111-2222-3333-4444-555555555555", started: true });
+    expect(getTask(db, "ts1")!.session_id).toBe("11111111-2222-3333-4444-555555555555");
+  });
+
   it("creates a task and seeds stage rows for full route", () => {
     const task = createTask(db, { id: "t1", title: "Refund API" });
     expect(task.id).toBe("t1");

@@ -1,0 +1,20 @@
+{
+  "version": "0.45.1",
+  "generatedAt": 1781458320535,
+  "frameworks": [
+    "React 19"
+  ],
+  "entrypoints": [
+    "src/core/",
+    "src/cli/",
+    "src/web/",
+    "src/"
+  ],
+  "moduleCount": 13,
+  "sourceFileCount": 96,
+  "namingConventions": [
+    "View(5)",
+    "Spec(3)"
+  ],
+  "projectType": "Node.js/TypeScript (React 19)"
+}
