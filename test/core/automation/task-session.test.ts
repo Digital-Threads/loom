@@ -55,11 +55,12 @@ describe("TaskSession (one session per task)", () => {
     expect(getTaskSession(db, "t1")).toEqual({ sessionId: "fixed-uuid", started: true });
   });
 
-  it("the preamble mandates token-pilot, task-journal, fact-only, and Russian formatting", () => {
+  it("the preamble mandates token-pilot, task-journal, fact-only, and plain user-language formatting", () => {
     expect(SESSION_PREAMBLE).toContain("token-pilot");
     expect(SESSION_PREAMBLE).toContain("task-journal");
     expect(SESSION_PREAMBLE).toMatch(/Только факт/i);
-    expect(SESSION_PREAMBLE).toMatch(/русск/i);
+    expect(SESSION_PREAMBLE).toMatch(/язык(е)? пользовател/i); // user's language, not hard-coded Russian
+    expect(SESSION_PREAMBLE).toMatch(/жаргон/i); // no machine/jargon-heavy text
   });
 
   it("every stage send reinforces the rules + carries the stage", async () => {
