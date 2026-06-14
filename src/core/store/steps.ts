@@ -73,6 +73,20 @@ export function updateStepStatus(
   }
 }
 
+/** Assign the router's choice (profile + optional model) to a step. */
+export function assignStep(
+  db: Database.Database,
+  id: string,
+  profile: string,
+  model?: string,
+): void {
+  db.prepare("UPDATE steps SET profile = ?, model = ? WHERE id = ?").run(
+    profile,
+    model ?? null,
+    id,
+  );
+}
+
 /** Parse a step's depends_on JSON into a string[] (empty when none). */
 export function stepDeps(step: StepRow): string[] {
   if (!step.depends_on) return [];
