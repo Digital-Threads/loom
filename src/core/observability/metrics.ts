@@ -78,6 +78,45 @@ export function rollupToStore(
   upsertCost(db, rollup.taskId, "token-pilot", "used", rollup.used, exact);
 }
 
+export interface AgentPerf {
+  profile: string;
+  runs: number;
+  failures: number;
+  durationMs: number;
+}
+
+/** Agent performance per profile, from run.completed events (L9.3). Feeds the
+ *  learning layer (L8) and the Accounts/Timeline panels. */
+export function agentPerformance(events: LoomEvent[]): AgentPerf[] {
+  const by = new Map<string, AgentPerf>();
+  for (const e of events) {
+    if (e.type !== "run.completed" || !e.profileId) continue;
+    const p = by.get(e.profileId) ?? { profile: e.profileId, runs: 0, failures: 0, durationMs: 0 };
+    p.runs += 1;
+    if ((e.metrics?.failed ?? 0) > 0 || e.severity === "error") p.failures += 1;
+    p.durationMs += e.metrics?.durationMs ?? 0;
+    by.set(e.profileId, p);
+  }
+  return [...by.values()];
+}
+
+export interface FailureReason {
+  message: string;
+  count: number;
+}
+
+/** Failure reasons from failed steps/runs (L9.3) — categorised by message. */
+export function failureReasons(events: LoomEvent[]): FailureReason[] {
+  const by = new Map<string, number>();
+  for (const e of events) {
+    const failed = e.severity === "error" && (e.type === "step.completed" || e.type === "run.completed" || e.type === "run.failed");
+    if (!failed) continue;
+    const key = e.message || e.type;
+    by.set(key, (by.get(key) ?? 0) + 1);
+  }
+  return [...by.entries()].map(([message, count]) => ({ message, count })).sort((a, b) => b.count - a.count);
+}
+
 export interface SessionSpend {
   sessionId: string;
   /** Total tokens spent in the session (aimux usage; e.g. totalTokens()). */
