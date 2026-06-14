@@ -1,11 +1,34 @@
 // Core-store database: open/migrate + typed helpers.
 // Single-file SQLite under ~/.loom/state/<projectId>.db (or test temp).
 
-import Database from "better-sqlite3";
+// Type-only import (erased at runtime) — the actual driver is loaded
+// conditionally below, because better-sqlite3 is a native addon Bun can't
+// dlopen. We use bun:sqlite under Bun and better-sqlite3 under Node (vitest).
+import type Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { loomDataDir } from "../paths.js";
 import { CREATE_TABLES, SCHEMA_VERSION } from "./schema.js";
+
+const requireDriver = createRequire(import.meta.url);
+
+/** Open a SQLite database with the runtime-appropriate driver. Both
+ *  better-sqlite3 and bun:sqlite expose the same prepare/run/get/all/exec
+ *  surface the store relies on. WAL is enabled either way. */
+function newDatabase(path: string): Database.Database {
+  const hasBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+  if (hasBun) {
+    const { Database: BunDatabase } = requireDriver("bun:sqlite");
+    const db = new BunDatabase(path);
+    db.exec("PRAGMA journal_mode = WAL");
+    return db as unknown as Database.Database;
+  }
+  const BetterSqlite3 = requireDriver("better-sqlite3");
+  const db = new BetterSqlite3(path);
+  db.pragma("journal_mode = WAL");
+  return db as Database.Database;
+}
 
 export function storeDir(): string {
   return join(loomDataDir(), "state");
@@ -18,8 +41,7 @@ export function storePath(projectId: string): string {
 export function openStore(path?: string, projectId?: string): Database.Database {
   const p = path ?? storePath(projectId ?? "default");
   mkdirSync(dirname(p), { recursive: true });
-  const db = new Database(p);
-  db.pragma("journal_mode = WAL");
+  const db = newDatabase(p);
   db.exec(CREATE_TABLES);
 
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
