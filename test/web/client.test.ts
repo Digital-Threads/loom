@@ -36,6 +36,25 @@ describe("web api client", () => {
     const c = createClient("", fakeFetch({}));
     await expect(c.board()).rejects.toThrow(/404/);
   });
+
+  it("create() posts and returns the task", async () => {
+    const c = createClient("", fakeFetch({ "/api/tasks": { task: { id: "t9", title: "X" } } }));
+    expect((await c.create({ title: "X" })).id).toBe("t9");
+  });
+
+  it("accept() returns the next stage", async () => {
+    const c = createClient("", fakeFetch({ "/api/tasks/t1/stages/analysis/accept": { next: "brainstorm" } }));
+    expect((await c.accept("t1", "analysis")).next).toBe("brainstorm");
+  });
+
+  it("start() and setGate() resolve", async () => {
+    const c = createClient(
+      "",
+      fakeFetch({ "/api/tasks/t1/start": { active: "analysis" }, "/api/tasks/t1/stages/spec/gate": { ok: true } }),
+    );
+    expect((await c.start("t1")).active).toBe("analysis");
+    expect((await c.setGate("t1", "spec", false)).ok).toBe(true);
+  });
 });
 
 describe("web ui helpers", () => {

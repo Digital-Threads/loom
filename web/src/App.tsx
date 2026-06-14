@@ -19,6 +19,7 @@ export function App() {
   const [view, setView] = useState<string>("board");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [reload, setReload] = useState(0);
 
   const inTask = taskId !== null;
 
@@ -26,6 +27,17 @@ export function App() {
     setView(v);
     setTaskId(null);
     setDrawer(false);
+  }
+
+  async function createNew() {
+    const title = window.prompt("Название задачи?");
+    if (!title?.trim()) return;
+    try {
+      await client.create({ title: title.trim() });
+      setReload((r) => r + 1);
+    } catch (e) {
+      window.alert(`Не удалось создать: ${e}`);
+    }
   }
 
   return (
@@ -48,15 +60,20 @@ export function App() {
           {inTask ? <span className="crumb">  {taskId}</span> : <span className="crumb" />}
           {view === "board" && !inTask ? (
             <div className="right">
-              <button className="btn acc">+ Новая</button>
+              <button className="btn acc" onClick={createNew}>+ Новая</button>
             </div>
           ) : null}
         </header>
         <div className="content">
           {inTask ? (
-            <TaskView client={client} taskId={taskId} />
+            <TaskView
+              key={`${taskId}:${reload}`}
+              client={client}
+              taskId={taskId}
+              onChanged={() => setReload((r) => r + 1)}
+            />
           ) : view === "board" ? (
-            <Board client={client} onOpen={setTaskId} />
+            <Board key={reload} client={client} onOpen={setTaskId} />
           ) : (
             <div className="empty">Раздел «{SECTION_TITLES[view] ?? view}» — скоро.</div>
           )}

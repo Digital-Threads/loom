@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { type LoomClient, type TaskDetail, STAGE_LABELS } from "../api";
 import { stageStateClass, stageIcon, statusLabel } from "../ui";
 
-export function TaskView({ client, taskId }: { client: LoomClient; taskId: string }) {
+export function TaskView({
+  client,
+  taskId,
+  onChanged,
+}: {
+  client: LoomClient;
+  taskId: string;
+  onChanged?: () => void;
+}) {
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<string>("analysis");
@@ -46,6 +54,28 @@ export function TaskView({ client, taskId }: { client: LoomClient; taskId: strin
         <div className="ph">
           <strong>{STAGE_LABELS[active] ?? active}</strong>
           <span className="tag">{statusLabel(detail.stages.find((s) => s.stage_key === active)?.status ?? "")}</span>
+          <span style={{ marginLeft: "auto" }} />
+          {detail.task.status === "created" ? (
+            <button
+              className="btn acc"
+              onClick={async () => {
+                await client.start(taskId);
+                onChanged?.();
+              }}
+            >
+              ▶ Старт
+            </button>
+          ) : detail.stages.find((s) => s.stage_key === active)?.status === "active" ? (
+            <button
+              className="btn acc"
+              onClick={async () => {
+                await client.accept(taskId, active);
+                onChanged?.();
+              }}
+            >
+              ✓ Принять
+            </button>
+          ) : null}
         </div>
         <div className="pb">
           {active === "rd" || active === "impl" ? (
