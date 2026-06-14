@@ -17,6 +17,9 @@ import { secureExecutor } from "../security/secure-executor.js";
 import { recordRunCost } from "../observability/cost-recorder.js";
 import { tokenEventsByTime, type TokenEvent } from "../plugins/token-pilot/adapter.js";
 import { resolveProjectRoot } from "../workspace/project-id.js";
+import { computePriors, outcomesFromEvents } from "../learning/priors.js";
+import { loadLoomEvents } from "../spine/event-bus.js";
+import type { LoomEvent } from "../spine/event.js";
 
 export interface StartSpecRunOptions {
   /** Override the orchestrate deps (decomposer/executor) — for tests. */
@@ -29,6 +32,8 @@ export interface StartSpecRunOptions {
   sandbox?: { repoRoot: string; base?: string; git?: GitRunner };
   /** Token events source for cost recording (default: token-pilot adapter). */
   loadTokenEvents?: () => TokenEvent[];
+  /** Event source for learning priors (default: project event bus). */
+  loadEvents?: () => LoomEvent[];
 }
 
 export function startSpecRun(
@@ -52,10 +57,15 @@ export function startSpecRun(
     opts.loadTokenEvents ??
     (() => tokenEventsByTime(opts.sandbox?.repoRoot ?? resolveProjectRoot(process.cwd())));
 
+  // learning (L8): bias routing by past outcomes from the event history.
+  const priorEvents = opts.loadEvents ? opts.loadEvents() : loadLoomEvents(ids.projectId);
+  const priors = computePriors(outcomesFromEvents(priorEvents));
+
   return rm.start<RunSpecResult>({ projectId: ids.projectId }, async (ctx) => {
     const result = await runSpec(db, deps, taskId, spec, candidates, ids, {
       emit: ctx.emit,
       sandbox: opts.sandbox,
+      priors,
     });
     // provод 4 — record cost on completion (exact via spine task_id tagging).
     if (ids.taskId) recordRunCost(db, ids.taskId, { tokenEvents: loadTokenEvents() });
