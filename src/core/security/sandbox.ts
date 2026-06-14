@@ -3,6 +3,7 @@
 // the git runner is injected so it's testable without a real repo.
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loomDataDir } from "../paths.js";
 
@@ -43,6 +44,20 @@ export function prepareWorktree(
   if (opts.base) args.push(opts.base);
   git(args, repoRoot);
   return { path, branch };
+}
+
+/** Idempotent worktree for a task: one worktree per task, reused across stages
+ *  (the whole session lives in it). Creates it on first use, returns it after. */
+export function ensureWorktree(
+  repoRoot: string,
+  taskId: string,
+  opts: SandboxOptions & { exists?: (p: string) => boolean } = {},
+): Worktree {
+  const path = worktreePath(taskId);
+  const branch = worktreeBranch(taskId);
+  const exists = opts.exists ?? ((p: string) => existsSync(p));
+  if (exists(path)) return { path, branch };
+  return prepareWorktree(repoRoot, taskId, opts);
 }
 
 /** Remove a task's worktree (best-effort; force drops uncommitted changes). */
