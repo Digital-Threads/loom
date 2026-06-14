@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { loomDataDir } from "../paths.js";
 import { CREATE_TABLES, SCHEMA_VERSION } from "./schema.js";
+import { runMigrations } from "./migrations.js";
 
 const requireDriver = createRequire(import.meta.url);
 
@@ -48,9 +49,17 @@ export function openStore(path?: string, projectId?: string): Database.Database 
     | { value: string }
     | undefined;
   if (!row) {
+    // Fresh db: CREATE_TABLES built it at the current version.
     db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?)").run(
       String(SCHEMA_VERSION),
     );
+  } else {
+    // Existing db: migrate forward if it predates the current schema.
+    const stored = Number(row.value) || 0;
+    if (stored < SCHEMA_VERSION) {
+      const reached = runMigrations(db, stored, SCHEMA_VERSION);
+      db.prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'").run(String(reached));
+    }
   }
   return db;
 }

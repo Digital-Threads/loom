@@ -76,6 +76,22 @@ describe("web api client", () => {
     const c = createClient("", fakeFetch({ "/api/memory/tasks/tj-1": { detail: { decisions: [1], findings: [], rejections: [] } } }));
     expect((await c.memoryTask("tj-1")).decisions).toEqual([1]);
   });
+
+  it("projects()/addProject()/setActiveProject() (D3)", async () => {
+    const c = createClient(
+      "",
+      fakeFetch({
+        "/api/projects": { projects: [{ projectId: "p1", root: "/r", name: "r", addedAt: 0 }], active: "p1" },
+      }),
+    );
+    const d = await c.projects();
+    expect(d.active).toBe("p1");
+    expect(d.projects[0].projectId).toBe("p1");
+    const c2 = createClient("", fakeFetch({ "/api/projects": { project: { projectId: "p2", root: "/x", name: "x", addedAt: 0 } } }));
+    expect((await c2.addProject("/x")).projectId).toBe("p2");
+    const c3 = createClient("", fakeFetch({ "/api/projects/active": { active: "p9" } }));
+    expect(await c3.setActiveProject("p9")).toBe("p9");
+  });
 });
 
 describe("web ui helpers", () => {

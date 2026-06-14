@@ -16,3 +16,7 @@ export function loomPluginsDir(): string {
 export function loomRegistryFile(): string {
   return join(loomDataDir(), "plugins.json");
 }
+
+export function loomProjectsFile(): string {
+  return join(loomDataDir(), "projects.json");
+}

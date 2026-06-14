@@ -13,12 +13,23 @@ import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile } from "@digital-threads/aimux/core";
+import {
+  listProjects,
+  addProject,
+  activeProject,
+  setActiveProject,
+  type ProjectEntry,
+} from "../core/workspace/projects.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
-  loadWorkspace?: () => Promise<WorkspaceData>;
+  loadWorkspace?: (root?: string) => Promise<WorkspaceData>;
   setActiveProfile?: (profileId: string) => void;
   memoryTask?: (id: string) => unknown;
+  listProjects?: () => ProjectEntry[];
+  addProject?: (root: string) => ProjectEntry;
+  setActiveProject?: (id: string) => boolean;
+  activeProject?: () => ProjectEntry | null;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -27,13 +38,37 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
   const memoryTask =
     deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
+  const projectsList = deps.listProjects ?? (() => listProjects());
+  const projectAdd = deps.addProject ?? ((root: string) => addProject(root));
+  const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
+  const projectActive = deps.activeProject ?? (() => activeProject());
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
-  // The 3 core modules' aggregated workspace (aimux/token-pilot/task-journal):
-  // subscriptions, sessions, health, token usage/events, tj tasks/events. One
-  // load() drives the Accounts/Tokens/Memory screens (F1).
-  app.get("/api/workspace", async (c) => c.json(await loadWorkspace()));
+  // The 3 core modules' aggregated workspace. ?project=<id> loads a specific
+  // registered project; otherwise the active project (D3) / cwd.
+  app.get("/api/workspace", async (c) => {
+    const pid = c.req.query("project");
+    const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : undefined;
+    return c.json(await loadWorkspace(root));
+  });
+
+  // ─── projects (D3) ─────────────────────────────────────────────────────────
+  app.get("/api/projects", (c) =>
+    c.json({ projects: projectsList(), active: projectActive()?.projectId ?? null }),
+  );
+  app.post("/api/projects", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { root?: unknown };
+    const root = typeof body.root === "string" ? body.root.trim() : "";
+    if (!root) return c.json({ error: "root required" }, 400);
+    return c.json({ project: projectAdd(root) }, 201);
+  });
+  app.post("/api/projects/active", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { projectId?: unknown };
+    const id = typeof body.projectId === "string" ? body.projectId : "";
+    if (!projectSetActive(id)) return c.json({ error: "unknown project" }, 404);
+    return c.json({ active: id });
+  });
 
   // Board view-model: 9 stage columns with their cards.
   app.get("/api/board", (c) => c.json({ columns: boardColumns(db) }));

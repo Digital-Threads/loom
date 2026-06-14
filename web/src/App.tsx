@@ -7,9 +7,11 @@ import { NewTaskModal } from "./components/NewTaskModal";
 import { Accounts } from "./components/Accounts";
 import { Tokens } from "./components/Tokens";
 import { Memory } from "./components/Memory";
+import { Projects } from "./components/Projects";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
+  projects: "Projects",
   accounts: "Accounts",
   tokens: "Tokens",
   memory: "Memory",
@@ -70,6 +72,8 @@ export function App() {
             />
           ) : view === "board" ? (
             <Board key={reload} client={client} onOpen={setTaskId} />
+          ) : view === "projects" ? (
+            <Projects client={client} onSwitched={() => setReload((r) => r + 1)} />
           ) : view === "accounts" ? (
             <Accounts client={client} />
           ) : view === "tokens" ? (
