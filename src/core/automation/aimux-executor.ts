@@ -44,6 +44,7 @@ export function createAimuxExecutor(deps: AimuxExecutorDeps = {}): StepExecutor 
         extraArgs: ["-p", buildPrompt(req.step)],
         taskId: req.ids.taskId,
         workflowId: req.ids.workflowId,
+        cwd: req.cwd,
       });
       return { exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr };
     },

@@ -12,6 +12,8 @@ export interface ExecRequest {
   taskId: string;
   step: StepRow;
   ids: SpineIds;
+  /** Working directory for the run (e.g. the sandbox worktree). */
+  cwd?: string;
 }
 
 export interface ExecResult {
@@ -58,6 +60,7 @@ export async function runStep(
   taskId: string,
   step: StepRow,
   ids: SpineIds,
+  cwd?: string,
 ): Promise<ExecResult> {
   const runId = `run-${step.id}`;
   updateStepStatus(db, step.id, "running");
@@ -71,7 +74,7 @@ export async function runStep(
 
   let res: ExecResult;
   try {
-    res = await executor.run({ taskId, step, ids });
+    res = await executor.run({ taskId, step, ids, cwd });
   } catch (e) {
     res = { exitCode: 1, stderr: (e as Error).message };
   }
@@ -97,6 +100,7 @@ export async function runDag(
   executor: StepExecutor,
   taskId: string,
   ids: SpineIds,
+  cwd?: string,
 ): Promise<DagResult> {
   const steps = getSteps(db, taskId);
   let ran = 0;
@@ -104,7 +108,7 @@ export async function runDag(
 
   for (const wave of waves(steps)) {
     const results = await Promise.all(
-      wave.map((s) => runStep(db, executor, taskId, s, ids)),
+      wave.map((s) => runStep(db, executor, taskId, s, ids, cwd)),
     );
     for (const r of results) {
       ran += 1;

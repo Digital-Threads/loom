@@ -23,8 +23,9 @@ export async function executeImplStage(
   executor: StepExecutor,
   taskId: string,
   ids: SpineIds,
+  cwd?: string,
 ): Promise<StageRunResult> {
-  const dag = await runDag(db, executor, taskId, ids);
+  const dag = await runDag(db, executor, taskId, ids, cwd);
   if (dag.ok) {
     completeStage(db, taskId, "impl");
     return { dag, advanced: true };

@@ -10,10 +10,19 @@ import { chooseRoute, type RouteCandidate } from "./router.js";
 import { executeImplStage, type StageRunResult } from "./conductor.js";
 import type { StepExecutor } from "./exec-loop.js";
 import type { SpineIds } from "../spine/ids.js";
+import { applyPriors, type Prior } from "../learning/priors.js";
+import { prepareWorktree, type GitRunner } from "../security/sandbox.js";
 
 export interface OrchestrateDeps {
   decomposer: Decomposer;
   executor: StepExecutor;
+}
+
+export interface RunSpecOptions {
+  /** Learning priors — bias the router toward reliable profiles. */
+  priors?: Map<string, Prior>;
+  /** Run in an isolated git worktree under repoRoot (security). */
+  sandbox?: { repoRoot: string; base?: string; git?: GitRunner };
 }
 
 export interface RunSpecResult {
@@ -21,6 +30,8 @@ export interface RunSpecResult {
   assigned: number;
   unrouted: string[];
   exec: StageRunResult;
+  /** Sandbox worktree path when sandbox was requested. */
+  cwd?: string;
 }
 
 /**
@@ -37,13 +48,17 @@ export async function runSpec(
   spec: string,
   candidates: RouteCandidate[],
   ids: SpineIds,
+  opts: RunSpecOptions = {},
 ): Promise<RunSpecResult> {
   const steps = await planTask(db, deps.decomposer, taskId, spec);
+
+  // learning: bias the candidate pool by past success before routing.
+  const pool = opts.priors ? applyPriors(candidates, opts.priors) : candidates;
 
   let assigned = 0;
   const unrouted: string[] = [];
   for (const step of steps) {
-    const choice = chooseRoute({ capability: step.agent ?? undefined }, candidates);
+    const choice = chooseRoute({ capability: step.agent ?? undefined }, pool);
     if (choice) {
       assignStep(db, step.id, choice.profile, choice.model);
       assigned += 1;
@@ -52,8 +67,17 @@ export async function runSpec(
     }
   }
 
-  updateStageStatus(db, taskId, "impl", "active");
-  const exec = await executeImplStage(db, deps.executor, taskId, ids);
+  // security: run in an isolated worktree when requested.
+  let cwd: string | undefined;
+  if (opts.sandbox) {
+    cwd = prepareWorktree(opts.sandbox.repoRoot, taskId, {
+      base: opts.sandbox.base,
+      git: opts.sandbox.git,
+    }).path;
+  }
 
-  return { steps: getSteps(db, taskId).length, assigned, unrouted, exec };
+  updateStageStatus(db, taskId, "impl", "active");
+  const exec = await executeImplStage(db, deps.executor, taskId, ids, cwd);
+
+  return { steps: getSteps(db, taskId).length, assigned, unrouted, exec, cwd };
 }

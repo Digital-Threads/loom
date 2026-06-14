@@ -77,3 +77,30 @@ export function rollupToStore(
   upsertCost(db, rollup.taskId, "token-pilot", "saved", rollup.saved, exact);
   upsertCost(db, rollup.taskId, "token-pilot", "used", rollup.used, exact);
 }
+
+export interface SessionSpend {
+  sessionId: string;
+  /** Total tokens spent in the session (aimux usage; e.g. totalTokens()). */
+  total: number;
+}
+
+/** Sum the real spend (from aimux usage) over the sessions belonging to a task.
+ *  Decoupled from aimux types: caller passes {sessionId,total} rows + the task's
+ *  session ids (e.g. from sessionsForTask). */
+export function spentForTask(rows: SessionSpend[], sessionIds: string[]): number {
+  const set = new Set(sessionIds);
+  let spent = 0;
+  for (const r of rows) if (set.has(r.sessionId)) spent += r.total;
+  return spent;
+}
+
+/** Persist a task's real spend into cost_rollups (source: aimux). `exact` =
+ *  spine-linked (sessions tied to the task). */
+export function recordSpend(
+  db: Database.Database,
+  taskId: string,
+  spent: number,
+  exact: boolean,
+): void {
+  upsertCost(db, taskId, "aimux", "spent", spent, exact);
+}
