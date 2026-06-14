@@ -45,13 +45,12 @@ import { getChatMessages, latestArtifact, createArtifact } from "../core/store/a
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
-import { worktreeBranch, removeWorktree } from "../core/security/sandbox.js";
+import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
-import type { RunSpecResult } from "../core/automation/orchestrate.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join as pathJoin } from "node:path";
-import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../core/pipeline/conductor.js";
+import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -124,11 +123,22 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
   const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher();
-  const stageAgentFor = (taskId: string, stage: string): StageAgent => {
-    if (deps.stageAgent) return deps.stageAgent;
-    const session = createTaskSession(db, taskId, { launcher: sessionLauncher });
-    return (prompt: string) => session.send(prompt, { stage }).then((r) => r.text);
+  // One cwd for the whole task = its worktree (created once, reused by every
+  // stage), so the live process edits in isolation. Non-git repos use the repo.
+  const taskCwd = (id: string): string | undefined => {
+    const t = getTask(db, id);
+    if (t?.repo && isGitRepo(t.repo)) return ensureWorktree(t.repo, id).path;
+    return t?.repo || undefined;
   };
+  // Send a stage instruction into the task's ONE session (tests inject a one-shot
+  // deps.stageAgent). All stages share the session + the task worktree cwd.
+  const sessionSend = (id: string, stage: string, prompt: string): Promise<string> => {
+    if (deps.stageAgent) return deps.stageAgent(prompt);
+    return createTaskSession(db, id, { launcher: sessionLauncher })
+      .send(prompt, { stage, cwd: taskCwd(id) })
+      .then((r) => r.text);
+  };
+  const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
   const taskSpec = (id: string) => {
     const t = getTask(db, id);
     return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
@@ -165,24 +175,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try { return JSON.parse(a.content) as T; } catch { return null; }
   };
 
-  // L13 — default stage runners: wire each pipeline stage to its layer. Override
-  // via deps.runners for tests. Interactive stages (brainstorm/spec) are driven
-  // by the UI; the conductor auto-runs them best-effort here for autopilot.
-  // The impl stage runs in an isolated git worktree (sandbox) when the task's
-  // repo is a git repo; the agent's edits are auto-committed onto branch
-  // loom/<taskId> so the PR stage has content to push.
-  async function runImplStage(taskId: string): Promise<StageOutcome> {
-    const t = getTask(db, taskId);
-    const repoRoot = t?.repo;
-    const useSandbox = !!repoRoot && isGitRepo(repoRoot);
-    const ids = buildSpineIds({ repoRoot: repoRoot || process.cwd(), taskId });
-    if (useSandbox) removeWorktree(repoRoot!, taskId); // clear any stale worktree from a prior run
-    const runId = startSpecRun(rm, db, taskId, taskSpec(taskId), ids, useSandbox ? { sandbox: { repoRoot: repoRoot! } } : {});
-    const rec = await rm.wait(runId);
-    const result = rec.result as RunSpecResult | undefined;
-    if (useSandbox && result?.cwd) commitWorktree(result.cwd, `loom: ${t?.title ?? taskId}`);
-    return { ok: rec.status === "done" && (result?.exec?.dag?.ok ?? true) };
-  }
+  // L13 — default stage runners: each stage injects its instruction into the
+  // task's ONE session. R&D = planning (decompose into self-sufficient subtasks,
+  // NO code) → stored for review. Implementation = execute the plan in the task
+  // worktree → auto-commit so PR has content. Both honour the completeness-gate.
+  const RD_PROMPT =
+    "Стадия R&D — планирование. Разбей задачу на самодостаточные подзадачи (план/DAG): для каждой опиши что именно реализуется, какие файлы затрагиваются и критерий готовности. Код пока НЕ пиши. В конце укажи статус строкой ИТОГ.";
+  const IMPL_PROMPT =
+    "Стадия реализации. Выполни план: внеси реальные изменения в код (при необходимости делегируй субагентам), проверь результат. В конце укажи статус строкой ИТОГ.";
   const doneProjectId = () => projectActive()?.projectId ?? "default";
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
@@ -194,8 +194,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       acceptSpec(db, id);
       return { ok: true };
     },
-    rd: async (_d, id) => runImplStage(id),
-    impl: async (_d, id) => runImplStage(id),
+    rd: async (_d, id) => {
+      const text = await sessionSend(id, "rd", RD_PROMPT); // plan only, no code
+      saveResult(id, "rd", "rd-plan", { plan: text });
+      const { complete, note } = parseCompleteness(text);
+      return complete ? { ok: true } : { ok: true, needsAttention: true, note };
+    },
+    impl: async (_d, id) => {
+      const text = await sessionSend(id, "impl", IMPL_PROMPT); // execute in the session/worktree
+      const t = getTask(db, id);
+      if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: ${t.title}`);
+      saveResult(id, "impl", "impl-report", { report: text });
+      const { complete, note } = parseCompleteness(text);
+      return complete ? { ok: true } : { ok: true, needsAttention: true, note };
+    },
     review: async (_d, id) => {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
       saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });

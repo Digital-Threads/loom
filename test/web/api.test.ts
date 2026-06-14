@@ -506,6 +506,25 @@ describe("web api — fs browse + PR connector", () => {
     expect(calls[0].sessionId).toBe(calls[1].sessionId); // same session across stages
   });
 
+  it("R&D stage produces a plan (no code) and honours the completeness-gate", async () => {
+    async function runRd(taskId: string, marker: string) {
+      createTask(database, { id: taskId, title: "Plan" });
+      const sessionLauncher = { run: async () => ({ text: `План:\n- подзадача 1\n${marker}` }) };
+      const a = createApi(database, { sessionLauncher });
+      await a.request(`/api/tasks/${taskId}/start`, { method: "POST" });
+      await a.request(`/api/tasks/${taskId}/move`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "rd" }) });
+      const res = await a.request(`/api/tasks/${taskId}/run-stage`, { method: "POST", body: "{}" });
+      const body = (await res.json()) as { stoppedAt: string | null };
+      // the plan was stored as an artifact for review
+      const stored = (await (await a.request(`/api/tasks/${taskId}`)).json()) as { task: unknown };
+      return { stoppedAt: body.stoppedAt, hasTask: !!stored.task };
+    }
+    const parked = await runRd("rdA", "ИТОГ: НЕ ГОТОВО — мало данных");
+    expect(parked.stoppedAt).toBe("rd"); // doubtful plan parks
+    const advanced = await runRd("rdB", "ИТОГ: ГОТОВО");
+    expect(advanced.stoppedAt).not.toBe("rd"); // ready plan moves on
+  });
+
   it("completeness-gate: spec parks on НЕ ГОТОВО, advances on ГОТОВО", async () => {
     async function runSpec(taskId: string, marker: string) {
       createTask(database, { id: taskId, title: "Gate" });
