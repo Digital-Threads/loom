@@ -13,6 +13,7 @@ import { retryingExecutor, type RunManager } from "./run-manager.js";
 import { liveCandidates } from "./router-live.js";
 import type { RouteCandidate } from "./router.js";
 import type { GitRunner } from "../security/sandbox.js";
+import { secureExecutor } from "../security/secure-executor.js";
 
 export interface StartSpecRunOptions {
   /** Override the orchestrate deps (decomposer/executor) — for tests. */
@@ -36,7 +37,10 @@ export function startSpecRun(
   const deps: OrchestrateDeps =
     opts.deps ?? {
       decomposer: createAimuxDecomposer(),
-      executor: retryingExecutor(createAimuxExecutor(), { maxRetries: opts.maxRetries ?? 1 }),
+      // retry(secure(aimux)): each attempt is sandboxed-redacted-audited.
+      executor: retryingExecutor(secureExecutor(createAimuxExecutor()), {
+        maxRetries: opts.maxRetries ?? 1,
+      }),
     };
   const candidates = opts.candidates ?? liveCandidates();
 
