@@ -40,7 +40,7 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { createTaskSession, parseCompleteness, type SessionLauncher } from "../core/automation/task-session.js";
-import { createAimuxSessionLauncher } from "../core/automation/aimux-session-launcher.js";
+import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
@@ -123,7 +123,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
-  const sessionLauncher = deps.sessionLauncher ?? createAimuxSessionLauncher();
+  const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher();
   const stageAgentFor = (taskId: string, stage: string): StageAgent => {
     if (deps.stageAgent) return deps.stageAgent;
     const session = createTaskSession(db, taskId, { launcher: sessionLauncher });
