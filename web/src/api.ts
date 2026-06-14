@@ -169,8 +169,17 @@ export function createClient(base = "", f: Fetcher = fetch) {
     specReturn: (id: string, comment: string) =>
       postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/return`, { comment }, f).then((d) => d.spec),
     specAccept: (id: string) => postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/accept`, {}, f).then((d) => d.spec),
+    // L6 — quality
+    reviewRun: (id: string, opts?: { mode?: string; passes?: string[] }) =>
+      postJson<{ result: ReviewResult; action: string }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
+    qaRun: (id: string, opts?: { checks?: string[] }) =>
+      postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
   };
 }
+
+export interface ReviewFinding { pass: string; severity: string; message: string; file?: string }
+export interface ReviewResult { findings: ReviewFinding[]; counts: Record<string, number>; passed: boolean }
+export interface QaResult { passed: boolean; results: { key: string; ok: boolean; output?: string }[] }
 
 export interface ChatMessage { id: string; role: string; content: string }
 export interface Artifact { id: string; kind: string; content: string; version: number; status: string }

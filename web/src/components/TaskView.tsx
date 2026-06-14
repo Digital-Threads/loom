@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { type LoomClient, type TaskDetail, STAGE_LABELS } from "../api";
 import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { StageDialog } from "./StageDialog";
+import { ReviewQA } from "./ReviewQA";
 
 export function TaskView({
   client,
@@ -123,6 +124,8 @@ export function TaskView({
             </>
           ) : active === "analysis" || active === "brainstorm" || active === "spec" ? (
             <StageDialog client={client} taskId={taskId} stage={active} onChanged={onChanged} />
+          ) : active === "review" || active === "qa" ? (
+            <ReviewQA client={client} taskId={taskId} stage={active} />
           ) : (
             <div className="muted">
               {detail.task.description || "Stage content appears as the task progresses."}
