@@ -48,6 +48,45 @@ export function tokensForTask(
 }
 
 /**
+ * Exact per-task token cost: sums only token events tagged with this task_id
+ * (the spine — token-pilot stamps task_id when the session was launched by
+ * Loom). No time-window heuristic, so no double-count across overlapping tasks.
+ */
+export function tokensForTaskExact(tokenEvents: TokenEvent[], taskId: string): TaskTokens {
+  let used = 0;
+  let saved = 0;
+  for (const t of tokenEvents) {
+    if (t.taskId !== taskId) continue;
+    used += t.used;
+    saved += t.saved;
+  }
+  return { used, saved };
+}
+
+export interface TaskCost extends TaskTokens {
+  /** true = summed from task_id-tagged events; false = time-window estimate. */
+  exact: boolean;
+}
+
+/**
+ * Best available per-task cost: prefers the exact sum over task_id-tagged events
+ * (spine active) and falls back to the time-window estimate when no event
+ * carries this task_id. `exact` is the honest provenance the UI shows
+ * (`exact` vs `≈ estimate`).
+ */
+export function taskCost(
+  allEvents: TjEvent[],
+  taskId: string,
+  tokenEvents: TokenEvent[],
+): TaskCost {
+  const hasTagged = tokenEvents.some((t) => t.taskId === taskId);
+  if (hasTagged) {
+    return { ...tokensForTaskExact(tokenEvents, taskId), exact: true };
+  }
+  return { ...tokensForTask(allEvents, taskId, tokenEvents), exact: false };
+}
+
+/**
  * Per-session breakdown of token usage within a task's event-time window.
  * Groups in-window token events by sessionId, joins the aimux profile
  * (unknown session → "—"), and sorts by used desc (tie-break: saved desc,
