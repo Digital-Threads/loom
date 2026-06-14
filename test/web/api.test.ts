@@ -153,6 +153,29 @@ describe("web api", () => {
     expect((await app2.request("/api/runs/nope")).status).toBe(404);
   });
 
+  it("POST /api/runs/:runId/stdin injects input into a live run (loom-isd.13)", async () => {
+    const rm = createRunManager();
+    const received: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const runId = rm.start({ projectId: "p1", toBus: false }, async (ctx) => {
+      ctx.onInput((data) => received.push(data));
+      await gate;
+      return received.length;
+    });
+    const app2 = createApi(db, { runManager: rm });
+    const res = await app2.request(`/api/runs/${runId}/stdin`, {
+      method: "POST",
+      body: JSON.stringify({ data: "y\n" }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    expect(received).toEqual(["y\n"]);
+    release();
+    await rm.wait(runId);
+    expect((await app2.request("/api/runs/nope/stdin", { method: "POST", body: "{}" })).status).toBe(404);
+  });
+
   it("GET /api/timeline returns the project events time-ordered (L9.4)", async () => {
     const e = (ts: number, type: string) => ({ schema: "loom.event.v1", ts, source: "loom", projectId: "p1", type });
     const app2 = createApi(db, {
