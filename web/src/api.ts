@@ -198,6 +198,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/toggle`, { enabled }, f),
     mcpRemove: (id: string) => postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/remove`, {}, f),
     mcpTest: (id: string) => postJson<{ ok: boolean; error?: string }>(`${base}/api/connectors/mcp/${id}/test`, {}, f),
+    importTracker: () => postJson<{ created: number }>(`${base}/api/connectors/import`, {}, f),
     // D6 — settings / attachments
     settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
     saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),

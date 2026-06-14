@@ -163,6 +163,13 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  it("GET /api/knowledge/search returns semantic hits (L7.2)", async () => {
+    const app2 = createApi(db, { search: (q) => [{ taskId: "t", projectHash: "h", eventType: "decision", text: `match ${q}`, score: 1 }] });
+    const r = (await (await app2.request("/api/knowledge/search?q=axum")).json()) as { hits: { text: string }[] };
+    expect(r.hits[0].text).toBe("match axum");
+    expect(await (await app2.request("/api/knowledge/search")).json()).toEqual({ hits: [] });
+  });
+
   it("GET /api/knowledge/graph derives nodes/edges from recall (L7.3)", async () => {
     const app2 = createApi(db, {
       recall: () => [
@@ -213,6 +220,12 @@ describe("web api", () => {
     expect((await app2.request("/api/connectors/mcp/fs/toggle", { method: "POST", body: JSON.stringify({ enabled: false }) })).status).toBe(200);
     expect(await (await app2.request("/api/connectors/mcp/fs/test", { method: "POST" })).json()).toMatchObject({ ok: true });
     await app2.request("/api/connectors/mcp/fs/remove", { method: "POST" });
+  });
+
+  it("POST /api/connectors/import creates tasks from drafts (D5.4)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "Imported A" }, { title: "Imported B", description: "d" }] });
+    const r = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number };
+    expect(r.created).toBe(2);
   });
 
   // ── settings / attachments (D6) ──
