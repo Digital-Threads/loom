@@ -1,37 +1,54 @@
-// Real SessionLauncher: maps TaskSession.send → one aimux headless turn that
-// creates (--session-id) or resumes (--resume) the task's Claude session. The
-// session flags ride through aimux's extraArgs passthrough, so aimux itself is
-// untouched (additive — the iron back-compat rule). With no config/profile it
-// degrades to empty output (same graceful fallback as the dialog agent).
+// Real live launcher: spawns a long-lived Claude process per task session via
+// aimux's buildRunParams (public — aimux unchanged) and drives it with the
+// verified stream-json multi-turn protocol. --session-id on create, --resume
+// only to recover a dead process. With no config/profile it degrades to empty
+// output (same graceful fallback as before).
 
-import { loadConfig, runProfileHeadless } from "@digital-threads/aimux/core";
+import { spawn } from "node:child_process";
+import { loadConfig, buildRunParams } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
-import type { SessionLauncher } from "./task-session.js";
+import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 
-export interface AimuxSessionLauncherDeps {
-  launch?: typeof runProfileHeadless;
+export interface AimuxLiveLauncherDeps {
   loadConfig?: typeof loadConfig;
+  buildParams?: typeof buildRunParams;
   profile?: string;
   model?: string;
 }
 
-export function createAimuxSessionLauncher(deps: AimuxSessionLauncherDeps = {}): SessionLauncher {
-  const launch = deps.launch ?? runProfileHeadless;
-  const load = deps.loadConfig ?? loadConfig;
+const STREAM_FLAGS = ["-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json"];
+
+/** A ProcLike that yields one empty result then closes — used when there is no
+ *  aimux config/profile, so the pipeline degrades gracefully instead of hanging. */
+function emptyProc(): ProcLike {
+  let onData: ((d: string) => void) | undefined;
+  let onClose: (() => void) | undefined;
   return {
-    run: async (prompt, opts) => {
-      const cfg = load();
-      if (!cfg) return { text: "" };
-      const profile = deps.profile ?? listSubscriptions()[0]?.name;
-      if (!profile) return { text: "" };
-      // resume an existing session, or create it with our chosen id.
-      const sessionArgs = opts.resume ? ["--resume", opts.sessionId] : ["--session-id", opts.sessionId];
-      const res = await launch(cfg, profile, {
-        model: deps.model,
-        cwd: opts.cwd,
-        extraArgs: ["-p", prompt, ...sessionArgs],
-      });
-      return { text: res.stdout ?? "" };
+    stdin: {
+      write: () => {
+        queueMicrotask(() => {
+          onData?.(JSON.stringify({ type: "result", subtype: "success", result: "" }) + "\n");
+        });
+      },
+      end: () => queueMicrotask(() => onClose?.()),
     },
+    stdout: { on: (_e, cb) => { onData = cb as (d: string) => void; } },
+    on: (e, cb) => { if (e === "close") onClose = cb as () => void; },
+    kill: () => {},
   };
+}
+
+export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
+  const load = deps.loadConfig ?? loadConfig;
+  const build = deps.buildParams ?? buildRunParams;
+  const spawnSession: SpawnSession = ({ sessionId, resume, cwd }) => {
+    const cfg = load();
+    const profile = deps.profile ?? listSubscriptions()[0]?.name;
+    if (!cfg || !profile) return emptyProc();
+    const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
+    const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...sessionArgs] });
+    const child = spawn(cli, args, { cwd, env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    return child as unknown as ProcLike;
+  };
+  return createLiveSessionLauncher({ spawn: spawnSession });
 }
