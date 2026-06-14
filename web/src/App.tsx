@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { Board } from "./components/Board";
@@ -14,6 +14,7 @@ import { Layers } from "./components/Layers";
 import { Skills } from "./components/Skills";
 import { Settings } from "./components/Settings";
 import { Connectors } from "./components/Connectors";
+import { Onboarding } from "./components/Onboarding";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -36,8 +37,23 @@ export function App() {
   const [drawer, setDrawer] = useState(false);
   const [reload, setReload] = useState(0);
   const [showNew, setShowNew] = useState(false);
+  const [onboard, setOnboard] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    client.projects().then((d) => setOnboard(d.projects.length === 0)).catch(() => setOnboard(false));
+  }, [client]);
 
   const inTask = taskId !== null;
+
+  if (onboard) {
+    return (
+      <div className="app">
+        <div className="main"><div className="content">
+          <Onboarding client={client} onDone={() => { setOnboard(false); setReload((r) => r + 1); }} />
+        </div></div>
+      </div>
+    );
+  }
 
   function nav(v: string) {
     setView(v);
