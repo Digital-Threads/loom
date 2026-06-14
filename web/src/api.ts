@@ -134,7 +134,21 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ active: string }>(`${base}/api/accounts/active`, { profileId }, f).then((d) => d.active),
     memoryTask: (id: string) =>
       getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
+    // D3 — projects
+    projects: () => getJson<{ projects: ProjectEntry[]; active: string | null }>(`${base}/api/projects`, f),
+    addProject: (root: string) =>
+      postJson<{ project: ProjectEntry }>(`${base}/api/projects`, { root }, f).then((d) => d.project),
+    setActiveProject: (projectId: string) =>
+      postJson<{ active: string }>(`${base}/api/projects/active`, { projectId }, f).then((d) => d.active),
   };
+}
+
+export interface ProjectEntry {
+  projectId: string;
+  root: string;
+  name: string;
+  type?: string;
+  addedAt: number;
 }
 
 export type LoomClient = ReturnType<typeof createClient>;

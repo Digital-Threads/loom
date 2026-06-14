@@ -1,5 +1,6 @@
 import { loomRegistry } from "../plugins/index.js";
 import { resolveProjectRoot, deriveProjectId } from "../workspace/project-id.js";
+import { activeProject } from "../workspace/projects.js";
 import type { LoomContext } from "../plugins/types.js";
 import type { TokenUsageRow, TokenEvent } from "../plugins/token-pilot/adapter.js";
 import type { TjEvent, TaskSummary } from "../plugins/task-journal/adapter.js";
@@ -39,9 +40,13 @@ async function safe<T>(fn: () => T | Promise<T>, fallback: T, errors: string[], 
   }
 }
 
-export async function loadWorkspaceData(): Promise<WorkspaceData> {
+// Load the aggregated 3-module workspace for a project. The root defaults to the
+// active project (D3 registry), then the current working directory — so a
+// multi-project host can load any project by passing its root.
+export async function loadWorkspaceData(root?: string): Promise<WorkspaceData> {
   const errors: string[] = [];
-  const projectRoot = resolveProjectRoot(process.cwd());
+  const base = root ?? activeProject()?.root ?? process.cwd();
+  const projectRoot = resolveProjectRoot(base);
   const projectId = deriveProjectId(projectRoot);
   const ctx: LoomContext = { projectRoot };
   const slices = await Promise.all(

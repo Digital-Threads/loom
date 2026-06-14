@@ -85,6 +85,42 @@ describe("web api", () => {
     expect(await res.json()).toEqual({ detail: { id: "tj-9", decisions: ["d1"] } });
   });
 
+  // ── projects (D3) ──
+  it("GET /api/projects lists projects + active (D3)", async () => {
+    const proj = { projectId: "p1", root: "/r", name: "r", addedAt: 0 };
+    const app2 = createApi(db, { listProjects: () => [proj], activeProject: () => proj });
+    expect(await (await app2.request("/api/projects")).json()).toEqual({ projects: [proj], active: "p1" });
+  });
+
+  it("POST /api/projects adds; requires root (D3)", async () => {
+    const added: string[] = [];
+    const app2 = createApi(db, {
+      addProject: (root) => { added.push(root); return { projectId: "px", root, name: "x", addedAt: 0 }; },
+    });
+    const ok = await app2.request("/api/projects", { method: "POST", body: JSON.stringify({ root: "/repo" }) });
+    expect(ok.status).toBe(201);
+    expect(added).toEqual(["/repo"]);
+    const bad = await app2.request("/api/projects", { method: "POST", body: "{}" });
+    expect(bad.status).toBe(400);
+  });
+
+  it("POST /api/projects/active switches; unknown → 404 (D3)", async () => {
+    const app2 = createApi(db, { setActiveProject: (id) => id === "p1" });
+    expect((await app2.request("/api/projects/active", { method: "POST", body: JSON.stringify({ projectId: "p1" }) })).status).toBe(200);
+    expect((await app2.request("/api/projects/active", { method: "POST", body: JSON.stringify({ projectId: "zz" }) })).status).toBe(404);
+  });
+
+  it("GET /api/workspace?project resolves the project root (D3)", async () => {
+    const roots: (string | undefined)[] = [];
+    const app2 = createApi(db, {
+      listProjects: () => [{ projectId: "p1", root: "/repoA", name: "a", addedAt: 0 }],
+      loadWorkspace: async (root) => { roots.push(root); return { projectId: "p1" } as never; },
+    });
+    await app2.request("/api/workspace?project=p1");
+    await app2.request("/api/workspace");
+    expect(roots).toEqual(["/repoA", undefined]);
+  });
+
   it("GET /api/board returns 9 columns with the task in analysis", async () => {
     const { body } = await json("/api/board");
     expect(body.columns).toHaveLength(9);
