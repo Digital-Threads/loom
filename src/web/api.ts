@@ -28,6 +28,17 @@ import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
 import { recallPrior, partitionHits, type RecallHit } from "../core/knowledge/recall.js";
+import {
+  runAnalysis,
+  brainstormTurn,
+  summarizeBrainstorm,
+  draftSpec,
+  reviseSpec,
+  acceptSpec,
+  type StageAgent,
+} from "../core/pipeline/stage-runners.js";
+import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
+import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -45,6 +56,8 @@ export interface ApiDeps {
   loadEvents?: (projectId: string) => LoomEvent[];
   /** Recall prior reasoning for a query (default: task-journal recall --json). */
   recall?: (query: string) => RecallHit[];
+  /** Agent for the dialog stages (default: aimux cheap one-shot). */
+  stageAgent?: StageAgent;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -60,6 +73,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
   const recall =
     deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
+  const stageAgent = deps.stageAgent ?? createAimuxStageAgent();
+  const taskSpec = (id: string) => {
+    const t = getTask(db, id);
+    return t?.description || t?.title || id;
+  };
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
@@ -207,6 +225,49 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const q = c.req.query("q") ?? "";
     const hits = q ? recall(q) : [];
     return c.json({ hits, ...partitionHits(hits) });
+  });
+
+  // ─── dialog stages (L12) ─────────────────────────────────────────────────────
+  app.post("/api/tasks/:id/analysis/run", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json(await runAnalysis(db, id, taskSpec(id), stageAgent));
+  });
+  app.get("/api/tasks/:id/brainstorm/messages", (c) =>
+    c.json({ messages: getChatMessages(db, c.req.param("id"), "brainstorm") }),
+  );
+  app.post("/api/tasks/:id/brainstorm/message", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { message?: unknown };
+    const message = typeof body.message === "string" ? body.message : undefined;
+    return c.json({ question: await brainstormTurn(db, id, stageAgent, message) });
+  });
+  app.post("/api/tasks/:id/brainstorm/done", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json({ summary: await summarizeBrainstorm(db, id, stageAgent) });
+  });
+  app.get("/api/tasks/:id/spec", (c) =>
+    c.json({ spec: latestArtifact(db, c.req.param("id"), "spec-md") ?? null }),
+  );
+  app.post("/api/tasks/:id/spec/draft", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json({ spec: await draftSpec(db, id, stageAgent) });
+  });
+  app.post("/api/tasks/:id/spec/return", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { comment?: unknown };
+    const comment = typeof body.comment === "string" ? body.comment : "";
+    return c.json({ spec: await reviseSpec(db, id, comment, stageAgent) });
+  });
+  app.post("/api/tasks/:id/spec/accept", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const spec = acceptSpec(db, id);
+    return spec ? c.json({ spec }) : c.json({ error: "no spec" }, 404);
   });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────

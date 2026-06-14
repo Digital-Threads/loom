@@ -154,6 +154,33 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  // ── dialog stages (L12) ──
+  it("analysis/brainstorm/spec endpoints drive the dialog stages (L12.5)", async () => {
+    let n = 0;
+    const stageAgent = async (prompt: string) => {
+      if (prompt.includes("Classify")) return '{"class":"feature","route":["analysis","spec","impl","done"]}';
+      if (prompt.includes("Summarise")) return "BRIEF";
+      if (prompt.includes("Write an SDD")) return "# SDD";
+      return `q${++n}?`;
+    };
+    const app2 = createApi(db, { stageAgent });
+
+    const analysis = (await (await app2.request("/api/tasks/t1/analysis/run", { method: "POST" })).json()) as { class: string; route: string[] };
+    expect(analysis.class).toBe("feature");
+    expect(analysis.route).toContain("spec");
+
+    await app2.request("/api/tasks/t1/brainstorm/message", { method: "POST", body: JSON.stringify({ message: "hi" }) });
+    const msgs = (await (await app2.request("/api/tasks/t1/brainstorm/messages")).json()) as { messages: unknown[] };
+    expect(msgs.messages.length).toBeGreaterThan(0);
+    const done = (await (await app2.request("/api/tasks/t1/brainstorm/done", { method: "POST" })).json()) as { summary: { content: string } };
+    expect(done.summary.content).toBe("BRIEF");
+
+    const draft = (await (await app2.request("/api/tasks/t1/spec/draft", { method: "POST" })).json()) as { spec: { content: string; version: number } };
+    expect(draft.spec.content).toBe("# SDD");
+    const accepted = (await (await app2.request("/api/tasks/t1/spec/accept", { method: "POST" })).json()) as { spec: { status: string } };
+    expect(accepted.spec.status).toBe("accepted");
+  });
+
   it("GET /api/knowledge/recall partitions hits into decisions/rejections (L7)", async () => {
     const app2 = createApi(db, {
       recall: (q) => [
