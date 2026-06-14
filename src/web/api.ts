@@ -27,7 +27,7 @@ import { buildSpineIds } from "../core/spine/ids.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
-import { recallPrior, partitionHits, type RecallHit } from "../core/knowledge/recall.js";
+import { recallPrior, partitionHits, buildGraph, type RecallHit } from "../core/knowledge/recall.js";
 import {
   runAnalysis,
   brainstormTurn,
@@ -285,6 +285,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const q = c.req.query("q") ?? "";
     const hits = q ? recall(q) : [];
     return c.json({ hits, ...partitionHits(hits) });
+  });
+  // L7.3 — problem→solution graph derived from recall hits.
+  app.get("/api/knowledge/graph", (c) => {
+    const q = c.req.query("q") ?? "";
+    return c.json(buildGraph(q ? recall(q) : []));
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────

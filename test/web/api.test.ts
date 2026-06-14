@@ -154,6 +154,18 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  it("GET /api/knowledge/graph derives nodes/edges from recall (L7.3)", async () => {
+    const app2 = createApi(db, {
+      recall: () => [
+        { taskId: "t", projectHash: "h", eventType: "decision", text: "a", score: 1 },
+        { taskId: "t", projectHash: "h", eventType: "rejection", text: "b", score: 1 },
+      ],
+    });
+    const g = (await (await app2.request("/api/knowledge/graph?q=x")).json()) as { nodes: unknown[]; edges: unknown[] };
+    expect(g.nodes).toHaveLength(2);
+    expect(g.edges).toHaveLength(1);
+  });
+
   // ── conductor (L13) ──
   it("POST /advance drives the task through its route via injected runners (L13)", async () => {
     // fresh autopilot task with a short route
