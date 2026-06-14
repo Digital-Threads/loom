@@ -9,11 +9,31 @@ import { listTasks, getTask, getStages, createTask, setStageGate } from "../core
 import { getSteps } from "../core/store/steps.js";
 import { getCosts } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage } from "../core/pipeline/engine.js";
+import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
+import { resolveProjectRoot } from "../core/workspace/project-id.js";
+import { taskDetail } from "../core/plugins/task-journal/adapter.js";
+import { saveActiveProfile } from "@digital-threads/aimux/core";
 
-export function createApi(db: Database.Database): Hono {
+// Injected backends so the API is testable without touching real aimux/tj/fs.
+export interface ApiDeps {
+  loadWorkspace?: () => Promise<WorkspaceData>;
+  setActiveProfile?: (profileId: string) => void;
+  memoryTask?: (id: string) => unknown;
+}
+
+export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
+  const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
+  const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
+  const memoryTask =
+    deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
 
   app.get("/api/health", (c) => c.json({ ok: true }));
+
+  // The 3 core modules' aggregated workspace (aimux/token-pilot/task-journal):
+  // subscriptions, sessions, health, token usage/events, tj tasks/events. One
+  // load() drives the Accounts/Tokens/Memory screens (F1).
+  app.get("/api/workspace", async (c) => c.json(await loadWorkspace()));
 
   // Board view-model: 9 stage columns with their cards.
   app.get("/api/board", (c) => c.json({ columns: boardColumns(db) }));
@@ -82,6 +102,26 @@ export function createApi(db: Database.Database): Hono {
     setStageGate(db, id, c.req.param("key"), body.gate !== false);
     return c.json({ ok: true });
   });
+
+  // ─── module actions (F1.5) ────────────────────────────────────────────────
+
+  // Re-check account health (re-loads the workspace). Returns the health slice.
+  app.post("/api/accounts/health", async (c) => {
+    const ws = await loadWorkspace();
+    return c.json({ health: ws.health });
+  });
+
+  // Swap the active aimux profile. Body: { profileId }.
+  app.post("/api/accounts/active", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { profileId?: unknown };
+    const profileId = typeof body.profileId === "string" ? body.profileId : "";
+    if (!profileId) return c.json({ error: "profileId required" }, 400);
+    setActiveProfile(profileId);
+    return c.json({ active: profileId });
+  });
+
+  // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
+  app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
 
   return app;
 }

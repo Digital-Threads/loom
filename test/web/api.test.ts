@@ -37,6 +37,54 @@ describe("web api", () => {
     expect(await json("/api/health")).toEqual({ status: 200, body: { ok: true } });
   });
 
+  it("GET /api/workspace returns the injected 3-module workspace (F1.1)", async () => {
+    const ws = {
+      subscriptions: [{ profile: "work" }],
+      sessions: [],
+      health: [{ profile: "work", ok: true }],
+      tokens: [{ sessionId: "s", used: 10, saved: 2 }],
+      tokenEvents: [],
+      taskEvents: [],
+      tasks: [{ id: "tj-1", title: "x" }],
+      errors: [],
+      projectId: "p1",
+    };
+    const app2 = createApi(db, { loadWorkspace: async () => ws as never });
+    const res = await app2.request("/api/workspace");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(ws);
+  });
+
+  it("POST /api/accounts/health re-loads and returns health (F1.5)", async () => {
+    const ws = { health: [{ profile: "work", ok: true }] };
+    const app2 = createApi(db, { loadWorkspace: async () => ws as never });
+    const res = await app2.request("/api/accounts/health", { method: "POST" });
+    expect(await res.json()).toEqual({ health: [{ profile: "work", ok: true }] });
+  });
+
+  it("POST /api/accounts/active swaps the active profile (F1.5)", async () => {
+    const swapped: string[] = [];
+    const app2 = createApi(db, { setActiveProfile: (p) => swapped.push(p) });
+    const res = await app2.request("/api/accounts/active", {
+      method: "POST",
+      body: JSON.stringify({ profileId: "main" }),
+    });
+    expect(await res.json()).toEqual({ active: "main" });
+    expect(swapped).toEqual(["main"]);
+  });
+
+  it("POST /api/accounts/active requires profileId (F1.5)", async () => {
+    const app2 = createApi(db, { setActiveProfile: () => {} });
+    const res = await app2.request("/api/accounts/active", { method: "POST", body: "{}" });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/memory/tasks/:id returns the injected detail (F1.5)", async () => {
+    const app2 = createApi(db, { memoryTask: (id) => ({ id, decisions: ["d1"] }) });
+    const res = await app2.request("/api/memory/tasks/tj-9");
+    expect(await res.json()).toEqual({ detail: { id: "tj-9", decisions: ["d1"] } });
+  });
+
   it("GET /api/board returns 9 columns with the task in analysis", async () => {
     const { body } = await json("/api/board");
     expect(body.columns).toHaveLength(9);

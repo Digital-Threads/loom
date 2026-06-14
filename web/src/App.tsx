@@ -4,10 +4,15 @@ import { Sidebar } from "./components/Sidebar";
 import { Board } from "./components/Board";
 import { TaskView } from "./components/TaskView";
 import { NewTaskModal } from "./components/NewTaskModal";
+import { Accounts } from "./components/Accounts";
+import { Tokens } from "./components/Tokens";
+import { Memory } from "./components/Memory";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
   accounts: "Accounts",
+  tokens: "Tokens",
+  memory: "Memory",
   connectors: "Connectors (MCP)",
   skills: "Skills",
   layers: "Layers",
@@ -65,6 +70,12 @@ export function App() {
             />
           ) : view === "board" ? (
             <Board key={reload} client={client} onOpen={setTaskId} />
+          ) : view === "accounts" ? (
+            <Accounts client={client} />
+          ) : view === "tokens" ? (
+            <Tokens client={client} />
+          ) : view === "memory" ? (
+            <Memory client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}

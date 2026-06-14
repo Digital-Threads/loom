@@ -3,8 +3,10 @@ import type { LoomClient, AttentionItem } from "../api";
 
 const NAV = [
   { key: "board", label: "Board", icon: "▦" },
-  { key: "accounts", label: "Accounts", icon: "◷", group: "Connections" },
-  { key: "connectors", label: "Connectors", icon: "⇄" },
+  { key: "accounts", label: "Accounts", icon: "◷", group: "Modules" },
+  { key: "tokens", label: "Tokens", icon: "❋" },
+  { key: "memory", label: "Memory", icon: "✎" },
+  { key: "connectors", label: "Connectors", icon: "⇄", group: "Connections" },
   { key: "skills", label: "Skills", icon: "✦", group: "Capabilities" },
   { key: "layers", label: "Layers", icon: "▤" },
   { key: "timeline", label: "Timeline", icon: "≡", group: "More" },
