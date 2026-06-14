@@ -32,9 +32,23 @@ export const SESSION_PREAMBLE = [
   "   Шаг считается выполненным ТОЛЬКО когда результат проверен и полон.",
   "3. Формат. Отвечай на чистом, читабельном русском, структурно. Без россыпи случайных",
   "   английских слов. Любой человек должен понять, что сделано и как этим пользоваться.",
-  "4. Завершение шага. В конце каждого шага дай краткий понятный итог и ЯВНО укажи: шаг завершён",
-  "   полностью (с доказательством) — или остались сомнения/недоделки (тогда это не завершение).",
+  "4. Завершение шага. В конце каждого шага дай краткий понятный итог и ПОСЛЕДНЕЙ строкой укажи",
+  "   машиночитаемый статус ровно в таком виде:",
+  "     ИТОГ: ГОТОВО            — если шаг полностью выполнен и проверен;",
+  "     ИТОГ: НЕ ГОТОВО — <причина> — если остались сомнения/недоделки.",
+  "   Пока не ГОТОВО — переход к следующему шагу запрещён.",
 ].join("\n");
+
+/** Parse the mandatory completeness marker the agent appends as the last line.
+ *  Conservative: only an explicit "НЕ ГОТОВО" parks the stage; an explicit
+ *  "ГОТОВО" or a missing marker is treated as complete (we don't block on a
+ *  forgotten marker, only on a declared doubt). */
+export function parseCompleteness(text: string): { complete: boolean; note?: string } {
+  const m = text.match(/ИТОГ:\s*(НЕ\s+ГОТОВО|ГОТОВО)\s*(?:[—:-]\s*(.*))?/iu);
+  if (!m) return { complete: true };
+  const complete = !/НЕ\s+ГОТОВО/iu.test(m[1]);
+  return complete ? { complete: true } : { complete: false, note: m[2]?.trim() || "agent reported the step is not complete" };
+}
 
 /** Per-stage reinforcement — short reminder of the rules + the step's task. */
 export function stageInstruction(stage: string | undefined, instruction: string): string {

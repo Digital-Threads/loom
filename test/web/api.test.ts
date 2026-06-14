@@ -506,6 +506,23 @@ describe("web api — fs browse + PR connector", () => {
     expect(calls[0].sessionId).toBe(calls[1].sessionId); // same session across stages
   });
 
+  it("completeness-gate: spec parks on НЕ ГОТОВО, advances on ГОТОВО", async () => {
+    async function runSpec(taskId: string, marker: string) {
+      createTask(database, { id: taskId, title: "Gate" });
+      const sessionLauncher = { run: async () => ({ text: `# SDD\n...\n${marker}` }) };
+      const a = createApi(database, { sessionLauncher });
+      await a.request(`/api/tasks/${taskId}/start`, { method: "POST" });
+      await a.request(`/api/tasks/${taskId}/move`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "spec" }) });
+      const res = await a.request(`/api/tasks/${taskId}/run-stage`, { method: "POST", body: "{}" });
+      return (await res.json()) as { ran: string[]; stoppedAt: string | null };
+    }
+    const parked = await runSpec("gateA", "ИТОГ: НЕ ГОТОВО — нужны уточнения");
+    expect(parked.stoppedAt).toBe("spec"); // doubtful spec does not advance
+
+    const advanced = await runSpec("gateB", "ИТОГ: ГОТОВО");
+    expect(advanced.stoppedAt).not.toBe("spec"); // ready spec moves on
+  });
+
   it("GET /favicon.ico returns 204 (no console 404)", async () => {
     const a = createApi(database);
     expect((await a.request("/favicon.ico")).status).toBe(204);

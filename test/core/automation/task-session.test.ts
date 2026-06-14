@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -77,6 +77,14 @@ describe("TaskSession (one session per task)", () => {
     const seen: string[] = [];
     await s.send("go", { stage: "analysis", onChunk: (c) => seen.push(c) });
     expect(seen).toEqual(["chunk"]);
+  });
+
+  it("parseCompleteness: parks only on an explicit НЕ ГОТОВО, passes otherwise", () => {
+    expect(parseCompleteness("итог...\nИТОГ: ГОТОВО").complete).toBe(true);
+    expect(parseCompleteness("no marker at all").complete).toBe(true); // missing marker → not blocked
+    const r = parseCompleteness("...\nИТОГ: НЕ ГОТОВО — нет доступа к API");
+    expect(r.complete).toBe(false);
+    expect(r.note).toContain("нет доступа");
   });
 
   it("compacts the session once the turn threshold is reached", async () => {
