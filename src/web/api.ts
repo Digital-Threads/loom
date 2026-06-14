@@ -27,6 +27,7 @@ import { buildSpineIds } from "../core/spine/ids.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
+import { recallPrior, partitionHits, type RecallHit } from "../core/knowledge/recall.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -42,6 +43,8 @@ export interface ApiDeps {
   startRun?: (taskId: string, stageKey: string) => string;
   /** Load the project's event stream (default: file bus). */
   loadEvents?: (projectId: string) => LoomEvent[];
+  /** Recall prior reasoning for a query (default: task-journal recall --json). */
+  recall?: (query: string) => RecallHit[];
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -55,6 +58,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
+  const recall =
+    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
@@ -194,6 +199,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/metrics/agents", (c) => {
     const events = loadEvents(resolveProjectId(c));
     return c.json({ agents: agentPerformance(events), failures: failureReasons(events) });
+  });
+
+  // ─── knowledge (L7) ──────────────────────────────────────────────────────────
+  // Recall prior reasoning for a query → "already decided" vs "already rejected".
+  app.get("/api/knowledge/recall", (c) => {
+    const q = c.req.query("q") ?? "";
+    const hits = q ? recall(q) : [];
+    return c.json({ hits, ...partitionHits(hits) });
   });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────

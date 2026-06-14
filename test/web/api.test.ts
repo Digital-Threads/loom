@@ -154,6 +154,23 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  it("GET /api/knowledge/recall partitions hits into decisions/rejections (L7)", async () => {
+    const app2 = createApi(db, {
+      recall: (q) => [
+        { taskId: "tj-1", projectHash: "h", eventType: "decision", text: `chose ${q}`, score: 1 },
+        { taskId: "tj-2", projectHash: "h", eventType: "rejection", text: `ruled out ${q}`, score: 1 },
+      ],
+    });
+    const body = (await (await app2.request("/api/knowledge/recall?q=axum")).json()) as {
+      decisions: { text: string }[]; rejections: { text: string }[];
+    };
+    expect(body.decisions[0].text).toContain("chose axum");
+    expect(body.rejections[0].text).toContain("ruled out axum");
+    // empty query → no hits, no recall call
+    const empty = await (await app2.request("/api/knowledge/recall")).json();
+    expect(empty).toMatchObject({ hits: [], decisions: [], rejections: [] });
+  });
+
   it("GET /api/metrics/board sums token totals (L9.2)", async () => {
     const tp = (used: number, saved: number) => ({ schema: "loom.event.v1", ts: 1, source: "token-pilot", projectId: "p1", type: "tokens", metrics: { used, saved } });
     const app2 = createApi(db, {
