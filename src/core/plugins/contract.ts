@@ -21,6 +21,20 @@ export interface SettingsSchema {
 
 export interface LoomContext {
   projectRoot: string;
+  // -- Capability DI (D1) — host-injected surfaces a behavior layer may use.
+  // All optional: absent in standalone use, so the plugin behaves autonomously
+  // and never imports Loom (one-way dependency, iron rule #5).
+  /** The run's spine ids (project/profile/task/workflow). */
+  spine?: { projectId: string; profileId?: string; taskId?: string; workflowId?: string };
+  /** Append a LoomEvent to the bus (typed as unknown to avoid pulling the event
+   *  type into the contract package). */
+  appendEvent?: (event: unknown) => void;
+  /** Read-only store handle the host passes for layers that need board/run data. */
+  storeRead?: unknown;
+  /** Sandbox surface (worktree/policy) injected by security (L10). */
+  sandbox?: unknown;
+  /** Minimal logger; all methods optional. */
+  logger?: { info?(m: string): void; warn?(m: string): void; error?(m: string): void };
 }
 
 export interface ActionResult {
@@ -63,7 +77,9 @@ export type LoomCategory =
   | "knowledge"     // knowledge (future layer)
   | "quality"       // quality (future layer)
   | "automation"    // automation (future layer)
-  | "observability"; // observability (future layer)
+  | "observability" // observability (future layer)
+  | "security"      // sandbox/isolation (L10)
+  | "extensibility"; // catalog/SDK/verify (L11)
 
 // Declaration of a plugin's capabilities (LP1). "Has/has not" flags, not commands.
 // install -- whether there is an install recipe (the real commands arrive in LP2);
@@ -73,6 +89,33 @@ export interface PluginCapabilities {
   data: boolean;      // the plugin returns data via load()
   settings: boolean;  // there are editable settings (non-empty settings.schema)
   actions: boolean;   // there is at least one action
+  execute?: boolean;  // behavior layer: implements execute() (D1)
+  slots?: boolean;    // contributes stage slots (D1)
+}
+
+// -- Capability facet (D1) — behavior layers (automation/swarm/quality/…) run
+// work, not just display data. Step/Result are minimal placeholders here; L4
+// (automation) refines the concrete shapes. Kept loose so the contract package
+// stays a leaf with no dependency on the store/automation types.
+export interface CapabilityStep {
+  id: string;
+  [k: string]: unknown;
+}
+export interface CapabilityResult {
+  ok: boolean;
+  [k: string]: unknown;
+}
+/** Rough pre-run cost estimate the router/learning can use. */
+export interface CostHint {
+  estUsd?: number;
+  estTokens?: number;
+}
+/** A layer plugs a skill into a pipeline stage slot (Review/QA/planner/…). The
+ *  flow-config resolver (L6.1) picks which contribution runs per stage. */
+export interface SlotContribution {
+  stage: string;     // pipeline stage key (analysis/brainstorm/…/review/qa/pr)
+  skill: string;     // skill backing the slot (code-review/simplify/…)
+  passId?: string;   // optional pass identifier within the stage
 }
 
 // the data source is abstracted behind load(): the plugin itself knows the method (core-import / file / CLI)
@@ -90,6 +133,17 @@ export interface LoomPlugin<TData = unknown> {
   // data -- WorkspaceData at host runtime; in the types-only contract the type is unknown,
   // so as not to pull WorkspaceData into this package.
   derivations?: Record<string, (data: unknown, ...args: unknown[]) => unknown>;
+  // -- Capability facet (D1) — present on behavior layers, absent on display
+  // plugins (the 3 core modules). The code orchestrator (L4 run-manager / L13
+  // conductor) discovers these via the registry, never by direct import.
+  /** Run a step; the host injects spine/sandbox/event surfaces via ctx. */
+  execute?(step: CapabilityStep, ctx: LoomContext): Promise<CapabilityResult>;
+  /** Stage slots this layer backs (Review/QA/planner/…). */
+  slots?: SlotContribution[];
+  /** Pre-run cost estimate for routing/learning. */
+  costHint?(step: CapabilityStep): CostHint;
+  /** Models this layer can drive (router hint). */
+  models?: string[];
 }
 
 // -- Declarative view schema (Task 7.2) ----------------------------------------
@@ -186,6 +240,8 @@ export interface LoomPluginManifest {
     tabs: { id: string; title: string }[];
     settings?: boolean;
     actions?: { id: string; label: string }[];
+    executes?: boolean;                          // behavior layer with execute() (D1)
+    slots?: { stage: string; skill: string }[]; // stage slots contributed (D1)
   };
 
   // permissions (declarative; verb:target format). v1 -- stored+shown, NOT enforced.

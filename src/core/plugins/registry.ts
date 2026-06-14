@@ -9,6 +9,12 @@ export interface Registry {
   // Groups plugins by category in registration order.
   // Plugins without a category -> key "undefined". Returns Map<category|"undefined", LoomPlugin[]>.
   groupByCategory(): Map<string, LoomPlugin[]>;
+  // -- Capability lookup (D1.2): how the code orchestrator finds behavior layers
+  // without importing them. "execute" -> layers implementing execute();
+  // "slots" -> layers contributing any stage slot. Registration order.
+  layersByCapability(cap: "execute" | "slots"): LoomPlugin[];
+  // Plugins whose slots[] back the given pipeline stage.
+  slotProviders(stage: string): LoomPlugin[];
 }
 
 export function createRegistry(plugins: LoomPlugin[]): Registry {
@@ -31,5 +37,11 @@ export function createRegistry(plugins: LoomPlugin[]): Registry {
       }
       return groups;
     },
+    layersByCapability: (cap) =>
+      [...byId.values()].filter((p) =>
+        cap === "execute" ? typeof p.execute === "function" : (p.slots?.length ?? 0) > 0,
+      ),
+    slotProviders: (stage) =>
+      [...byId.values()].filter((p) => p.slots?.some((s) => s.stage === stage)),
   };
 }
