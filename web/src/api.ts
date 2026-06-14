@@ -88,6 +88,32 @@ export interface NewTask {
   run_mode?: string;
 }
 
+// ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────
+export interface Subscription { profile: string; [k: string]: unknown }
+export interface SessionRow { [k: string]: unknown }
+export interface HealthRow { profile: string; ok?: boolean; [k: string]: unknown }
+export interface TokenUsageRow { sessionId: string; used: number; saved: number; [k: string]: unknown }
+export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
+export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
+export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
+export interface WorkspaceData {
+  subscriptions: Subscription[];
+  sessions: SessionRow[];
+  health: HealthRow[];
+  tokens: TokenUsageRow[];
+  tokenEvents: TokenEvent[];
+  taskEvents: TjEventRow[];
+  tasks: TjTaskSummary[];
+  errors: string[];
+  projectId: string;
+}
+export interface MemoryDetail {
+  decisions: unknown[];
+  findings: unknown[];
+  rejections: unknown[];
+  [k: string]: unknown;
+}
+
 export function createClient(base = "", f: Fetcher = fetch) {
   return {
     board: () => getJson<{ columns: BoardColumn[] }>(`${base}/api/board`, f).then((d) => d.columns),
@@ -100,6 +126,14 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ next: string | null }>(`${base}/api/tasks/${id}/stages/${key}/accept`, {}, f),
     setGate: (id: string, key: string, gate: boolean) =>
       postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/stages/${key}/gate`, { gate }, f),
+    // F1 — 3 core modules
+    workspace: () => getJson<WorkspaceData>(`${base}/api/workspace`, f),
+    accountsHealth: () =>
+      postJson<{ health: HealthRow[] }>(`${base}/api/accounts/health`, {}, f).then((d) => d.health),
+    setActive: (profileId: string) =>
+      postJson<{ active: string }>(`${base}/api/accounts/active`, { profileId }, f).then((d) => d.active),
+    memoryTask: (id: string) =>
+      getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
   };
 }
 

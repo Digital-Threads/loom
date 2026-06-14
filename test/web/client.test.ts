@@ -55,6 +55,27 @@ describe("web api client", () => {
     expect((await c.start("t1")).active).toBe("analysis");
     expect((await c.setGate("t1", "spec", false)).ok).toBe(true);
   });
+
+  // F1 — 3 core modules
+  it("workspace() returns the aggregated 3-module data", async () => {
+    const ws = { subscriptions: [{ profile: "work" }], sessions: [], health: [], tokens: [], tokenEvents: [], taskEvents: [], tasks: [], errors: [], projectId: "p1" };
+    const c = createClient("", fakeFetch({ "/api/workspace": ws }));
+    expect((await c.workspace()).subscriptions[0].profile).toBe("work");
+  });
+
+  it("accountsHealth() unwraps health, setActive() unwraps active", async () => {
+    const c = createClient(
+      "",
+      fakeFetch({ "/api/accounts/health": { health: [{ profile: "work", ok: true }] }, "/api/accounts/active": { active: "main" } }),
+    );
+    expect((await c.accountsHealth())[0].profile).toBe("work");
+    expect(await c.setActive("main")).toBe("main");
+  });
+
+  it("memoryTask() unwraps detail", async () => {
+    const c = createClient("", fakeFetch({ "/api/memory/tasks/tj-1": { detail: { decisions: [1], findings: [], rejections: [] } } }));
+    expect((await c.memoryTask("tj-1")).decisions).toEqual([1]);
+  });
 });
 
 describe("web ui helpers", () => {
