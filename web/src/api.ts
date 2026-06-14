@@ -146,6 +146,12 @@ export function createClient(base = "", f: Fetcher = fetch) {
     startRun: (taskId: string, stageKey: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${taskId}/stages/${stageKey}/run`, {}, f).then((d) => d.runId),
     runStreamUrl: (runId: string) => `${base}/api/runs/${runId}/stream`,
+    // loom-isd.13 — inject input into a live run (intervene)
+    sendStdin: (runId: string, data: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/runs/${runId}/stdin`, { data }, f),
+    // folder picker — list sub-directories of a path
+    fsList: (path?: string) =>
+      getJson<DirListing>(`${base}/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ""}`, f),
     // L9 — observability
     timeline: () => getJson<{ events: TimelineEvent[] }>(`${base}/api/timeline`, f).then((d) => d.events),
     boardMetrics: () => getJson<{ used: number; saved: number; events: number }>(`${base}/api/metrics/board`, f),
@@ -187,8 +193,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     runStageNext: (id: string) =>
       postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/run-stage`, {}, f),
     // L14 — PR / Done
-    prRun: (id: string) =>
-      postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, {}, f).then((d) => d.pr),
+    prRun: (id: string, opts?: { connector?: boolean; base?: string }) =>
+      postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, opts ?? {}, f).then((d) => d.pr),
     doneRun: (id: string) => postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/done/run`, {}, f),
     // D5 — connectors (MCP)
     mcpList: () => getJson<{ servers: McpServer[] }>(`${base}/api/connectors/mcp`, f).then((d) => d.servers),
@@ -208,6 +214,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ attachment: Attachment }>(`${base}/api/tasks/${id}/attachments`, a, f).then((d) => d.attachment),
   };
 }
+
+export interface DirEntry { name: string; path: string; isGitRepo: boolean }
+export interface DirListing { path: string; parent: string | null; entries: DirEntry[] }
 
 export interface Attachment { id: string; kind: string; name: string; path_or_url: string }
 export interface McpServer { id: string; command: string; args?: string[]; enabled: boolean }
