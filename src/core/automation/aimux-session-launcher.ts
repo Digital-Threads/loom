@@ -16,7 +16,11 @@ export interface AimuxLiveLauncherDeps {
   model?: string;
 }
 
-const STREAM_FLAGS = ["-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json"];
+// --dangerously-skip-permissions: the task worktree IS the sandbox (security L10)
+// and Loom's approval gates are at the STAGE level, not per-tool — so the
+// autonomous session must not block on interactive trust/permission prompts
+// (a fresh worktree dir otherwise hangs the headless session). User-authorised.
+const STREAM_FLAGS = ["-p", "--verbose", "--dangerously-skip-permissions", "--input-format", "stream-json", "--output-format", "stream-json"];
 
 /** A ProcLike that yields one empty result then closes — used when there is no
  *  aimux config/profile, so the pipeline degrades gracefully instead of hanging. */
