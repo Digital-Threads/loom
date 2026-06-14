@@ -154,6 +154,20 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  // ── PR / Done (L14) ──
+  it("POST /pr/run returns a description; /done/run finalizes (L14)", async () => {
+    let closed = false;
+    const app2 = createApi(db, {
+      prOptions: () => ({ describe: () => "PR BODY" }),
+      closeTask: () => { closed = true; },
+    });
+    const pr = (await (await app2.request("/api/tasks/t1/pr/run", { method: "POST" })).json()) as { pr: { description: string } };
+    expect(pr.pr.description).toBe("PR BODY");
+    const done = await (await app2.request("/api/tasks/t1/done/run", { method: "POST" })).json();
+    expect(done).toEqual({ ok: true });
+    expect(closed).toBe(true);
+  });
+
   // ── extensibility (L11) ──
   it("GET /api/layers lists registered plugins with capabilities (L11)", async () => {
     const app2 = createApi(db);

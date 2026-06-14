@@ -3,6 +3,7 @@ import { type LoomClient, type TaskDetail, STAGE_LABELS } from "../api";
 import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { StageDialog } from "./StageDialog";
 import { ReviewQA } from "./ReviewQA";
+import { PrDone } from "./PrDone";
 
 export function TaskView({
   client,
@@ -126,6 +127,8 @@ export function TaskView({
             <StageDialog client={client} taskId={taskId} stage={active} onChanged={onChanged} />
           ) : active === "review" || active === "qa" ? (
             <ReviewQA client={client} taskId={taskId} stage={active} />
+          ) : active === "pr" || active === "done" ? (
+            <PrDone client={client} taskId={taskId} stage={active} onChanged={onChanged} />
           ) : (
             <div className="muted">
               {detail.task.description || "Stage content appears as the task progresses."}
