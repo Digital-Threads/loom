@@ -4,8 +4,11 @@ import { dirname, join } from "node:path";
 import { runPluginCli } from "./cli/plugin-cli.js";
 import { runPackCli } from "./cli/pack-cli.js";
 import { runConfigCli } from "./cli/config-cli.js";
+import { spawn } from "node:child_process";
 import { defaultDeps } from "./core/install/runner.js";
 import { serveApi, DEFAULT_PORT } from "./web/server.js";
+import { parseServeArgs } from "./cli/serve-args.js";
+import { runPluginNew } from "./cli/plugin-new.js";
 
 const HELP = `Loom — AI orchestrator
 Usage:
@@ -20,12 +23,23 @@ function webDistDir(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "..", "web", "dist");
 }
 
+function openBrowser(url: string): void {
+  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
+  } catch {
+    /* best-effort */
+  }
+}
+
 function runServe(args: string[]): void {
-  const portFlag = args.indexOf("--port");
-  const port = portFlag >= 0 ? Number(args[portFlag + 1]) || DEFAULT_PORT : DEFAULT_PORT;
+  const { port, open, project } = parseServeArgs(args, DEFAULT_PORT);
+  if (project) process.chdir(project);
   const server = serveApi({ port, webDist: webDistDir() });
   const url = server.url?.toString() ?? `http://localhost:${port}/`;
   console.log(`Loom running at ${url}`);
+  if (open) openBrowser(url);
   console.log("Press Ctrl+C to stop.");
   // Bun.serve keeps the process alive.
 }
@@ -35,6 +49,13 @@ async function main(): Promise<void> {
 
   switch (cmd) {
     case "plugin": {
+      if (rest[0] === "new") {
+        const name = rest[1];
+        if (!name) { console.error("usage: loom plugin new <name>"); process.exit(1); }
+        const written = runPluginNew(name, process.cwd());
+        written.forEach((p) => console.log(`created ${p}`));
+        process.exit(0);
+      }
       const res = runPluginCli(rest, defaultDeps());
       res.lines.forEach((l) => console.log(l));
       process.exit(res.code);
