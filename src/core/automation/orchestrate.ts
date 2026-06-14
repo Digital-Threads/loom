@@ -8,7 +8,7 @@ import { updateStageStatus } from "../store/db.js";
 import { planTask, type Decomposer } from "./planner.js";
 import { chooseRoute, type RouteCandidate } from "./router.js";
 import { executeImplStage, type StageRunResult } from "./conductor.js";
-import type { StepExecutor } from "./exec-loop.js";
+import type { StepExecutor, LoomEventSink } from "./exec-loop.js";
 import type { SpineIds } from "../spine/ids.js";
 import { applyPriors, type Prior } from "../learning/priors.js";
 import { prepareWorktree, type GitRunner } from "../security/sandbox.js";
@@ -23,6 +23,8 @@ export interface RunSpecOptions {
   priors?: Map<string, Prior>;
   /** Run in an isolated git worktree under repoRoot (security). */
   sandbox?: { repoRoot: string; base?: string; git?: GitRunner };
+  /** Lifecycle event sink (run-manager wires it to the bus / live stream). */
+  emit?: LoomEventSink;
 }
 
 export interface RunSpecResult {
@@ -77,7 +79,7 @@ export async function runSpec(
   }
 
   updateStageStatus(db, taskId, "impl", "active");
-  const exec = await executeImplStage(db, deps.executor, taskId, ids, cwd);
+  const exec = await executeImplStage(db, deps.executor, taskId, ids, cwd, opts.emit);
 
   return { steps: getSteps(db, taskId).length, assigned, unrouted, exec, cwd };
 }
