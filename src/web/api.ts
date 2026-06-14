@@ -39,7 +39,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
+import { getChatMessages, latestArtifact, createArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
@@ -142,6 +142,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, taskId);
     return buildQaChecks(keys, { repoRoot: t?.repo || process.cwd() });
   };
+  // Persist a stage result so the panel can re-display it on revisit (history).
+  const saveResult = (taskId: string, stage: string, kind: string, data: unknown) =>
+    createArtifact(db, { id: `art_${randomUUID().slice(0, 8)}`, taskId, stage, kind, content: JSON.stringify(data), status: "accepted" });
+  const loadResult = <T,>(taskId: string, kind: string): T | null => {
+    const a = latestArtifact(db, taskId, kind);
+    if (!a) return null;
+    try { return JSON.parse(a.content) as T; } catch { return null; }
+  };
 
   // L13 — default stage runners: wire each pipeline stage to its layer. Override
   // via deps.runners for tests. Interactive stages (brainstorm/spec) are driven
@@ -170,10 +178,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     impl: async (_d, id) => runImplStage(id),
     review: async (_d, id) => {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
+      saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
       return { ok: res.passed, needsAttention: !res.passed };
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
+      saveResult(id, "qa", "qa-result", { result: res });
       return { ok: res.passed, needsAttention: !res.passed };
     },
     pr: async (_d, id) => { runPr(db, id, deps.prOptions?.(id) ?? {}); return { ok: true }; },
@@ -193,6 +203,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
 
   app.get("/api/health", (c) => c.json({ ok: true }));
+  app.get("/favicon.ico", (c) => c.body(null, 204)); // no favicon → quiet 204, not a console 404
 
   // The 3 core modules' aggregated workspace. ?project=<id> loads a specific
   // registered project; otherwise the active project (D3) / cwd.
@@ -525,7 +536,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const keys = resolveFlow("review", undefined, override);
     const result = await runReview(keys, (key) => reviewPass(key, taskSpec(id)));
     const mode = body.mode === "autofix" ? "autofix" : "triage";
-    return c.json({ result, action: reviewAction(result, mode) });
+    const payload = { result, action: reviewAction(result, mode) };
+    saveResult(id, "review", "review-result", payload);
+    return c.json(payload);
   });
   app.post("/api/tasks/:id/qa/run", async (c) => {
     const id = c.req.param("id");
@@ -535,8 +548,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const override = Array.isArray(body.checks) ? { passes: body.checks as string[] } : undefined;
     const keys = resolveFlow("qa", undefined, override);
     const checks = deps.qaChecks ? deps.qaChecks(keys) : buildQaChecks(keys, { repoRoot: t.repo || process.cwd() });
-    return c.json({ result: await runQa(checks) });
+    const result = await runQa(checks);
+    saveResult(id, "qa", "qa-result", { result });
+    return c.json({ result });
   });
+  // Stored stage results (history re-display when revisiting a completed stage).
+  app.get("/api/tasks/:id/analysis", (c) => {
+    const a = latestArtifact(db, c.req.param("id"), "analysis");
+    let result: unknown = null;
+    if (a) { try { result = JSON.parse(a.content); } catch { result = null; } }
+    return c.json({ result });
+  });
+  app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
+  app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
 

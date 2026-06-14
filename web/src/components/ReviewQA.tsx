@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LoomClient, ReviewResult, QaResult } from "../api";
 
 // L6.6 — Review / QA panels: run the configured passes/checks and show the
-// verdict + findings/results.
+// verdict + findings/results. On open, the last stored result is re-displayed.
 export function ReviewQA({ client, taskId, stage }: { client: LoomClient; taskId: string; stage: string }) {
   const [review, setReview] = useState<{ result: ReviewResult; action: string } | null>(null);
   const [qa, setQa] = useState<QaResult | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (stage === "review") client.reviewGet(taskId).then((d) => d.result && setReview({ result: d.result, action: d.action ?? "" })).catch(() => {});
+    else client.qaGet(taskId).then((r) => r && setQa(r)).catch(() => {});
+  }, [client, taskId, stage]);
 
   async function run() {
     setBusy(true);
