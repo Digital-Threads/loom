@@ -39,7 +39,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { createTaskSession, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxSessionLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
@@ -187,7 +187,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
     brainstorm: async () => ({ ok: true }), // human-driven via StageDialog
-    spec: async (_d, id) => { await draftSpec(db, id, stageAgentFor(id, "spec")); acceptSpec(db, id); return { ok: true }; },
+    spec: async (_d, id) => {
+      const art = await draftSpec(db, id, stageAgentFor(id, "spec"));
+      const { complete, note } = parseCompleteness(art.content); // completeness-gate: don't advance a doubtful spec
+      if (!complete) return { ok: true, needsAttention: true, note };
+      acceptSpec(db, id);
+      return { ok: true };
+    },
     rd: async (_d, id) => runImplStage(id),
     impl: async (_d, id) => runImplStage(id),
     review: async (_d, id) => {
