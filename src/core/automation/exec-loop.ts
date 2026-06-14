@@ -7,6 +7,36 @@ import type Database from "better-sqlite3";
 import { getSteps, updateStepStatus, stepDeps, type StepRow } from "../store/steps.js";
 import { insertRun, completeRun } from "../store/execute.js";
 import type { SpineIds } from "../spine/ids.js";
+import { makeEvent, type LoomEvent } from "../spine/event.js";
+import { appendLoomEvent } from "../spine/event-bus.js";
+
+/** Where exec-loop emits its run/step lifecycle events. Injected so the loop
+ *  stays pure/testable; the run-manager wires it to the event bus via busSink. */
+export type LoomEventSink = (e: LoomEvent) => void;
+const NO_EMIT: LoomEventSink = () => {};
+
+/** A sink that appends to the file event bus for the given project. */
+export function busSink(projectId: string): LoomEventSink {
+  return (e) => appendLoomEvent(projectId, e);
+}
+
+/** Build a run/step lifecycle event from the spine ids. */
+function lifecycleEvent(
+  ids: SpineIds,
+  type: string,
+  extra?: { message?: string; metrics?: Record<string, number>; severity?: LoomEvent["severity"] },
+): LoomEvent {
+  return makeEvent({
+    ts: Date.now(),
+    source: "loom",
+    projectId: ids.projectId,
+    profileId: ids.profileId,
+    taskId: ids.taskId,
+    workflowId: ids.workflowId,
+    type,
+    ...extra,
+  });
+}
 
 export interface ExecRequest {
   taskId: string;
@@ -61,6 +91,7 @@ export async function runStep(
   step: StepRow,
   ids: SpineIds,
   cwd?: string,
+  emit: LoomEventSink = NO_EMIT,
 ): Promise<ExecResult> {
   const runId = `run-${step.id}`;
   updateStepStatus(db, step.id, "running");
@@ -71,7 +102,9 @@ export async function runStep(
     workflowId: ids.workflowId,
     profile: step.profile ?? ids.profileId,
   });
+  emit(lifecycleEvent(ids, "step.started", { message: step.id }));
 
+  const startedAt = Date.now();
   let res: ExecResult;
   try {
     res = await executor.run({ taskId, step, ids, cwd });
@@ -81,6 +114,13 @@ export async function runStep(
 
   completeRun(db, runId, res.exitCode, res.stdout, res.stderr);
   updateStepStatus(db, step.id, res.exitCode === 0 ? "done" : "failed", res.exitCode);
+  emit(
+    lifecycleEvent(ids, "step.completed", {
+      message: step.id,
+      metrics: { exitCode: res.exitCode, durationMs: Date.now() - startedAt },
+      severity: res.exitCode === 0 ? "info" : "error",
+    }),
+  );
   return res;
 }
 
@@ -101,14 +141,18 @@ export async function runDag(
   taskId: string,
   ids: SpineIds,
   cwd?: string,
+  emit: LoomEventSink = NO_EMIT,
 ): Promise<DagResult> {
   const steps = getSteps(db, taskId);
   let ran = 0;
   let failed = 0;
 
+  const startedAt = Date.now();
+  emit(lifecycleEvent(ids, "run.started", { metrics: { steps: steps.length } }));
+
   for (const wave of waves(steps)) {
     const results = await Promise.all(
-      wave.map((s) => runStep(db, executor, taskId, s, ids, cwd)),
+      wave.map((s) => runStep(db, executor, taskId, s, ids, cwd, emit)),
     );
     for (const r of results) {
       ran += 1;
@@ -117,5 +161,13 @@ export async function runDag(
     if (failed > 0) break; // don't run dependents of a failed wave
   }
 
-  return { ran, failed, ok: failed === 0 && ran === steps.length };
+  const ok = failed === 0 && ran === steps.length;
+  emit(
+    lifecycleEvent(ids, "run.completed", {
+      metrics: { ran, failed, durationMs: Date.now() - startedAt },
+      severity: ok ? "info" : "error",
+    }),
+  );
+
+  return { ran, failed, ok };
 }
