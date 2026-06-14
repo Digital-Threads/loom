@@ -1,0 +1,99 @@
+// TaskSession — one persistent Claude session per task. Every stage injects its
+// instruction into the SAME session (context accumulates), so analysis →
+// brainstorm → spec → R&D → impl → review → … keep the thread. The first call
+// creates the session (--session-id <uuid>); later calls resume it (--resume).
+// The conversation runner is injected (SessionLauncher) so this is testable
+// without a real CLI; the real launcher maps to aimux runProfileHeadless with
+// the session flags passed through extraArgs (aimux unchanged — additive).
+
+import { randomUUID } from "node:crypto";
+import type Database from "better-sqlite3";
+import { getTaskSession, setTaskSession } from "../store/db.js";
+
+/** One headless turn against a session. resume=false → create with sessionId. */
+export interface SessionLauncher {
+  run(
+    prompt: string,
+    opts: { sessionId: string; resume: boolean; cwd?: string; onChunk?: (chunk: string) => void },
+  ): Promise<{ text: string }>;
+}
+
+/** Mandatory standing instructions, injected once when the session is created.
+ *  These are the user's hard conditions for every task session. */
+export const SESSION_PREAMBLE = [
+  "Ты ведёшь ОДНУ задачу в этой сессии от начала до конца — контекст копится между шагами.",
+  "Обязательные правила на всю сессию:",
+  "",
+  "1. Инструменты (всегда). Для чтения кода используй token-pilot (smart_read, read_symbol,",
+  "   read_for_edit, find_usages, smart_diff, smart_log, test_summary) — не cat/grep, это экономит токены.",
+  "   Решения, находки и причины фиксируй через task-journal. Применяй наши модули, держи их в уме.",
+  "2. Только факт. Не выдавай неуверенный или предполагаемый результат. Если есть сомнение или",
+  "   результат не финальный — доведи до конца и проверь (чтением кода, тестом, запуском).",
+  "   Шаг считается выполненным ТОЛЬКО когда результат проверен и полон.",
+  "3. Формат. Отвечай на чистом, читабельном русском, структурно. Без россыпи случайных",
+  "   английских слов. Любой человек должен понять, что сделано и как этим пользоваться.",
+  "4. Завершение шага. В конце каждого шага дай краткий понятный итог и ЯВНО укажи: шаг завершён",
+  "   полностью (с доказательством) — или остались сомнения/недоделки (тогда это не завершение).",
+].join("\n");
+
+/** Per-stage reinforcement — short reminder of the rules + the step's task. */
+export function stageInstruction(stage: string | undefined, instruction: string): string {
+  const head = stage ? `Стадия: ${stage}.` : "Следующий шаг.";
+  return [
+    `${head} Помни правила сессии (token-pilot + task-journal, только факт, читабельный русский, явное завершение шага).`,
+    "",
+    "Задача шага:",
+    instruction,
+  ].join("\n");
+}
+
+export interface SendOptions {
+  stage?: string;
+  cwd?: string;
+  onChunk?: (chunk: string) => void;
+}
+
+export interface TaskSession {
+  readonly taskId: string;
+  /** The session uuid once created (empty until the first send). */
+  sessionId(): string;
+  /** Inject a stage instruction into the task's session. First call creates the
+   *  session with the preamble; later calls resume and reinforce. */
+  send(instruction: string, opts?: SendOptions): Promise<{ text: string }>;
+}
+
+export interface TaskSessionDeps {
+  launcher: SessionLauncher;
+  /** Generate the session uuid (override for deterministic tests). */
+  newId?: () => string;
+  /** Compaction: invoked before a send once `turns` reaches the threshold, so a
+   *  long session is condensed in place (artifacts stay the durable record). */
+  compactEvery?: number;
+  compact?: (session: { sessionId: string; cwd?: string }) => Promise<void>;
+}
+
+export function createTaskSession(db: Database.Database, taskId: string, deps: TaskSessionDeps): TaskSession {
+  const newId = deps.newId ?? randomUUID;
+  let turns = 0;
+  return {
+    taskId,
+    sessionId: () => getTaskSession(db, taskId).sessionId ?? "",
+    async send(instruction, opts = {}) {
+      const sess = getTaskSession(db, taskId);
+      const resume = sess.started;
+      const sessionId = sess.sessionId ?? newId();
+
+      if (deps.compact && deps.compactEvery && turns > 0 && turns % deps.compactEvery === 0) {
+        await deps.compact({ sessionId, cwd: opts.cwd });
+      }
+
+      const body = stageInstruction(opts.stage, instruction);
+      const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
+      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, onChunk: opts.onChunk });
+
+      if (!resume) setTaskSession(db, taskId, sessionId); // created → next send resumes
+      turns += 1;
+      return res;
+    },
+  };
+}
