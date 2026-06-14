@@ -59,6 +59,23 @@ describe("live session launcher", () => {
     expect(l.costOf("s")).toBeCloseTo(0.04);
   });
 
+  it("passes bypassPermissions through to spawn (autopilot full access)", async () => {
+    const seen: Array<boolean | undefined> = [];
+    const spawn: SpawnSession = ({ bypassPermissions }) => {
+      seen.push(bypassPermissions);
+      let onData: ((d: string) => void) | undefined;
+      return {
+        stdin: { write: () => queueMicrotask(() => onData?.(JSON.stringify({ type: "result", subtype: "success", result: "ok" }) + "\n")), end: () => {} },
+        stdout: { on: (_e, cb) => { onData = cb as (d: string) => void; } },
+        on: () => {}, kill: () => {},
+      };
+    };
+    const l = createLiveSessionLauncher({ spawn });
+    await l.run("go", { sessionId: "s1", resume: false, bypassPermissions: true });
+    await l.run("go", { sessionId: "s2", resume: false, bypassPermissions: false });
+    expect(seen).toEqual([true, false]);
+  });
+
   it("streams assistant chunks to onChunk", async () => {
     const { spawn } = fakeSpawn();
     const l = createLiveSessionLauncher({ spawn });

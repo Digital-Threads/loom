@@ -22,6 +22,7 @@ export interface SpawnSessionOpts {
   resume: boolean; // true → spawn with --resume (recovery); false → --session-id (create)
   cwd?: string;
   env?: Record<string, string>; // spine env (LOOM_TASK_ID …) so plugin telemetry attributes to the task
+  bypassPermissions?: boolean; // autopilot only — full access, user-warned at task creation
 }
 export type SpawnSession = (opts: SpawnSessionOpts) => ProcLike;
 
@@ -79,11 +80,11 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
     l.proc.on("error", () => live.delete(sessionId));
   }
 
-  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined): Live {
+  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined): Live {
     const existing = live.get(sessionId);
     if (existing) return existing;
     // No live process: create (resume=false) or recover (resume=true).
-    const proc = deps.spawn({ sessionId, resume, cwd, env });
+    const proc = deps.spawn({ sessionId, resume, cwd, env, bypassPermissions });
     const l: Live = { proc, buf: "", pending: null, cost: 0 };
     live.set(sessionId, l);
     attach(sessionId, l);
@@ -92,7 +93,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
 
   return {
     async run(prompt, opts) {
-      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env);
+      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions);
       l.onChunk = opts.onChunk;
       const text = await new Promise<string>((resolve) => {
         l.pending = resolve;

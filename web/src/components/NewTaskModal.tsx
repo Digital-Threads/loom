@@ -97,6 +97,11 @@ export function NewTaskModal({
               <option value="autopilot">Autopilot — run end-to-end</option>
             </select>
           </label>
+          {runMode === "autopilot" ? (
+            <div className="modal-warn" style={{ fontSize: 12, color: "var(--warn)" }}>
+              ⚠ Autopilot grants the agent <b>full access</b> — it runs end-to-end without per-action approval. Use only on a repo you trust.
+            </div>
+          ) : null}
           {err ? <div className="modal-err">{err}</div> : null}
         </div>
         <div className="modal-f">

@@ -153,7 +153,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher })
-      .send(prompt, { stage, cwd: taskCwd(id), env: spineEnv(ids) });
+      .send(prompt, { stage, cwd: taskCwd(id), env: spineEnv(ids), bypassPermissions: t?.run_mode === "autopilot" });
     recordSessionCost(id, repoRoot);
     return text;
   };
