@@ -21,7 +21,7 @@
     "build:host": "tsc -p tsconfig.json",
     "copy:manifests": "node scripts/copy-manifests.mjs",
     "build": "tsc -p tsconfig.json && bun run copy:manifests",
-    "start": "node dist/cli.js",
+    "start": "bun dist/cli.js",
     "test": "vitest run",
     "prepublishOnly": "bun run build"
   },

@@ -1,48 +1,66 @@
-#!/usr/bin/env node
-import React from "react";
-import { render } from "ink";
-import { App } from "./ui/App.js";
-import { loadDynamicPlugins } from "./core/plugins/index.js";
+#!/usr/bin/env bun
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { runPluginCli } from "./cli/plugin-cli.js";
 import { runPackCli } from "./cli/pack-cli.js";
 import { runConfigCli } from "./cli/config-cli.js";
 import { defaultDeps } from "./core/install/runner.js";
-import { takeHandover } from "./core/handover.js";
+import { serveApi, DEFAULT_PORT } from "./web/server.js";
+
+const HELP = `Loom — AI orchestrator
+Usage:
+  loom [serve]            Start the app (API + web UI), default
+  loom serve [--port N]   Start on a specific port
+  loom plugin <add|remove|list>
+  loom pack [--out <file>] [--copy]
+  loom config <doctor|merge>`;
+
+function webDistDir(): string {
+  // src/cli.tsx → ../web/dist (built frontend).
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "web", "dist");
+}
+
+function runServe(args: string[]): void {
+  const portFlag = args.indexOf("--port");
+  const port = portFlag >= 0 ? Number(args[portFlag + 1]) || DEFAULT_PORT : DEFAULT_PORT;
+  const server = serveApi({ port, webDist: webDistDir() });
+  const url = server.url?.toString() ?? `http://localhost:${port}/`;
+  console.log(`Loom running at ${url}`);
+  console.log("Press Ctrl+C to stop.");
+  // Bun.serve keeps the process alive.
+}
 
 async function main(): Promise<void> {
-  // `loom plugin <add|remove|list>` -> headless CLI without rendering the TUI.
-  if (process.argv[2] === "plugin") {
-    const res = runPluginCli(process.argv.slice(3), defaultDeps());
-    for (const l of res.lines) console.log(l);
-    process.exit(res.code);
-  }
+  const [cmd, ...rest] = process.argv.slice(2);
 
-  // `loom pack [--out <file>] [--copy]` -> headless CLI without rendering the TUI.
-  if (process.argv[2] === "pack") {
-    const res = await runPackCli(process.argv.slice(3), {});
-    for (const l of res.lines) console.log(l);
-    process.exit(res.code);
-  }
-
-  // `loom config <doctor|merge>` -> headless CLI without rendering the TUI.
-  if (process.argv[2] === "config") {
-    const res = runConfigCli(process.argv.slice(3), {});
-    for (const l of res.lines) console.log(l);
-    process.exit(res.code);
-  }
-
-  // Otherwise: the normal TUI. Populate the registry with dynamic plugins BEFORE the first
-  // render so App sees the full list. Load failures must not break startup.
-  const errs = await loadDynamicPlugins();
-  if (errs.length) {
-    console.error("Loom: plugin load problems:\n" + errs.join("\n"));
-  }
-
-  const app = render(<App />);
-  await app.waitUntilExit();
-  const handover = takeHandover();
-  if (handover) {
-    await handover();
+  switch (cmd) {
+    case "plugin": {
+      const res = runPluginCli(rest, defaultDeps());
+      res.lines.forEach((l) => console.log(l));
+      process.exit(res.code);
+    }
+    case "pack": {
+      const res = await runPackCli(rest, {});
+      res.lines.forEach((l) => console.log(l));
+      process.exit(res.code);
+    }
+    case "config": {
+      const res = runConfigCli(rest, {});
+      res.lines.forEach((l) => console.log(l));
+      process.exit(res.code);
+    }
+    case "-h":
+    case "--help":
+    case "help":
+      console.log(HELP);
+      process.exit(0);
+    case undefined:
+    case "serve":
+      runServe(rest);
+      break;
+    default:
+      console.error(`Unknown command: ${cmd}\n\n${HELP}`);
+      process.exit(1);
   }
 }
 

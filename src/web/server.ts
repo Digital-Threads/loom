@@ -1,7 +1,11 @@
-// Serve the local API. Runs under Bun (the host runtime); `declare const Bun`
-// keeps tsc happy without pulling bun-types into the whole project. The React
-// frontend is served separately (vite dev / Tauri in prod); this exposes /api.
+// Serve the Loom app: the Hono API + the built React frontend (web/dist).
+// Runs under Bun (host runtime). `declare const Bun` keeps tsc clean without
+// pulling bun-types project-wide.
 
+import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { createApi } from "./api.js";
 import { openStore, storePath } from "../core/store/db.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
@@ -24,12 +28,25 @@ export function defaultDb(): Database.Database {
 export interface ServeOptions {
   db?: Database.Database;
   port?: number;
+  /** Directory of the built frontend (web/dist). Static + SPA fallback served
+   *  when present; omitted in API-only / test mode. */
+  webDist?: string;
 }
 
-/** Start the API server; returns the Bun server handle. */
+/** Start the server: API under /api, static frontend otherwise. */
 export function serveApi(opts: ServeOptions = {}) {
   const db = opts.db ?? defaultDb();
-  const app = createApi(db);
   const port = opts.port ?? DEFAULT_PORT;
+
+  const app = new Hono();
+  app.route("/", createApi(db));
+
+  if (opts.webDist && existsSync(opts.webDist)) {
+    const root = opts.webDist;
+    app.use("/*", serveStatic({ root }));
+    // SPA fallback: any non-/api path → index.html.
+    app.get("*", serveStatic({ path: join(root, "index.html") }));
+  }
+
   return Bun.serve({ port, fetch: app.fetch });
 }
