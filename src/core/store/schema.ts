@@ -18,6 +18,8 @@ export const CREATE_TABLES = `
     repo        TEXT,
     branch      TEXT,
     description TEXT,
+    session_id      TEXT,                       -- the task's persistent Claude session (one session per task)
+    session_started INTEGER NOT NULL DEFAULT 0, -- 0 = session not yet created (next call uses --session-id), 1 = resume
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL
   );

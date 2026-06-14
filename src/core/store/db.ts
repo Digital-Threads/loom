@@ -75,6 +75,8 @@ export interface TaskRow {
   repo: string | null;
   branch: string | null;
   description: string | null;
+  session_id: string | null;
+  session_started: number;
   created_at: number;
   updated_at: number;
 }
@@ -150,6 +152,24 @@ export function updateTaskStatus(
     Date.now(),
     id,
   );
+}
+
+// ─── Task session (one persistent Claude session per task) ───────────────────
+
+/** Set the task's session id (uuid) and mark it created so later stage calls
+ *  resume it instead of starting a new one. */
+export function setTaskSession(db: Database.Database, id: string, sessionId: string): void {
+  db.prepare("UPDATE tasks SET session_id = ?, session_started = 1, updated_at = ? WHERE id = ?").run(
+    sessionId,
+    Date.now(),
+    id,
+  );
+}
+
+/** The task's session: its id and whether it has been created yet (resume vs new). */
+export function getTaskSession(db: Database.Database, id: string): { sessionId: string | null; started: boolean } {
+  const t = getTask(db, id);
+  return { sessionId: t?.session_id ?? null, started: !!t?.session_started };
 }
 
 // ─── Stage helpers ──────────────────────────────────────────────────────────
