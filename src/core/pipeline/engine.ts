@@ -47,6 +47,32 @@ export function completeStage(
   return null;
 }
 
+/**
+ * Move a task so its current position becomes `stageKey` (Kanban drag-drop):
+ * in-route stages before the target → done, the target → active, after → pending;
+ * non-route (skipped) stages are left untouched. Dropping on `done` finishes the
+ * task. Returns the new current stage key, or null if the stage is unknown.
+ * Repositions only — it does not start a run (running stays an explicit action).
+ */
+export function moveToStage(db: Database.Database, taskId: string, stageKey: string): string | null {
+  const stages = getStages(db, taskId);
+  const targetIdx = STAGE_KEYS.indexOf(stageKey as (typeof STAGE_KEYS)[number]);
+  if (targetIdx < 0 || !stages.some((s) => s.stage_key === stageKey)) return null;
+
+  if (stageKey === "done") {
+    for (const s of stages) if (s.status !== "skipped") updateStageStatus(db, taskId, s.stage_key, "done");
+    updateTaskStatus(db, taskId, "done");
+    return null;
+  }
+  for (const s of stages) {
+    if (s.stage_key === stageKey) updateStageStatus(db, taskId, s.stage_key, "active");
+    else if (s.status === "skipped") continue;
+    else updateStageStatus(db, taskId, s.stage_key, STAGE_KEYS.indexOf(s.stage_key as (typeof STAGE_KEYS)[number]) < targetIdx ? "done" : "pending");
+  }
+  updateTaskStatus(db, taskId, "running");
+  return stageKey;
+}
+
 export interface BoardCard {
   id: string;
   title: string;

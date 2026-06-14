@@ -99,6 +99,18 @@ describe("web api client", () => {
     expect(createClient("/base").runStreamUrl("run_x")).toBe("/base/api/runs/run_x/stream");
   });
 
+  it("moveTask() posts the target stage and returns the new current", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    const fetchSpy = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = (typeof input === "string" ? input : input.toString()).replace(/^https?:\/\/[^/]+/, "");
+      calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      return new Response(JSON.stringify({ current: "spec" }), { status: 200 });
+    }) as typeof fetch;
+    const c = createClient("", fetchSpy);
+    expect((await c.moveTask("t1", "spec")).current).toBe("spec");
+    expect(calls[0]).toEqual({ path: "/api/tasks/t1/move", body: { stageKey: "spec" } });
+  });
+
   it("fsList() lists a directory (with and without a path query)", async () => {
     const listing = { path: "/home", parent: "/", entries: [{ name: "repo", path: "/home/repo", isGitRepo: true }] };
     const c = createClient("", fakeFetch({ "/api/fs/list": listing, "/api/fs/list?path=%2Fhome": listing }));

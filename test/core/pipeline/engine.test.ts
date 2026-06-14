@@ -9,6 +9,7 @@ import {
   currentStage,
   boardColumns,
   attentionQueue,
+  moveToStage,
 } from "../../../src/core/pipeline/engine.js";
 import type Database from "better-sqlite3";
 
@@ -81,5 +82,45 @@ describe("pipeline engine", () => {
     db.prepare("UPDATE stages SET gate = 0 WHERE task_id = 'u' AND stage_key = 'analysis'").run();
     startTask(db, "u");
     expect(attentionQueue(db)).toEqual([]);
+  });
+
+  it("moveToStage repositions a task to the target column (drag-drop)", () => {
+    createTask(db, { id: "m", title: "Move me" });
+    startTask(db, "m"); // analysis active
+    expect(moveToStage(db, "m", "spec")).toBe("spec");
+    const stages = getStages(db, "m");
+    const status = (k: string) => stages.find((s) => s.stage_key === k)!.status;
+    expect(status("analysis")).toBe("done");
+    expect(status("brainstorm")).toBe("done");
+    expect(status("spec")).toBe("active");
+    expect(status("rd")).toBe("pending");
+    // board reflects the move
+    expect(boardColumns(db).find((c) => c.stageKey === "spec")!.cards.map((c) => c.id)).toEqual(["m"]);
+  });
+
+  it("moveToStage can move a task backwards", () => {
+    createTask(db, { id: "b", title: "Back" });
+    startTask(db, "b");
+    moveToStage(db, "b", "qa");
+    expect(moveToStage(db, "b", "analysis")).toBe("analysis");
+    expect(currentStage(getStages(db, "b"))!.stage_key).toBe("analysis");
+  });
+
+  it("moveToStage to done finishes the task", () => {
+    createTask(db, { id: "d", title: "Finish" });
+    startTask(db, "d");
+    expect(moveToStage(db, "d", "done")).toBeNull();
+    expect(currentStage(getStages(db, "d"))).toBeUndefined();
+    expect(boardColumns(db).find((c) => c.stageKey === "done")!.cards.map((c) => c.id)).toEqual(["d"]);
+  });
+
+  it("moveToStage leaves skipped (out-of-route) stages untouched", () => {
+    createTask(db, { id: "r", title: "Bug", route: ["analysis", "impl", "review", "pr", "done"] });
+    startTask(db, "r");
+    moveToStage(db, "r", "review");
+    const stages = getStages(db, "r");
+    expect(stages.find((s) => s.stage_key === "brainstorm")!.status).toBe("skipped");
+    expect(stages.find((s) => s.stage_key === "impl")!.status).toBe("done");
+    expect(stages.find((s) => s.stage_key === "review")!.status).toBe("active");
   });
 });

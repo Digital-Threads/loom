@@ -126,6 +126,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ next: string | null }>(`${base}/api/tasks/${id}/stages/${key}/accept`, {}, f),
     setGate: (id: string, key: string, gate: boolean) =>
       postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/stages/${key}/gate`, { gate }, f),
+    // board drag-drop: reposition a task to a stage column (no run started)
+    moveTask: (id: string, stageKey: string) =>
+      postJson<{ current: string | null }>(`${base}/api/tasks/${id}/move`, { stageKey }, f),
     // F1 — 3 core modules
     workspace: () => getJson<WorkspaceData>(`${base}/api/workspace`, f),
     accountsHealth: () =>

@@ -8,7 +8,7 @@ import type Database from "better-sqlite3";
 import { listTasks, getTask, getStages, createTask, setStageGate } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts } from "../core/store/execute.js";
-import { boardColumns, attentionQueue, startTask, completeStage } from "../core/pipeline/engine.js";
+import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
@@ -285,6 +285,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const body = (await c.req.json().catch(() => ({}))) as { gate?: unknown };
     setStageGate(db, id, c.req.param("key"), body.gate !== false);
     return c.json({ ok: true });
+  });
+
+  // Move a task to a stage (board drag-drop). Body: { stageKey }. Repositions
+  // only — does not start a run.
+  app.post("/api/tasks/:id/move", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { stageKey?: unknown };
+    const stageKey = typeof body.stageKey === "string" ? body.stageKey : "";
+    const current = moveToStage(db, id, stageKey);
+    if (current === null && stageKey !== "done") return c.json({ error: "unknown stage" }, 400);
+    return c.json({ current });
   });
 
   // ─── module actions (F1.5) ────────────────────────────────────────────────

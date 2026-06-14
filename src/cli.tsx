@@ -24,10 +24,14 @@ function webDistDir(): string {
 }
 
 function openBrowser(url: string): void {
+  // Headless / WSL: no display → no opener (xdg-open is absent and throws).
+  if (process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return;
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
   try {
-    spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
+    const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+    child.on("error", () => {}); // swallow async spawn errors (opener missing)
+    child.unref();
   } catch {
     /* best-effort */
   }
