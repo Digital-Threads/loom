@@ -66,3 +66,52 @@ describe("registry.groupByCategory", () => {
     expect(r.groupByCategory().get("memory")?.map((p) => p.id)).toEqual(["x2", "y2"]);
   });
 });
+
+describe("registry capability lookup (D1.2)", () => {
+  const exec: LoomPlugin = {
+    id: "exec", title: "Exec", tabs: [], load: () => ({}), category: "automation",
+    async execute(step) { return { ok: true, id: step.id }; },
+    slots: [{ stage: "rd", skill: "writing-plans" }],
+  };
+  const reviewer: LoomPlugin = {
+    id: "rev", title: "Rev", tabs: [], load: () => ({}), category: "quality",
+    slots: [{ stage: "review", skill: "code-review" }, { stage: "qa", skill: "canary" }],
+  };
+
+  it("layersByCapability('execute') returns only plugins with execute()", () => {
+    const r = createRegistry([fake, exec, reviewer]);
+    expect(r.layersByCapability("execute").map((p) => p.id)).toEqual(["exec"]);
+  });
+
+  it("layersByCapability('slots') returns plugins contributing any slot", () => {
+    const r = createRegistry([fake, exec, reviewer]);
+    expect(r.layersByCapability("slots").map((p) => p.id).sort()).toEqual(["exec", "rev"]);
+  });
+
+  it("slotProviders(stage) returns plugins backing that stage", () => {
+    const r = createRegistry([fake, exec, reviewer]);
+    expect(r.slotProviders("review").map((p) => p.id)).toEqual(["rev"]);
+    expect(r.slotProviders("rd").map((p) => p.id)).toEqual(["exec"]);
+    expect(r.slotProviders("nope")).toEqual([]);
+  });
+
+  it("D1.3: orchestrator finds the executor via registry and runs it with injected ctx", async () => {
+    const events: unknown[] = [];
+    const layer: LoomPlugin = {
+      id: "auto", title: "Auto", tabs: [], load: () => ({}), category: "automation",
+      async execute(step, ctx) {
+        ctx.appendEvent?.({ step: step.id });           // uses injected DI surface
+        return { ok: true, project: ctx.spine?.projectId };
+      },
+    };
+    const r = createRegistry([fake, layer]);
+    const executor = r.layersByCapability("execute")[0];   // discovered, not imported
+    expect(executor.id).toBe("auto");
+    const res = await executor.execute!(
+      { id: "s1" },
+      { projectRoot: "/p", spine: { projectId: "p1" }, appendEvent: (e) => events.push(e) },
+    );
+    expect(res).toMatchObject({ ok: true, project: "p1" });
+    expect(events).toEqual([{ step: "s1" }]);              // DI reached the layer
+  });
+});
