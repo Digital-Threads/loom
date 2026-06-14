@@ -93,3 +93,11 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
 .picker-row:hover{background:var(--panel2)}
 .picker-git{font-size:10px;color:var(--ok);background:rgba(63,185,80,.12);border-radius:5px;padding:1px 6px}
 .fld-check{font-size:13px;color:var(--txt)}
+.approvals{border:1px solid var(--warn);background:rgba(210,153,34,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.approvals-h{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--warn)}
+.approvals-dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.approvals-sub{color:var(--mut);font-size:12px;margin:4px 0 10px}
+.approvals-list{display:flex;flex-direction:column;gap:8px}
+.approvals-row{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px}
+.approvals-tool{font-size:12.5px;color:var(--txt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.approvals-actions{display:flex;gap:8px}

@@ -46,12 +46,18 @@ function emptyProc(): ProcLike {
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
-  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions }) => {
+  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools }) => {
     const cfg = load();
     const profile = deps.profile ?? listSubscriptions()[0]?.name;
     if (!cfg || !profile) return emptyProc();
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
-    const permArgs = bypassPermissions ? ["--dangerously-skip-permissions"] : []; // autopilot only (user-warned)
+    // autopilot → full access (user-warned); manual/gated → safe allowlist, the
+    // rest is denied and surfaced for approval in the UI.
+    const permArgs = bypassPermissions
+      ? ["--dangerously-skip-permissions"]
+      : allowedTools && allowedTools.length
+        ? ["--allowedTools", ...allowedTools]
+        : [];
     const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
     // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
     // attribute their telemetry to this task — exact cost without a separate counter.

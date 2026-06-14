@@ -54,7 +54,7 @@ import { existsSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
-import { getAllSettings, setSetting } from "../core/store/settings.js";
+import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import { beadsConnector } from "../core/connectors/beads.js";
@@ -144,6 +144,22 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       /* cost is best-effort */
     }
   };
+  // manual/gated: agent may freely read/edit in the worktree + run git; anything
+  // else is denied and surfaced for approval. autopilot: full access (no list).
+  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite"];
+  const allowKey = (id: string) => `perm.allow.${id}`;
+  const taskAllowed = (id: string): string[] => getSetting<string[]>(db, allowKey(id), []);
+  const allowedToolsFor = (id: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...taskAllowed(id)];
+  // Capture tools the agent was denied (await user approval) after a send.
+  const recordDenials = (id: string) => {
+    try {
+      const sid = getTaskSession(db, id).sessionId;
+      const denials = sid ? (sessionLauncher as { denialsOf?: (s: string) => string[] }).denialsOf?.(sid) ?? [] : [];
+      if (denials.length) saveResult(id, "permissions", "permission-denials", { denials });
+    } catch {
+      /* best-effort */
+    }
+  };
   // Send a stage instruction into the task's ONE session (tests inject a one-shot
   // deps.stageAgent). All stages share the session + the task worktree cwd, and
   // the spine env so plugin telemetry attributes to this task.
@@ -152,9 +168,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, id);
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
-    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher })
-      .send(prompt, { stage, cwd: taskCwd(id), env: spineEnv(ids), bypassPermissions: t?.run_mode === "autopilot" });
+    const autopilot = t?.run_mode === "autopilot";
+    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
+      stage,
+      cwd: taskCwd(id),
+      env: spineEnv(ids),
+      bypassPermissions: autopilot,
+      allowedTools: autopilot ? undefined : allowedToolsFor(id),
+    });
     recordSessionCost(id, repoRoot);
+    recordDenials(id);
     return text;
   };
   const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
@@ -619,6 +642,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));
   app.get("/api/tasks/:id/rd", (c) => c.json(loadResult(c.req.param("id"), "rd-plan") ?? { plan: null }));
   app.get("/api/tasks/:id/impl", (c) => c.json(loadResult(c.req.param("id"), "impl-report") ?? { report: null }));
+
+  // ─── permissions (deny → approve) ─────────────────────────────────────────────
+  // Tools the agent was denied (await approval) + the task's current allowlist.
+  app.get("/api/tasks/:id/permissions", (c) => {
+    const id = c.req.param("id");
+    const denied = loadResult<{ denials: string[] }>(id, "permission-denials")?.denials ?? [];
+    const allowed = taskAllowed(id);
+    return c.json({ denials: denied.filter((d) => !allowed.includes(d)), allowed });
+  });
+  // Approve a tool: add it to the task's allowlist (next run includes it). Body: { tool }.
+  app.post("/api/tasks/:id/permissions/allow", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { tool?: unknown };
+    const tool = typeof body.tool === "string" ? body.tool.trim() : "";
+    if (!tool) return c.json({ error: "tool required" }, 400);
+    const allowed = taskAllowed(id);
+    if (!allowed.includes(tool)) setSetting(db, allowKey(id), [...allowed, tool]);
+    return c.json({ allowed: taskAllowed(id) });
+  });
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
 
