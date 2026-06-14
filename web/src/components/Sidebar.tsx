@@ -28,7 +28,17 @@ export function Sidebar({
 }) {
   const [attn, setAttn] = useState<AttentionItem[]>([]);
   useEffect(() => {
-    client.attention().then(setAttn).catch(() => setAttn([]));
+    client.attention().then((items) => {
+      // D6.4 — browser push when new items need attention.
+      if (typeof Notification !== "undefined" && items.length > attn.length) {
+        if (Notification.permission === "granted") {
+          new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
+        } else if (Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
+      }
+      setAttn(items);
+    }).catch(() => setAttn([]));
   }, [client, view]);
 
   return (

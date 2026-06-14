@@ -43,7 +43,7 @@ import { runPr, runDone, type PrOptions } from "../core/pipeline/pr-done.js";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting } from "../core/store/settings.js";
-import { addAttachment, getAttachments } from "../core/store/attachments.js";
+import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
@@ -98,7 +98,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const stageAgent = deps.stageAgent ?? createAimuxStageAgent();
   const taskSpec = (id: string) => {
     const t = getTask(db, id);
-    return t?.description || t?.title || id;
+    return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
   };
   const reviewPass =
     deps.reviewPass ??
