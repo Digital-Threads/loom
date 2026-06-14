@@ -26,8 +26,8 @@ export function TaskView({
       .catch((e) => setErr(String(e)));
   }, [client, taskId]);
 
-  if (err) return <div className="empty">Ошибка: {err}</div>;
-  if (!detail) return <div className="empty">Загрузка…</div>;
+  if (err) return <div className="empty">Error: {err}</div>;
+  if (!detail) return <div className="empty">Loading…</div>;
 
   const stageSteps = detail.steps;
   const costs = detail.costs;
@@ -63,7 +63,7 @@ export function TaskView({
                 onChanged?.();
               }}
             >
-              ▶ Старт
+              ▶ Start
             </button>
           ) : detail.stages.find((s) => s.stage_key === active)?.status === "active" ? (
             <button
@@ -73,14 +73,14 @@ export function TaskView({
                 onChanged?.();
               }}
             >
-              ✓ Принять
+              ✓ Accept
             </button>
           ) : null}
         </div>
         <div className="pb">
           {active === "rd" || active === "impl" ? (
             <>
-              <div className="kv"><b>Шаги (R&D / DAG)</b></div>
+              <div className="kv"><b>Steps (R&D / DAG)</b></div>
               {stageSteps.length ? (
                 stageSteps.map((step) => (
                   <div className="kv" key={step.id}>
@@ -93,17 +93,17 @@ export function TaskView({
                   </div>
                 ))
               ) : (
-                <div className="muted">шагов пока нет</div>
+                <div className="muted">no steps yet</div>
               )}
             </>
           ) : (
             <div className="muted">
-              {detail.task.description || "Содержимое этапа появится по мере прохождения."}
+              {detail.task.description || "Stage content appears as the task progresses."}
             </div>
           )}
 
           <div className="kv" style={{ marginTop: 18 }}>
-            <b>Стоимость</b>
+            <b>Cost</b>
             <span>
               {costs.length
                 ? costs.map((c) => `${c.source}/${c.metric}: ${c.value}${c.exact ? "" : " ≈"}`).join(" · ")

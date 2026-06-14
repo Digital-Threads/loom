@@ -59,8 +59,8 @@ describe("web api client", () => {
 
 describe("web ui helpers", () => {
   it("statusLabel maps known statuses", () => {
-    expect(statusLabel("running")).toBe("идёт");
-    expect(statusLabel("done")).toBe("готово");
+    expect(statusLabel("running")).toBe("running");
+    expect(statusLabel("done")).toBe("done");
     expect(statusLabel("zzz")).toBe("zzz");
   });
   it("statusClass + stage helpers", () => {

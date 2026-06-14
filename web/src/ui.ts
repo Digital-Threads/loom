@@ -3,14 +3,14 @@
 export function statusLabel(status: string): string {
   return (
     {
-      created: "создана",
-      running: "идёт",
-      wait: "ждёт",
-      done: "готово",
-      active: "идёт",
-      pending: "ждёт",
-      skipped: "пропуск",
-      failed: "ошибка",
+      created: "new",
+      running: "running",
+      wait: "waiting",
+      done: "done",
+      active: "running",
+      pending: "waiting",
+      skipped: "skipped",
+      failed: "failed",
     }[status] ?? status
   );
 }

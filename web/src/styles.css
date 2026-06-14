@@ -73,3 +73,17 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
   .col{width:84vw;flex:0 0 84vw;max-height:none}
   .board{height:auto}
 }
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:60;padding:16px}
+.modal{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;max-height:90vh}
+.modal-h{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:650}
+.modal-b{padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.modal-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld span{font-size:12px;color:var(--mut)}
+.fld input,.fld textarea,.fld select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:9px 11px;font:inherit;outline:none}
+.fld input:focus,.fld textarea:focus,.fld select:focus{border-color:var(--acc)}
+.fld-row{display:flex;gap:12px}.fld-row .fld{flex:1}
+.modal-err{color:var(--bad);font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}

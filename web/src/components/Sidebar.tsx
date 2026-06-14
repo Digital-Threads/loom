@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import type { LoomClient, AttentionItem } from "../api";
 
 const NAV = [
-  { key: "board", label: "Доска", icon: "▦" },
-  { key: "accounts", label: "Аккаунты", icon: "◷", group: "Подключения" },
-  { key: "connectors", label: "Коннекторы", icon: "⇄" },
-  { key: "skills", label: "Скилы", icon: "✦", group: "Возможности" },
-  { key: "layers", label: "Слои", icon: "▤" },
-  { key: "timeline", label: "Таймлайн", icon: "≡", group: "Прочее" },
-  { key: "settings", label: "Настройки", icon: "⚙" },
+  { key: "board", label: "Board", icon: "▦" },
+  { key: "accounts", label: "Accounts", icon: "◷", group: "Connections" },
+  { key: "connectors", label: "Connectors", icon: "⇄" },
+  { key: "skills", label: "Skills", icon: "✦", group: "Capabilities" },
+  { key: "layers", label: "Layers", icon: "▤" },
+  { key: "timeline", label: "Timeline", icon: "≡", group: "More" },
+  { key: "settings", label: "Settings", icon: "⚙" },
 ] as const;
 
 export function Sidebar({
@@ -45,10 +45,10 @@ export function Sidebar({
       <div className="spacer" />
       <div className="attn" onClick={() => onNav("board")}>
         <div className="h">
-          🔔 Требует внимания {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
+          🔔 Needs attention {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
         </div>
         <div className="b">
-          {attn.length ? attn.map((a) => `${a.taskId}: ${a.stageKey}`).join(" · ") : "пусто"}
+          {attn.length ? attn.map((a) => `${a.taskId}: ${a.stageKey}`).join(" · ") : "empty"}
         </div>
       </div>
     </aside>

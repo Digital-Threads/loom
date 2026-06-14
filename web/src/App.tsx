@@ -3,15 +3,16 @@ import { createClient } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { Board } from "./components/Board";
 import { TaskView } from "./components/TaskView";
+import { NewTaskModal } from "./components/NewTaskModal";
 
 const SECTION_TITLES: Record<string, string> = {
-  board: "Доска",
-  accounts: "Аккаунты",
-  connectors: "Коннекторы (MCP)",
-  skills: "Скилы",
-  layers: "Слои",
-  timeline: "Таймлайн",
-  settings: "Настройки",
+  board: "Board",
+  accounts: "Accounts",
+  connectors: "Connectors (MCP)",
+  skills: "Skills",
+  layers: "Layers",
+  timeline: "Timeline",
+  settings: "Settings",
 };
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [reload, setReload] = useState(0);
+  const [showNew, setShowNew] = useState(false);
 
   const inTask = taskId !== null;
 
@@ -27,17 +29,6 @@ export function App() {
     setView(v);
     setTaskId(null);
     setDrawer(false);
-  }
-
-  async function createNew() {
-    const title = window.prompt("Название задачи?");
-    if (!title?.trim()) return;
-    try {
-      await client.create({ title: title.trim() });
-      setReload((r) => r + 1);
-    } catch (e) {
-      window.alert(`Не удалось создать: ${e}`);
-    }
   }
 
   return (
@@ -51,7 +42,7 @@ export function App() {
           {inTask ? (
             <h1>
               <span style={{ cursor: "pointer", color: "var(--mut)" }} onClick={() => setTaskId(null)}>
-                ‹ Доска
+                ‹ Board
               </span>
             </h1>
           ) : (
@@ -60,7 +51,7 @@ export function App() {
           {inTask ? <span className="crumb">  {taskId}</span> : <span className="crumb" />}
           {view === "board" && !inTask ? (
             <div className="right">
-              <button className="btn acc" onClick={createNew}>+ Новая</button>
+              <button className="btn acc" onClick={() => setShowNew(true)}>+ New</button>
             </div>
           ) : null}
         </header>
@@ -75,10 +66,18 @@ export function App() {
           ) : view === "board" ? (
             <Board key={reload} client={client} onOpen={setTaskId} />
           ) : (
-            <div className="empty">Раздел «{SECTION_TITLES[view] ?? view}» — скоро.</div>
+            <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}
         </div>
       </div>
+
+      {showNew ? (
+        <NewTaskModal
+          client={client}
+          onClose={() => setShowNew(false)}
+          onCreated={() => setReload((r) => r + 1)}
+        />
+      ) : null}
     </div>
   );
 }

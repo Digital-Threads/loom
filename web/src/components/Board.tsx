@@ -10,8 +10,8 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
     client.board().then(setCols).catch((e) => setErr(String(e)));
   }, [client]);
 
-  if (err) return <div className="empty">Нет связи с ядром: {err}</div>;
-  if (!cols) return <div className="empty">Загрузка…</div>;
+  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
+  if (!cols) return <div className="empty">Loading…</div>;
 
   return (
     <div className="board">

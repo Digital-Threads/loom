@@ -106,11 +106,11 @@ export function createClient(base = "", f: Fetcher = fetch) {
 export type LoomClient = ReturnType<typeof createClient>;
 
 export const STAGE_LABELS: Record<string, string> = {
-  analysis: "Анализ",
-  brainstorm: "Брейншторм",
-  spec: "Спека",
+  analysis: "Analysis",
+  brainstorm: "Brainstorm",
+  spec: "Spec",
   rd: "R&D",
-  impl: "Реализация",
+  impl: "Implementation",
   review: "Review",
   qa: "QA",
   pr: "PR",
