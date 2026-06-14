@@ -51,3 +51,14 @@ export function scanSecrets(text: string): SecretFinding[] {
 export function hasSecret(text: string): boolean {
   return scanSecrets(text).length > 0;
 }
+
+/** Replace every likely secret in the text with its redacted preview, so
+ *  captured stdout/stderr/events can be stored or streamed without leaking. */
+export function redactSecrets(text: string): string {
+  let out = text;
+  for (const { kind, re } of PATTERNS) {
+    void kind;
+    out = out.replace(new RegExp(re.source, re.flags), (m) => redact(m));
+  }
+  return out;
+}
