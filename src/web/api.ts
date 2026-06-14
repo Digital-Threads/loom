@@ -617,6 +617,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));
+  app.get("/api/tasks/:id/rd", (c) => c.json(loadResult(c.req.param("id"), "rd-plan") ?? { plan: null }));
+  app.get("/api/tasks/:id/impl", (c) => c.json(loadResult(c.req.param("id"), "impl-report") ?? { report: null }));
 
   // ─── runs (L4.4) ────────────────────────────────────────────────────────────
 

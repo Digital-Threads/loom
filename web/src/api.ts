@@ -25,6 +25,7 @@ export interface TaskRow {
   repo: string | null;
   branch: string | null;
   description: string | null;
+  session_id?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -193,6 +194,10 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
     qaGet: (id: string) =>
       getJson<{ result: QaResult | null }>(`${base}/api/tasks/${id}/qa`, f).then((d) => d.result),
+    rdGet: (id: string) =>
+      getJson<{ plan: string | null }>(`${base}/api/tasks/${id}/rd`, f).then((d) => d.plan),
+    implGet: (id: string) =>
+      getJson<{ report: string | null }>(`${base}/api/tasks/${id}/impl`, f).then((d) => d.report),
     // L11 — extensibility
     layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
     skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),
