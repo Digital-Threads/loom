@@ -40,6 +40,7 @@ import {
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { getChatMessages, latestArtifact } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions } from "../core/pipeline/pr-done.js";
+import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { runReview, reviewAction } from "../core/quality/review-runner.js";
@@ -72,6 +73,8 @@ export interface ApiDeps {
   prOptions?: (taskId: string) => PrOptions;
   /** Close the task in task-journal at Done (default: no-op). */
   closeTask?: (taskId: string) => void;
+  /** Stage runner registry for the conductor (default: wired to L4/L6/L12/L14). */
+  runners?: RunnerRegistry;
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -99,6 +102,37 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       run: async () => parseFindings(key, await stageAgent(reviewPrompt(key, target))),
     }));
   const qaChecks = deps.qaChecks ?? (() => [] as QaCheck[]);
+
+  // L13 — default stage runners: wire each pipeline stage to its layer. Override
+  // via deps.runners for tests. Interactive stages (brainstorm/spec) are driven
+  // by the UI; the conductor auto-runs them best-effort here for autopilot.
+  async function runImplStage(taskId: string): Promise<StageOutcome> {
+    const t = getTask(db, taskId);
+    const ids = buildSpineIds({ repoRoot: t?.repo || process.cwd(), taskId });
+    const runId = startSpecRun(rm, db, taskId, taskSpec(taskId), ids);
+    const rec = await rm.wait(runId);
+    const result = rec.result as { exec?: { dag?: { ok?: boolean } } } | undefined;
+    return { ok: rec.status === "done" && (result?.exec?.dag?.ok ?? true) };
+  }
+  const doneProjectId = () => projectActive()?.projectId ?? "default";
+  const defaultRunners: RunnerRegistry = {
+    analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgent); return { ok: true }; },
+    brainstorm: async () => ({ ok: true }), // human-driven via StageDialog
+    spec: async (_d, id) => { await draftSpec(db, id, stageAgent); acceptSpec(db, id); return { ok: true }; },
+    rd: async (_d, id) => runImplStage(id),
+    impl: async (_d, id) => runImplStage(id),
+    review: async (_d, id) => {
+      const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
+      return { ok: res.passed, needsAttention: !res.passed };
+    },
+    qa: async () => {
+      const res = await runQa(qaChecks(resolveFlow("qa")));
+      return { ok: res.passed, needsAttention: !res.passed };
+    },
+    pr: async (_d, id) => { runPr(db, id, deps.prOptions?.(id) ?? {}); return { ok: true }; },
+    done: async (_d, id) => { runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) }); return { ok: true }; },
+  };
+  const runners = deps.runners ?? defaultRunners;
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
@@ -246,6 +280,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const q = c.req.query("q") ?? "";
     const hits = q ? recall(q) : [];
     return c.json({ hits, ...partitionHits(hits) });
+  });
+
+  // ─── conductor (L13) ──────────────────────────────────────────────────────────
+  // Drive the task per run_mode (manual parks, gated stops at gate=1, autopilot
+  // runs through). run-stage runs the current stage (manual Run / gate approval).
+  app.post("/api/tasks/:id/advance", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json(await advanceTask(db, id, runners));
+  });
+  app.post("/api/tasks/:id/run-stage", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json(await runAndAdvance(db, id, runners));
   });
 
   // ─── PR / Done (L14) ──────────────────────────────────────────────────────────
