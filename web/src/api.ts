@@ -140,6 +140,10 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ project: ProjectEntry }>(`${base}/api/projects`, { root }, f).then((d) => d.project),
     setActiveProject: (projectId: string) =>
       postJson<{ active: string }>(`${base}/api/projects/active`, { projectId }, f).then((d) => d.active),
+    // L4 — runs
+    startRun: (taskId: string, stageKey: string) =>
+      postJson<{ runId: string }>(`${base}/api/tasks/${taskId}/stages/${stageKey}/run`, {}, f).then((d) => d.runId),
+    runStreamUrl: (runId: string) => `${base}/api/runs/${runId}/stream`,
   };
 }
 

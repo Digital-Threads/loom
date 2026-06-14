@@ -92,6 +92,12 @@ describe("web api client", () => {
     const c3 = createClient("", fakeFetch({ "/api/projects/active": { active: "p9" } }));
     expect(await c3.setActiveProject("p9")).toBe("p9");
   });
+
+  it("startRun() returns the runId; runStreamUrl builds the SSE path (L4.5)", async () => {
+    const c = createClient("", fakeFetch({ "/api/tasks/t1/stages/rd/run": { runId: "run_x" } }));
+    expect(await c.startRun("t1", "rd")).toBe("run_x");
+    expect(createClient("/base").runStreamUrl("run_x")).toBe("/base/api/runs/run_x/stream");
+  });
 });
 
 describe("web ui helpers", () => {
