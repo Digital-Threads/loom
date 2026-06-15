@@ -16,8 +16,9 @@ export interface AimuxLiveLauncherDeps {
   profile?: string;
   model?: string;
   /** EXPERIMENTAL: wrap the child in an OS sandbox (writes confined to the
-   *  worktree/cwd) when a backend is available. Off by default. */
-  sandbox?: boolean;
+   *  worktree/cwd) when a backend is available. Off by default. A function is
+   *  resolved per spawn so a Settings toggle takes effect on the next run. */
+  sandbox?: boolean | (() => boolean);
 }
 
 // manual/gated: normal Claude permissions (approvals surfaced to the Loom UI).
@@ -66,7 +67,8 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
         : [];
     const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
-    const wrapped = deps.sandbox && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
+    const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
+    const wrapped = sandboxOn && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
     // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
     // attribute their telemetry to this task — exact cost without a separate counter.
     const child = spawn(wrapped.cli, wrapped.args, { cwd, env: { ...process.env, ...built.env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });

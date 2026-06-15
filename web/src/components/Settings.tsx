@@ -20,6 +20,7 @@ export function Settings({ client }: { client: LoomClient }) {
   const runMode = (s["run_mode"] as string) ?? "gated";
   const tokenPilot = (s["tokenPilot.enabled"] as boolean) ?? true;
   const notify = (s["notify.enabled"] as boolean) ?? true;
+  const sandbox = (s["sandbox.enabled"] as boolean) ?? false;
 
   return (
     <div className="panel">
@@ -38,6 +39,15 @@ export function Settings({ client }: { client: LoomClient }) {
       <div className="kv">
         <b>Notifications</b>
         <span><button className="btn" onClick={() => save("notify.enabled", !notify)}>{notify ? "on" : "off"}</button></span>
+      </div>
+      <div className="kv">
+        <b>OS sandbox <span className="chip" style={{ marginLeft: 6 }}>experimental</span></b>
+        <span>
+          <button className={`btn ${sandbox ? "acc" : ""}`} onClick={() => save("sandbox.enabled", !sandbox)}>{sandbox ? "on" : "off"}</button>
+        </span>
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+        Confines agent writes to the task worktree (bubblewrap / sandbox-exec). Requires the tool installed; verify in your environment.
       </div>
     </div>
   );
