@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, ProjectEntry } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 // D3.5 — project registry: list projects, add by path, switch the active one.
 export function Projects({ client, onSwitched }: { client: LoomClient; onSwitched?: () => void }) {
@@ -20,13 +21,13 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
   async function add() {
     if (!root.trim()) return;
     setBusy(true);
-    try { await client.addProject(root.trim()); setRoot(""); refresh(); }
-    catch (e) { setErr(String(e)); }
+    try { await client.addProject(root.trim()); setRoot(""); refresh(); toast.success("Project added"); }
+    catch (e) { setErr(String(e)); toast.error("Couldn’t add project"); }
     finally { setBusy(false); }
   }
   async function switchTo(id: string) {
     setBusy(true);
-    try { await client.setActiveProject(id); setActive(id); onSwitched?.(); }
+    try { await client.setActiveProject(id); setActive(id); onSwitched?.(); toast.success("Switched project"); }
     finally { setBusy(false); }
   }
 

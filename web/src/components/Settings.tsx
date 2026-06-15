@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient } from "../api";
 import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 // D6.2 — Settings: default run_mode, token-pilot on/off, notifications on/off.
 // (Per-column flow defaults reuse the L6 flow-config; surfaced here later.)
@@ -13,6 +14,7 @@ export function Settings({ client }: { client: LoomClient }) {
   async function save(key: string, value: unknown) {
     await client.saveSetting(key, value);
     setS((cur) => ({ ...(cur ?? {}), [key]: value }));
+    toast.success("Saved");
   }
 
   if (err) return <StateView kind="error" msg={err} />;

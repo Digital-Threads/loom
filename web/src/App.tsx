@@ -15,6 +15,7 @@ import { Skills } from "./components/Skills";
 import { Settings } from "./components/Settings";
 import { Connectors } from "./components/Connectors";
 import { Onboarding } from "./components/Onboarding";
+import { Toaster } from "./components/Toaster";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -128,6 +129,7 @@ export function App() {
           onCreated={() => setReload((r) => r + 1)}
         />
       ) : null}
+      <Toaster />
     </div>
   );
 }

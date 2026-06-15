@@ -1,5 +1,6 @@
 // Typed client for the loom local API. fetch is injectable so the client is
 // testable without a server / DOM.
+import { toast } from "./toast";
 
 export interface BoardCard {
   id: string;
@@ -65,9 +66,16 @@ export interface TaskDetail {
 
 export type Fetcher = typeof fetch;
 
+// A 5xx is an unexpected server fault → surface it globally as a toast. A 4xx is
+// expected/validation and is handled by the caller, so it just throws quietly.
+function onHttpError(path: string, status: number): Error {
+  if (status >= 500) toast.error(`Server error (${status}) — ${path.replace(/^.*\/api\//, "/api/")}`);
+  return new Error(`${path} → ${status}`);
+}
+
 async function getJson<T>(path: string, f: Fetcher): Promise<T> {
   const res = await f(path);
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  if (!res.ok) throw onHttpError(path, res.status);
   return (await res.json()) as T;
 }
 
@@ -77,7 +85,7 @@ async function postJson<T>(path: string, body: unknown, f: Fetcher): Promise<T> 
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  if (!res.ok) throw onHttpError(path, res.status);
   return (await res.json()) as T;
 }
 
