@@ -598,9 +598,35 @@ describe("web api — fs browse + PR connector", () => {
     const { runId } = (await (await a.request("/api/tasks/st/stages/rd/run", { method: "POST", body: "{}" })).json()) as { runId: string };
     await rm.wait(runId);
     expect(rm.get(runId)!.output.join("")).toContain("live-chunk"); // streamed to the run → SSE
-    // "Run" runs the stage's agent but does NOT auto-advance — user approves to move on.
+    // a clean run completes the stage and activates the next (pipeline moves on).
     const stages = (await (await a.request("/api/tasks/st")).json()) as { stages: { stage_key: string; status: string }[] };
-    expect(stages.stages.find((s) => s.stage_key === "rd")!.status).toBe("active");
+    expect(stages.stages.find((s) => s.stage_key === "rd")!.status).toBe("done");
+    expect(stages.stages.find((s) => s.stage_key === "impl")!.status).toBe("active");
+  });
+
+  it("a parked stage (needs attention) stays active after a run", async () => {
+    createTask(database, { id: "pk", title: "Park", run_mode: "manual" });
+    const rm = createRunManager();
+    // review with a bug-severity finding → not passed → needsAttention → stays put
+    const a = createApi(database, { runManager: rm, reviewPass: (key) => ({ key, run: async () => [{ pass: key, severity: "bug" as const, message: "boom" }] }) });
+    await a.request("/api/tasks/pk/start", { method: "POST" });
+    await a.request("/api/tasks/pk/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const { runId } = (await (await a.request("/api/tasks/pk/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const stages = (await (await a.request("/api/tasks/pk")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active");
+  });
+
+  it("brainstorm Done → Spec advances to the spec stage", async () => {
+    createTask(database, { id: "bd", title: "BD", run_mode: "manual" });
+    const a = createApi(database, { stageAgent: async () => "requirements brief" });
+    await a.request("/api/tasks/bd/start", { method: "POST" });
+    await a.request("/api/tasks/bd/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "brainstorm" }) });
+    const done = (await (await a.request("/api/tasks/bd/brainstorm/done", { method: "POST" })).json()) as { next: string | null };
+    expect(done.next).toBe("spec");
+    const stages = (await (await a.request("/api/tasks/bd")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "brainstorm")!.status).toBe("done");
+    expect(stages.stages.find((s) => s.stage_key === "spec")!.status).toBe("active");
   });
 
   it("chat sends the message verbatim into the session and records a turn", async () => {

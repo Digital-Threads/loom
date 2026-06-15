@@ -325,10 +325,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
         });
         try {
-          // run the stage's agent and STREAM it; do NOT auto-complete/advance —
-          // the user reviews the output, then approves to move on.
+          // run the stage's agent and STREAM it. On a clean outcome, complete the
+          // stage and activate the next one (the pipeline visibly moves forward).
+          // A parked/failed outcome (e.g. review found issues) stays put for the
+          // user. We complete ONLY this stage — no cascade into the next runner,
+          // so interactive stages (brainstorm) aren't auto-skipped.
           const runner = runners[stageKey];
           const outcome = runner ? await runner(db, taskId, stageKey) : { ok: true };
+          if (outcome.ok && !outcome.needsAttention) completeStage(db, taskId, stageKey);
           return { outcome };
         } finally {
           streamSinks.delete(taskId);
@@ -605,7 +609,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/brainstorm/done", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json({ summary: await summarizeBrainstorm(db, id, stageAgentFor(id, "brainstorm")) });
+    const summary = await summarizeBrainstorm(db, id, stageAgentFor(id, "brainstorm"));
+    const next = completeStage(db, id, "brainstorm"); // "Done → Spec" advances to the spec stage
+    return c.json({ summary, next });
   });
   app.get("/api/tasks/:id/spec", (c) =>
     c.json({ spec: latestArtifact(db, c.req.param("id"), "spec-md") ?? null }),

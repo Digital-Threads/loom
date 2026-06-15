@@ -59,12 +59,37 @@ export function TaskView({
       .catch((e) => setErr(String(e)));
   }, [client, taskId, reload]);
 
-  // Attach an SSE stream of a run to the live transcript pane.
-  function attachStream(id: string) {
+  // After an action that advances the task (accept, brainstorm done, advance),
+  // reload and jump the selection to the new current stage so progress is visible.
+  function refreshAndFollow() {
+    refreshLocal();
+    client.task(taskId).then((d) => {
+      setDetail(d);
+      const cur = d.stages.find((s) => s.status === "active") ?? d.stages.find((s) => s.status === "pending");
+      if (cur) setActive(cur.stage_key);
+    }).catch(() => {});
+  }
+
+  // Attach an SSE stream of a run to the live transcript pane. follow=true (a
+  // stage run) jumps the selection to the new current stage when it finishes, so
+  // the pipeline visibly moves forward; chat replies keep the current selection.
+  function attachStream(id: string, follow = false) {
     setRunId(id);
     const es = new EventSource(client.runStreamUrl(id));
     es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
-    es.addEventListener("status", () => { es.close(); setRunId(null); refreshLocal(); onChanged?.(); });
+    es.addEventListener("status", () => {
+      es.close();
+      setRunId(null);
+      if (follow) {
+        client.task(taskId).then((d) => {
+          setDetail(d);
+          const cur = d.stages.find((s) => s.status === "active") ?? d.stages.find((s) => s.status === "pending");
+          if (cur) setActive(cur.stage_key);
+        }).catch(() => {});
+      }
+      refreshLocal();
+      onChanged?.();
+    });
     es.addEventListener("error", () => es.close());
   }
 
@@ -72,7 +97,7 @@ export function TaskView({
   function runStageLive() {
     setLive([]);
     setRunId(null);
-    client.startRun(taskId, active).then(attachStream);
+    client.startRun(taskId, active).then((id) => attachStream(id, true));
   }
 
   if (err) return <div className="empty">Error: {err}</div>;
@@ -150,14 +175,14 @@ export function TaskView({
             <span className={`badge ${badgeClass(activeStatus)}`}>{statusLabel(activeStatus)}</span>
             <div className="ph-actions">
               {task.status === "created" ? (
-                <button className="btn acc sm" onClick={async () => { await client.start(taskId); refreshLocal(); onChanged?.(); }}>▶ Start task</button>
+                <button className="btn acc sm" onClick={async () => { await client.start(taskId); refreshAndFollow(); onChanged?.(); }}>▶ Start task</button>
               ) : task.status !== "done" ? (
                 <>
-                  <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshLocal} />
+                  <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
                   {activeStatus === "active" ? (
-                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshLocal(); onChanged?.(); }}>✓ Approve &amp; continue</button>
+                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode" onClick={async () => { await client.advance(taskId); refreshLocal(); onChanged?.(); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode" onClick={async () => { await client.advance(taskId); refreshAndFollow(); onChanged?.(); }}>▶▶ Advance</button>
                 </>
               ) : null}
             </div>
