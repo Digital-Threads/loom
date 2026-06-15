@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { LoomClient, RecallHit } from "../api";
+import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 // L7.4 — knowledge recall: search prior reasoning across projects → what was
 // already decided vs already rejected (so the team/agent doesn't repeat itself).
@@ -18,6 +20,8 @@ export function Knowledge({ client }: { client: LoomClient }) {
       setDecisions(r.decisions);
       setRejections(r.rejections);
       setRan(true);
+    } catch (e) {
+      toast.error(`Recall failed: ${e}`);
     } finally {
       setBusy(false);
     }
@@ -37,7 +41,7 @@ export function Knowledge({ client }: { client: LoomClient }) {
       </div>
 
       {ran && decisions.length === 0 && rejections.length === 0 ? (
-        <div className="empty">Nothing prior found for “{q}”.</div>
+        <StateView kind="empty" msg={`Nothing prior found for “${q}”.`} />
       ) : null}
 
       {rejections.length ? (
