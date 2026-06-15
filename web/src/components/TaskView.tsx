@@ -6,6 +6,26 @@ import { ReviewQA } from "./ReviewQA";
 import { PrDone } from "./PrDone";
 import { Approvals } from "./Approvals";
 
+// Short human description per stage — shown under the stage title.
+const STAGE_DESC: Record<string, string> = {
+  analysis: "Classify the task and propose its pipeline route.",
+  brainstorm: "The agent asks clarifying questions until the goal is clear.",
+  spec: "Draft an SDD from the brainstorm; review and accept it.",
+  rd: "Decompose the spec into self-sufficient subtasks (a plan / DAG) — no code yet.",
+  impl: "Execute the plan in the task worktree and commit the changes.",
+  review: "Review the implementation; surface findings to triage.",
+  qa: "Run the repo's checks (tests / build).",
+  pr: "Generate the PR description; optionally push and open the PR.",
+  done: "Finalize and close the task.",
+};
+
+function badgeClass(status: string): string {
+  if (status === "active") return "badge-acc";
+  if (status === "done") return "badge-ok";
+  if (status === "skipped") return "badge-dim";
+  return "badge-warn";
+}
+
 export function TaskView({
   client,
   taskId,
@@ -52,119 +72,111 @@ export function TaskView({
   }, [client, taskId]);
 
   if (err) return <div className="empty">Error: {err}</div>;
-  if (!detail) return <div className="empty">Loading…</div>;
+  if (!detail) return <div className="state-loading">Loading task…</div>;
 
   const stageSteps = detail.steps;
   const costs = detail.costs;
+  const task = detail.task;
+  const activeStatus = detail.stages.find((s) => s.stage_key === active)?.status ?? "";
+  const lastIdx = detail.stages.length - 1;
 
   return (
     <div className="task">
-      <div className="rail">
-        <div className="gh">Stages · {taskId}</div>
-        {detail.task.session_id ? (
-          <div className="muted" style={{ fontSize: 11, padding: "0 9px 6px" }} title="One live Claude session for the whole task">
-            session {detail.task.session_id.slice(0, 8)}
+      <aside className="rail">
+        <div className="rail-head">
+          <div className="rail-title">{task.title}</div>
+          <div className="rail-sub">
+            <span className="chip">{task.run_mode}</span>
+            {task.session_id ? (
+              <span className="chip" title="One live Claude session for the whole task">◦ {task.session_id.slice(0, 8)}</span>
+            ) : null}
           </div>
-        ) : null}
+        </div>
         <div className="steps">
-          {detail.stages.map((s) => (
+          {detail.stages.map((s, i) => (
             <button
               key={s.stage_key}
               className={`step ${stageStateClass(s.status)} ${s.stage_key === active ? "active" : ""}`}
               onClick={() => setActive(s.stage_key)}
             >
-              <div className="st">{stageIcon(s.status)}</div>
-              <div>{STAGE_LABELS[s.stage_key] ?? s.stage_key}</div>
+              <span className="step-rail">
+                <span className="st">{stageIcon(s.status)}</span>
+                {i < lastIdx ? <span className="step-line" /> : null}
+              </span>
+              <span className="step-main">
+                <span className="step-label">{STAGE_LABELS[s.stage_key] ?? s.stage_key}</span>
+                <span className="step-state">{statusLabel(s.status)}</span>
+              </span>
             </button>
           ))}
         </div>
-      </div>
+      </aside>
 
-      <div className="pane">
-        <div className="ph">
-          <strong>{STAGE_LABELS[active] ?? active}</strong>
-          <span className="tag">{statusLabel(detail.stages.find((s) => s.stage_key === active)?.status ?? "")}</span>
-          <span style={{ marginLeft: "auto" }} />
-          {detail.task.status === "created" ? (
-            <button
-              className="btn acc"
-              onClick={async () => {
-                await client.start(taskId);
-                onChanged?.();
-              }}
-            >
-              ▶ Start
-            </button>
-          ) : detail.stages.find((s) => s.stage_key === active)?.status === "active" ? (
-            <button
-              className="btn acc"
-              onClick={async () => {
-                await client.accept(taskId, active);
-                onChanged?.();
-              }}
-            >
-              ✓ Accept
-            </button>
-          ) : null}
-          {detail.task.status !== "created" && detail.task.status !== "done" ? (
-            <>
-              <button className="btn" style={{ marginLeft: 8 }} onClick={async () => { await client.runStageNext(taskId); onChanged?.(); }}>▶ Run stage</button>
-              <button className="btn" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
-            </>
-          ) : null}
-        </div>
+      <section className="pane">
+        <header className="ph">
+          <div className="ph-top">
+            <h2 className="ph-title">{STAGE_LABELS[active] ?? active}</h2>
+            <span className={`badge ${badgeClass(activeStatus)}`}>{statusLabel(activeStatus)}</span>
+            <div className="ph-actions">
+              {task.status === "created" ? (
+                <button className="btn acc" onClick={async () => { await client.start(taskId); onChanged?.(); }}>▶ Start</button>
+              ) : activeStatus === "active" ? (
+                <button className="btn acc" onClick={async () => { await client.accept(taskId, active); onChanged?.(); }}>✓ Accept</button>
+              ) : null}
+              {task.status !== "created" && task.status !== "done" ? (
+                <>
+                  <button className="btn" onClick={async () => { await client.runStageNext(taskId); onChanged?.(); }}>▶ Run stage</button>
+                  <button className="btn" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>
+        </header>
+
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={onChanged} />
+
           {active === "rd" || active === "impl" ? (
-            <>
-              <div className="kv">
-                <b>{active === "rd" ? "Plan (subtasks / DAG)" : "Implementation report"}</b>
-                <button className="btn acc" style={{ marginLeft: "auto" }} onClick={runStage}>▶ Run</button>
+            <div className="card-plain">
+              <div className="card-head">
+                <span>{active === "rd" ? "Plan — subtasks / DAG" : "Implementation report"}</span>
+                <button className="btn acc sm" onClick={runStage}>▶ Run</button>
               </div>
               {planText ? (
-                <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto" }}>{planText}</pre>
+                <pre className="doc">{planText}</pre>
               ) : (
-                <div className="muted">{active === "rd" ? "No plan yet — run R&D to decompose the task." : "Not implemented yet — run Implementation."}</div>
+                <div className="state-empty">{active === "rd" ? "No plan yet — run R&D to decompose the task." : "Not implemented yet — run Implementation."}</div>
               )}
+
               {runId ? (
-                <div className="live">
-                  <div className="grp">Live · {runId}</div>
-                  <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>
-                    {live.length ? live.join("\n") : "starting…"}
-                  </pre>
-                  <div className="fld-row" style={{ gap: 8, marginTop: 8 }}>
+                <div className="term">
+                  <div className="term-head"><span className="dotc run" /> Live · {runId.slice(0, 12)}</div>
+                  <pre className="term-body">{live.length ? live.join("\n") : "starting…"}</pre>
+                  <div className="term-input">
                     <input
                       value={stdin}
                       onChange={(e) => setStdin(e.target.value)}
-                      placeholder="Intervene — type input for the live agent…"
-                      style={{ flex: 1 }}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      placeholder="Intervene — send guidance to the live agent…"
+                      onKeyDown={(e) => { if (e.key === "Enter" && stdin) { client.sendStdin(runId, stdin + "\n"); setStdin(""); } }}
                     />
-                    <button
-                      className="btn"
-                      disabled={!stdin}
-                      onClick={async () => { await client.sendStdin(runId, stdin + "\n"); setStdin(""); }}
-                    >
-                      Send
-                    </button>
+                    <button className="btn sm" disabled={!stdin} onClick={() => { client.sendStdin(runId, stdin + "\n"); setStdin(""); }}>Send</button>
                   </div>
                 </div>
               ) : null}
+
               {stageSteps.length ? (
-                stageSteps.map((step) => (
-                  <div className="kv" key={step.id}>
-                    <b>{step.id}</b>
-                    <span>
-                      {step.title}
-                      {step.profile ? ` · ${step.profile}` : ""}
-                      {step.model ? ` · ${step.model}` : ""} · {statusLabel(step.status)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="muted">no steps yet</div>
-              )}
-            </>
+                <div className="steps-list">
+                  {stageSteps.map((step) => (
+                    <div className="step-row" key={step.id}>
+                      <span className="step-row-id">{step.id}</span>
+                      <span className="step-row-t">{step.title}{step.profile ? ` · ${step.profile}` : ""}{step.model ? ` · ${step.model}` : ""}</span>
+                      <span className="chip">{statusLabel(step.status)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : active === "analysis" || active === "brainstorm" || active === "spec" ? (
             <StageDialog client={client} taskId={taskId} stage={active} onChanged={onChanged} />
           ) : active === "review" || active === "qa" ? (
@@ -172,21 +184,23 @@ export function TaskView({
           ) : active === "pr" || active === "done" ? (
             <PrDone client={client} taskId={taskId} stage={active} onChanged={onChanged} />
           ) : (
-            <div className="muted">
-              {detail.task.description || "Stage content appears as the task progresses."}
-            </div>
+            <div className="state-empty">{task.description || "Stage content appears as the task progresses."}</div>
           )}
 
-          <div className="kv" style={{ marginTop: 18 }}>
-            <b>Cost</b>
-            <span>
-              {costs.length
-                ? costs.map((c) => `${c.source}/${c.metric}: ${c.value}${c.exact ? "" : " ≈"}`).join(" · ")
-                : "—"}
-            </span>
+          <div className="cost-bar">
+            <span className="cost-label">Cost</span>
+            {costs.length ? (
+              costs.map((c, i) => (
+                <span className="cost-stat" key={i}>
+                  <b>{c.value}{c.exact ? "" : " ≈"}</b> {c.source}/{c.metric}
+                </span>
+              ))
+            ) : (
+              <span className="muted">—</span>
+            )}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
