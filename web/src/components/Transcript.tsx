@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type LoomClient, STAGE_LABELS } from "../api";
+import { Markdown } from "./Markdown";
 
 // The task's one live session as a single conversation: every turn (stage input
 // + the agent's full output) in order, plus the live stream of the running turn.
@@ -41,7 +42,7 @@ export function Transcript({
             </button>
           </div>
           {open === i ? <pre className="turn-in">{t.input}</pre> : null}
-          <div className="turn-out">{t.output || <span className="muted">(no output)</span>}</div>
+          <div className="turn-out">{t.output ? <Markdown text={t.output} /> : <span className="muted">(no output)</span>}</div>
         </div>
       ))}
       {runId ? (
