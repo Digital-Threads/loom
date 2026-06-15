@@ -11,6 +11,7 @@ export function Transcript({
   taskId,
   live,
   runId,
+  reconnecting,
   reloadKey,
   onOpenFile,
 }: {
@@ -18,6 +19,7 @@ export function Transcript({
   taskId: string;
   live: string[];
   runId: string | null;
+  reconnecting?: boolean;
   reloadKey: number;
   onOpenFile: (path: string) => void;
 }) {
@@ -88,8 +90,11 @@ export function Transcript({
         );
       })}
       {runId ? (
-        <div className="turn turn-live">
-          <div className="turn-head"><span className="dotc run" /> working… {elapsed > 0 ? `${elapsed}s` : ""}</div>
+        <div className={`turn turn-live ${reconnecting ? "turn-reconnect" : ""}`}>
+          <div className="turn-head">
+            <span className={`dotc ${reconnecting ? "wait" : "run"}`} />
+            {reconnecting ? "reconnecting…" : <>working… {elapsed > 0 ? `${elapsed}s` : ""}</>}
+          </div>
           <pre className="turn-out mono">{live.length ? live.join("\n") : "The agent is starting — tool activity will appear here as it works…"}</pre>
         </div>
       ) : null}

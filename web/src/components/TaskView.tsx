@@ -40,6 +40,7 @@ export function TaskView({
   const [active, setActive] = useState<string>("analysis");
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
+  const [reconnecting, setReconnecting] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -77,11 +78,20 @@ export function TaskView({
   // the pipeline visibly moves forward; chat replies keep the current selection.
   function attachStream(id: string, follow = false) {
     setRunId(id);
+    setReconnecting(false);
+    let done = false;
+    let buf: string[] = [];
     const es = new EventSource(client.runStreamUrl(id));
-    es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
+    // The server replays the whole output buffer on every (re)connection, so we
+    // rebuild from scratch each time a connection opens — no duplicates after a
+    // reconnect, and a mid-run network drop recovers on its own.
+    es.addEventListener("open", () => { buf = []; setLive([]); setReconnecting(false); });
+    es.addEventListener("event", (e) => { buf.push((e as MessageEvent).data); setLive([...buf]); });
     es.addEventListener("status", () => {
+      done = true;
       es.close();
       setRunId(null);
+      setReconnecting(false);
       if (follow) {
         client.task(taskId).then((d) => {
           setDetail(d);
@@ -92,7 +102,12 @@ export function TaskView({
       refreshLocal();
       onChanged?.();
     });
-    es.addEventListener("error", () => es.close());
+    es.addEventListener("error", (e) => {
+      // a server-sent "error" event (unknown run) carries data → terminal. A bare
+      // connection error → let EventSource retry natively; show "reconnecting".
+      if (done || (e as MessageEvent).data) { es.close(); setRunId(null); setReconnecting(false); }
+      else setReconnecting(true);
+    });
   }
 
   // Stream a live run of the current stage into the transcript.
@@ -210,7 +225,7 @@ export function TaskView({
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={() => { setLive([]); client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch(() => {}); }} />
-          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
+          <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>
 
         {inputMode ? (
