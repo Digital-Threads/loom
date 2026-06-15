@@ -54,6 +54,14 @@ export function NewTaskModal({
 
   // repo is in the projects list unless the user browsed to a custom folder.
   const repoInList = projects.some((p) => p.root === repo);
+  // surface the trap that silently bound a task to a throwaway folder: warn when
+  // no repo is chosen or it looks like a temp dir, so the agent isn't pointed at
+  // empty/scratch code.
+  const repoWarning = !repo.trim()
+    ? "No project selected — Browse to your code folder, or the agent will have nothing to work on."
+    : /(^|\/)(tmp|temp)(\/|$)/i.test(repo)
+      ? "This looks like a temporary folder. Pick your real project unless you meant a scratch repo."
+      : null;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -80,6 +88,7 @@ export function NewTaskModal({
               </select>
               <button type="button" className="btn" onClick={() => setPicking(true)}>Browse…</button>
             </div>
+            {repoWarning ? <span className="fld-warn">⚠ {repoWarning}</span> : null}
           </label>
           <label className="fld">
             <span>Branch</span>

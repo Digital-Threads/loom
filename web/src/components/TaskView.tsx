@@ -4,6 +4,7 @@ import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { Approvals } from "./Approvals";
 import { Transcript } from "./Transcript";
 import { StageActions } from "./StageActions";
+import { StageResult } from "./StageResult";
 
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
@@ -166,6 +167,7 @@ export function TaskView({
 
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
+          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} />
         </div>
 

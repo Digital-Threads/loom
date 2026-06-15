@@ -33,18 +33,32 @@ export function Transcript({
       {empty ? (
         <div className="state-empty">No activity yet — run a stage and the agent's work shows here live.</div>
       ) : null}
-      {turns.map((t, i) => (
-        <div className="turn" key={i}>
-          <div className="turn-head">
-            <span className="chip">{STAGE_LABELS[t.stage] ?? t.stage}</span>
-            <button className="turn-toggle" onClick={() => setOpen(open === i ? null : i)}>
-              {open === i ? "hide prompt" : "show prompt"}
-            </button>
+      {turns.map((t, i) => {
+        // brainstorm signals readiness with "READY — <why>" → show a clear plaque
+        // instead of a plain turn, so the user knows it's time for the spec.
+        const ready = t.stage === "brainstorm" && /^\s*READY\b/.test(t.output);
+        const reason = ready ? t.output.replace(/^\s*READY\s*[—:-]?\s*/, "").trim() : "";
+        return (
+          <div className="turn" key={i}>
+            <div className="turn-head">
+              <span className="chip">{STAGE_LABELS[t.stage] ?? t.stage}</span>
+              <button className="turn-toggle" onClick={() => setOpen(open === i ? null : i)}>
+                {open === i ? "hide prompt" : "show prompt"}
+              </button>
+            </div>
+            {open === i ? <pre className="turn-in">{t.input}</pre> : null}
+            {ready ? (
+              <div className="ready-note">
+                <div><span className="ok-dot">✓</span> The agent has enough to write the spec.</div>
+                {reason ? <div className="ready-reason">{reason}</div> : null}
+                <div className="ready-reason">Use “Done → Spec” above to continue.</div>
+              </div>
+            ) : (
+              <div className="turn-out">{t.output ? <Markdown text={t.output} /> : <span className="muted">(no output)</span>}</div>
+            )}
           </div>
-          {open === i ? <pre className="turn-in">{t.input}</pre> : null}
-          <div className="turn-out">{t.output ? <Markdown text={t.output} /> : <span className="muted">(no output)</span>}</div>
-        </div>
-      ))}
+        );
+      })}
       {runId ? (
         <div className="turn turn-live">
           <div className="turn-head"><span className="dotc run" /> running…</div>

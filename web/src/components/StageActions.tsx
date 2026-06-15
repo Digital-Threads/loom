@@ -21,6 +21,8 @@ export function StageActions({
 }) {
   const [busy, setBusy] = useState(false);
   const [connector, setConnector] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const [comment, setComment] = useState("");
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
     try { await fn(); onChanged(); } finally { setBusy(false); }
@@ -38,6 +40,19 @@ export function StageActions({
       <>
         <button className="btn acc sm" onClick={onRunLive}>▶ Draft spec</button>
         <button className="btn sm" disabled={busy} onClick={() => run(() => client.specAccept(taskId))}>✓ Accept</button>
+        <button className="btn sm" disabled={busy} onClick={() => setReturning((v) => !v)}>↩ Changes</button>
+        {returning ? (
+          <span className="spec-return">
+            <input
+              value={comment}
+              autoFocus
+              placeholder="What to change in the spec…"
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && comment.trim()) run(async () => { await client.specReturn(taskId, comment.trim()); setComment(""); setReturning(false); }); }}
+            />
+            <button className="btn acc sm" disabled={busy || !comment.trim()} onClick={() => run(async () => { await client.specReturn(taskId, comment.trim()); setComment(""); setReturning(false); })}>{busy ? <><Spin /> …</> : "Send"}</button>
+          </span>
+        ) : null}
       </>
     );
 
