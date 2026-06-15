@@ -8,12 +8,16 @@ import { spawn } from "node:child_process";
 import { loadConfig, buildRunParams } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
+import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
 
 export interface AimuxLiveLauncherDeps {
   loadConfig?: typeof loadConfig;
   buildParams?: typeof buildRunParams;
   profile?: string;
   model?: string;
+  /** EXPERIMENTAL: wrap the child in an OS sandbox (writes confined to the
+   *  worktree/cwd) when a backend is available. Off by default. */
+  sandbox?: boolean;
 }
 
 // manual/gated: normal Claude permissions (approvals surfaced to the Loom UI).
@@ -58,10 +62,12 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
       : allowedTools && allowedTools.length
         ? ["--allowedTools", ...allowedTools]
         : [];
-    const { cli, args, env } = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
+    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
+    // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
+    const wrapped = deps.sandbox && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
     // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
     // attribute their telemetry to this task — exact cost without a separate counter.
-    const child = spawn(cli, args, { cwd, env: { ...process.env, ...env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(wrapped.cli, wrapped.args, { cwd, env: { ...process.env, ...built.env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });
     return child as unknown as ProcLike;
   };
   return createLiveSessionLauncher({ spawn: spawnSession });
