@@ -22,20 +22,33 @@ export function StageDialog({
 
 function Analysis({ client, taskId, onChanged }: { client: LoomClient; taskId: string; onChanged?: () => void }) {
   const [res, setRes] = useState<{ class: string; route: string[] } | null>(null);
+  const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { client.analysisGet(taskId).then((r) => r && setRes(r)).catch(() => {}); }, [client, taskId]);
+  useEffect(() => { client.analysisGet(taskId).then((g) => { setRes(g.result); setText(g.text); }).catch(() => {}); }, [client, taskId]);
   async function run() {
     setBusy(true);
-    try { setRes(await client.analysisRun(taskId)); onChanged?.(); } finally { setBusy(false); }
+    try { await client.analysisRun(taskId); const g = await client.analysisGet(taskId); setRes(g.result); setText(g.text); onChanged?.(); } finally { setBusy(false); }
   }
   return (
     <div>
-      <button className="btn acc" disabled={busy} onClick={run}>▶ Run analysis</button>
-      {res ? (
-        <div className="kv" style={{ marginTop: 12 }}>
-          <b>{res.class}</b><span>route: {res.route.join(" → ")}</span>
+      <button className="btn acc" disabled={busy} onClick={run}>{busy ? <><span className="spin" /> Analyzing…</> : res ? "↻ Re-run analysis" : "▶ Run analysis"}</button>
+      {busy ? (
+        <div className="run-note"><span className="spin" /> Reading the task and the codebase…</div>
+      ) : text ? (
+        <div className="result-card">
+          <div className="result-head"><span className="ok-dot" /> Analysis{res ? <> — classified as <b>{res.class}</b></> : null}</div>
+          <div className="doc">{text}</div>
+          {res && res.route.length ? (
+            <div className="route">
+              {res.route.map((s, i) => (
+                <span key={s} className="route-step">{s}{i < res.route.length - 1 ? <span className="route-arrow">→</span> : null}</span>
+              ))}
+            </div>
+          ) : null}
         </div>
-      ) : <div className="muted" style={{ marginTop: 12 }}>Classify the task and propose its route.</div>}
+      ) : (
+        <div className="state-empty">Not analyzed yet — run it to classify the task and propose its route.</div>
+      )}
     </div>
   );
 }
@@ -60,20 +73,31 @@ function Brainstorm({ client, taskId }: { client: LoomClient; taskId: string }) 
 
   return (
     <div>
-      <div className="chat" style={{ maxHeight: 280, overflow: "auto" }}>
+      <div className="chat">
         {msgs.length ? msgs.map((m) => (
-          <div className={`kv ${m.role === "agent" ? "" : "warn"}`} key={m.id}><b>{m.role}</b><span>{m.content}</span></div>
-        )) : <div className="muted">Start the brainstorm — ask the agent for the first question.</div>}
+          <div className={`bubble ${m.role === "agent" ? "bubble-agent" : "bubble-user"}`} key={m.id}>
+            <div className="bubble-role">{m.role === "agent" ? "Agent" : "You"}</div>
+            <div className="bubble-text">{m.content}</div>
+          </div>
+        )) : <div className="state-empty">The agent will ask clarifying questions one at a time. Start when you're ready.</div>}
+        {busy ? <div className="run-note"><span className="spin" /> Agent is thinking…</div> : null}
       </div>
-      <div className="row" style={{ gap: 8, marginTop: 8 }}>
-        <input className="inp" value={input} placeholder="your answer…" onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) send(input.trim()); }} />
-        <button className="btn" disabled={busy} onClick={() => send(msgs.length ? input.trim() || undefined : undefined)}>
-          {msgs.length ? "Send" : "Ask"}
-        </button>
-        <button className="btn acc" disabled={busy} onClick={done}>Done → spec</button>
-      </div>
-      {summary ? <div className="kv" style={{ marginTop: 8 }}><b>summary</b><span>{summary.content}</span></div> : null}
+      {summary ? (
+        <div className="result-card" style={{ marginTop: 12 }}>
+          <div className="result-head"><span className="ok-dot" /> Brainstorm summary</div>
+          <div className="doc">{summary.content}</div>
+        </div>
+      ) : (
+        <div className="chat-input">
+          <input value={input} placeholder={msgs.length ? "your answer…" : "press Start — the agent asks first"} disabled={busy || !msgs.length}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) send(input.trim()); }} />
+          <button className="btn" disabled={busy} onClick={() => send(msgs.length ? input.trim() || undefined : undefined)}>
+            {msgs.length ? "Send" : "▶ Start brainstorm"}
+          </button>
+          {msgs.length ? <button className="btn acc" disabled={busy} onClick={done}>Done → Spec</button> : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -91,19 +115,19 @@ function Spec({ client, taskId, onChanged }: { client: LoomClient; taskId: strin
   return (
     <div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn acc" disabled={busy} onClick={() => act(() => client.specDraft(taskId))}>Draft</button>
-        {spec ? <button className="btn" disabled={busy} onClick={() => act(() => client.specAccept(taskId))}>Accept</button> : null}
+        <button className="btn acc" disabled={busy} onClick={() => act(() => client.specDraft(taskId))}>{busy ? <><span className="spin" /> Drafting…</> : spec ? "↻ Re-draft" : "▶ Draft spec"}</button>
+        {spec ? <button className="btn" disabled={busy} onClick={() => act(() => client.specAccept(taskId))}>✓ Accept spec</button> : null}
       </div>
       {spec ? (
-        <>
-          <div className="grp" style={{ marginTop: 10 }}>spec-md v{spec.version} · {spec.status}</div>
-          <pre className="b" style={{ whiteSpace: "pre-wrap", maxHeight: 280, overflow: "auto" }}>{spec.content}</pre>
-          <div className="row" style={{ gap: 8 }}>
-            <input className="inp" placeholder="return with comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
-            <button className="btn" disabled={busy || !comment.trim()} onClick={() => { act(() => client.specReturn(taskId, comment.trim())); setComment(""); }}>Return</button>
+        <div className="result-card" style={{ marginTop: 12 }}>
+          <div className="card-head"><span>SDD <span className="chip">v{spec.version}</span> <span className={`badge ${spec.status === "accepted" ? "badge-ok" : "badge-warn"}`}>{spec.status}</span></span></div>
+          <pre className="doc">{spec.content}</pre>
+          <div className="chat-input">
+            <input placeholder="return with a comment for the agent to revise…" value={comment} disabled={busy} onChange={(e) => setComment(e.target.value)} />
+            <button className="btn" disabled={busy || !comment.trim()} onClick={() => { act(() => client.specReturn(taskId, comment.trim())); setComment(""); }}>Return for changes</button>
           </div>
-        </>
-      ) : <div className="muted" style={{ marginTop: 10 }}>No spec yet — draft from the brainstorm summary.</div>}
+        </div>
+      ) : <div className="state-empty">No spec yet — draft it from the brainstorm summary.</div>}
     </div>
   );
 }

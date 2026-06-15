@@ -146,6 +146,7 @@ describe("web ui helpers", () => {
     expect(stageStateClass("done")).toBe("done");
     expect(stageStateClass("active")).toBe("active2");
     expect(stageIcon("done")).toBe("✓");
-    expect(stageIcon("pending")).toBe("!");
+    expect(stageIcon("active")).toBe("●");
+    expect(stageIcon("pending")).toBe(""); // neutral empty circle, not an alert glyph
   });
 });

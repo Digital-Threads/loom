@@ -119,14 +119,13 @@ export function TaskView({
             <span className={`badge ${badgeClass(activeStatus)}`}>{statusLabel(activeStatus)}</span>
             <div className="ph-actions">
               {task.status === "created" ? (
-                <button className="btn acc" onClick={async () => { await client.start(taskId); onChanged?.(); }}>▶ Start</button>
-              ) : activeStatus === "active" ? (
-                <button className="btn acc" onClick={async () => { await client.accept(taskId, active); onChanged?.(); }}>✓ Accept</button>
-              ) : null}
-              {task.status !== "created" && task.status !== "done" ? (
+                <button className="btn acc" onClick={async () => { await client.start(taskId); onChanged?.(); }}>▶ Start task</button>
+              ) : task.status !== "done" ? (
                 <>
-                  <button className="btn" onClick={async () => { await client.runStageNext(taskId); onChanged?.(); }}>▶ Run stage</button>
-                  <button className="btn" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
+                  {activeStatus === "active" ? (
+                    <button className="btn" title="Mark this stage done and move to the next" onClick={async () => { await client.accept(taskId, active); onChanged?.(); }}>✓ Approve &amp; continue</button>
+                  ) : null}
+                  <button className="btn acc" title="Auto-run forward through the pipeline (per run mode)" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
                 </>
               ) : null}
             </div>

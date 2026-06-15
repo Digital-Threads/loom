@@ -5,10 +5,10 @@ export function statusLabel(status: string): string {
     {
       created: "new",
       running: "running",
-      wait: "waiting",
+      wait: "pending",
       done: "done",
-      active: "running",
-      pending: "waiting",
+      active: "current",
+      pending: "pending",
       skipped: "skipped",
       failed: "failed",
     }[status] ?? status
@@ -31,5 +31,5 @@ export function stageStateClass(status: string): string {
 }
 
 export function stageIcon(status: string): string {
-  return { done: "✓", active: "●", pending: "!", skipped: "–" }[status] ?? "○";
+  return { done: "✓", active: "●", pending: "", skipped: "–" }[status] ?? "";
 }
