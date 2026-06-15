@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type LoomClient, STAGE_LABELS } from "../api";
 import { Markdown } from "./Markdown";
 import { filePaths } from "../paths";
@@ -23,10 +23,27 @@ export function Transcript({
 }) {
   const [turns, setTurns] = useState<{ stage: string; input: string; output: string }[]>([]);
   const [open, setOpen] = useState<number | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     client.transcript(taskId).then(setTurns).catch(() => {});
   }, [client, taskId, reloadKey, runId]);
+
+  // Tick an elapsed counter while a run is live, so the user sees it's alive
+  // even during quiet stretches (the agent thinking before its next tool call).
+  useEffect(() => {
+    if (!runId) { setElapsed(0); return; }
+    const t0 = Date.now();
+    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [runId]);
+
+  // Keep the newest content in view (chat-style): the actual work is at the
+  // bottom, so stick there as turns load and the live stream grows.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [turns, live, runId]);
 
   const empty = turns.length === 0 && !(runId && live.length);
 
@@ -72,10 +89,11 @@ export function Transcript({
       })}
       {runId ? (
         <div className="turn turn-live">
-          <div className="turn-head"><span className="dotc run" /> running…</div>
-          <pre className="turn-out mono">{live.length ? live.join("\n") : "starting…"}</pre>
+          <div className="turn-head"><span className="dotc run" /> working… {elapsed > 0 ? `${elapsed}s` : ""}</div>
+          <pre className="turn-out mono">{live.length ? live.join("\n") : "The agent is starting — tool activity will appear here as it works…"}</pre>
         </div>
       ) : null}
+      <div ref={bottomRef} />
     </div>
   );
 }

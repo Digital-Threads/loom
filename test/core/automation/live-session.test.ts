@@ -100,4 +100,27 @@ describe("live session launcher", () => {
     await l.run("go", { sessionId: "s", resume: false, onChunk: (c) => chunks.push(c) });
     expect(chunks).toContain("hi");
   });
+
+  it("streams tool activity (so a long tool-heavy stage isn't silent)", async () => {
+    // a fake that emits a tool_use block (no text) then a result
+    const spawn: SpawnSession = () => {
+      let onData: ((d: string) => void) | undefined;
+      return {
+        stdin: {
+          write: () => queueMicrotask(() => {
+            onData?.(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Edit", input: { file_path: "src/x.ts" } }] } }) + "\n");
+            onData?.(JSON.stringify({ type: "result", subtype: "success", result: "ok" }) + "\n");
+          }),
+          end: () => {},
+        },
+        stdout: { on: (_e: "data", cb: (d: string | Buffer) => void) => { onData = cb as (d: string) => void; } },
+        on: () => {},
+        kill: () => {},
+      } as ProcLike;
+    };
+    const l = createLiveSessionLauncher({ spawn });
+    const chunks: string[] = [];
+    await l.run("impl", { sessionId: "s", resume: false, onChunk: (c) => chunks.push(c) });
+    expect(chunks.join("\n")).toContain("→ Edit: src/x.ts");
+  });
 });

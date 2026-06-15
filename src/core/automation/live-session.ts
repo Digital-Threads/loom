@@ -84,7 +84,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
         } catch {
           continue;
         }
-        if (ev.type === "assistant" && l.onChunk) l.onChunk(extractText(ev.message?.content));
+        if (ev.type === "assistant" && l.onChunk) { const s = summarizeAssistant(ev.message?.content); if (s) l.onChunk(s); }
         if (ev.type === "result") {
           if (typeof ev.total_cost_usd === "number") l.cost += ev.total_cost_usd;
           for (const d of ev.permission_denials ?? []) { const t = denialLabel(d); if (!l.denials.includes(t)) l.denials.push(t); }
@@ -142,13 +142,28 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
   };
 }
 
-/** Extract plain text from an assistant message's content blocks. */
-function extractText(content: unknown): string {
+/** Summarise an assistant message for the live stream: its text PLUS a readable
+ *  line per tool call ("→ Edit: src/x.ts", "→ Bash: bun test"). Tool activity is
+ *  most of what a long stage (impl) does, so without this the stream looks dead. */
+function summarizeAssistant(content: unknown): string {
   if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : ""))
-      .join("");
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const b of content) {
+    if (!b || typeof b !== "object") continue;
+    const blk = b as { type?: string; text?: unknown; name?: unknown; input?: unknown };
+    if (blk.type === "text" && typeof blk.text === "string") parts.push(blk.text);
+    else if (blk.type === "tool_use") parts.push(`→ ${toolLabel(blk.name, blk.input)}`);
   }
-  return "";
+  return parts.join("\n");
+}
+
+/** A short, readable label for a tool call. */
+function toolLabel(name: unknown, input: unknown): string {
+  const n = typeof name === "string" ? name : "tool";
+  const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const raw = o.command ?? o.file_path ?? o.path ?? o.pattern ?? o.url ?? o.description ?? o.prompt;
+  const arg = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : "";
+  const brief = arg.length > 80 ? `${arg.slice(0, 80)}…` : arg;
+  return brief ? `${n}: ${brief}` : n;
 }
