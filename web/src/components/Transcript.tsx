@@ -19,11 +19,6 @@ export function Transcript({
 }) {
   const [turns, setTurns] = useState<{ stage: string; input: string; output: string }[]>([]);
   const [open, setOpen] = useState<number | null>(null);
-  const [intervene, setIntervene] = useState("");
-
-  function send() {
-    if (runId && intervene) { client.sendStdin(runId, intervene + "\n"); setIntervene(""); }
-  }
 
   useEffect(() => {
     client.transcript(taskId).then(setTurns).catch(() => {});
@@ -53,12 +48,6 @@ export function Transcript({
         <div className="turn turn-live">
           <div className="turn-head"><span className="dotc run" /> running…</div>
           <pre className="turn-out mono">{live.length ? live.join("\n") : "starting…"}</pre>
-          <div className="chat-input">
-            <input value={intervene} placeholder="Intervene — send guidance to the live agent…"
-              onChange={(e) => setIntervene(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
-            <button className="btn sm" disabled={!intervene} onClick={send}>Send</button>
-          </div>
         </div>
       ) : null}
     </div>
