@@ -62,6 +62,9 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
   costOf(sessionId: string): number;
   /** Tools the agent tried to use but were denied (await user approval). */
   denialsOf(sessionId: string): string[];
+  /** Inject extra guidance into a LIVE session mid-run ("intervene"): writes a
+   *  user message to the running process's stdin. No-op if no live process. */
+  interject(sessionId: string, text: string): boolean;
   /** Stop a session's process (e.g. on task done). */
   stop(sessionId: string): void;
 } {
@@ -118,6 +121,12 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
     },
     costOf: (sessionId) => live.get(sessionId)?.cost ?? 0,
     denialsOf: (sessionId) => live.get(sessionId)?.denials ?? [],
+    interject: (sessionId, text) => {
+      const l = live.get(sessionId);
+      if (!l) return false;
+      l.proc.stdin.write(userMessage(text));
+      return true;
+    },
     stop: (sessionId) => {
       const l = live.get(sessionId);
       if (l) {

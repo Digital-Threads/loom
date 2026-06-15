@@ -23,7 +23,6 @@ import {
 } from "../core/workspace/projects.js";
 import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
-import { startSpecRun } from "../core/automation/start-run.js";
 import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
 import { tokenEventsByTime } from "../core/plugins/token-pilot/adapter.js";
@@ -52,7 +51,7 @@ import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join as pathJoin } from "node:path";
-import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
+import { advanceTask, runAndAdvance, runStage, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -163,6 +162,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Send a stage instruction into the task's ONE session (tests inject a one-shot
   // deps.stageAgent). All stages share the session + the task worktree cwd, and
   // the spine env so plugin telemetry attributes to this task.
+  // Live output sinks per task: when a stage runs via the run-manager, its
+  // session output streams here → run-manager record → SSE to the UI.
+  const streamSinks = new Map<string, (chunk: string) => void>();
   const sessionSend = async (id: string, stage: string, prompt: string): Promise<string> => {
     if (deps.stageAgent) return deps.stageAgent(prompt);
     const t = getTask(db, id);
@@ -175,6 +177,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       env: spineEnv(ids),
       bypassPermissions: autopilot,
       allowedTools: autopilot ? undefined : allowedToolsFor(id),
+      onChunk: streamSinks.get(id),
     });
     recordSessionCost(id, repoRoot);
     recordDenials(id);
@@ -272,13 +275,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   const rm = deps.runManager ?? createRunManager();
+  // Run a single stage in the background, streaming the live session's output to
+  // the run record (→ SSE). Intervene (stdin) injects guidance into the live
+  // session mid-run. Returns a runId immediately.
   const startRun =
     deps.startRun ??
-    ((taskId: string) => {
-      const task = getTask(db, taskId);
-      const spec = task?.description || task?.title || taskId;
-      const ids = buildSpineIds({ repoRoot: task?.repo || process.cwd(), taskId });
-      return startSpecRun(rm, db, taskId, spec, ids);
+    ((taskId: string, stageKey: string) => {
+      const projectId = projectActive()?.projectId ?? "default";
+      return rm.start({ projectId }, async (ctx) => {
+        streamSinks.set(taskId, ctx.appendOutput);
+        ctx.onInput((data) => {
+          const sid = getTaskSession(db, taskId).sessionId;
+          if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+        });
+        try {
+          const { outcome, next } = await runStage(db, taskId, stageKey, runners);
+          return { outcome, next };
+        } finally {
+          streamSinks.delete(taskId);
+        }
+      });
     });
 
   app.get("/api/health", (c) => c.json({ ok: true }));
