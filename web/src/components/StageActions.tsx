@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { LoomClient } from "../api";
+import { toast } from "../toast";
 
 // Compact per-stage controls for the chat-first task workspace. Agent stages run
 // LIVE (onRunLive → streamed into the transcript); only non-agent actions
@@ -25,7 +26,9 @@ export function StageActions({
   const [comment, setComment] = useState("");
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
-    try { await fn(); onChanged(); } finally { setBusy(false); }
+    try { await fn(); onChanged(); }
+    catch (e) { toast.error(`Action failed: ${e}`); }
+    finally { setBusy(false); }
   }
   const Spin = () => <span className="spin" />;
 

@@ -7,6 +7,8 @@ import { StageActions } from "./StageActions";
 import { StageResult } from "./StageResult";
 import { DocPanel } from "./DocPanel";
 import { CostBar } from "./CostBar";
+import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
@@ -115,7 +117,7 @@ export function TaskView({
   function runStageLive() {
     setLive([]);
     setRunId(null);
-    client.startRun(taskId, active).then((id) => attachStream(id, true));
+    client.startRun(taskId, active).then((id) => attachStream(id, true)).catch((e) => toast.error(`Couldn’t start the stage: ${e}`));
   }
 
   // Reconnect to a run that's still going when we (re)open the task — the stream
@@ -130,8 +132,8 @@ export function TaskView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, taskId]);
 
-  if (err) return <div className="empty">Error: {err}</div>;
-  if (!detail) return <div className="state-loading">Loading task…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!detail) return <StateView kind="loading" msg="Loading task…" />;
 
   const task = detail.task;
   const costs = detail.costs;
@@ -212,7 +214,7 @@ export function TaskView({
                   {activeStatus === "active" ? (
                     <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch(() => {}); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ Advance</button>
                 </>
               ) : null}
               {task.repo ? (
@@ -225,7 +227,7 @@ export function TaskView({
 
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
-          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={() => { setLive([]); client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch(() => {}); }} />
+          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={() => { setLive([]); client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the fix: ${e}`)); }} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>
 
