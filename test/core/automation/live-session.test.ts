@@ -76,6 +76,23 @@ describe("live session launcher", () => {
     expect(seen).toEqual([true, false]);
   });
 
+  it("interject writes a user message into the live process stdin (intervene)", async () => {
+    const writes: string[] = [];
+    const spawn: SpawnSession = () => {
+      let onData: ((d: string) => void) | undefined;
+      return {
+        stdin: { write: (s: string) => { writes.push(s); queueMicrotask(() => onData?.(JSON.stringify({ type: "result", subtype: "success", result: "ok" }) + "\n")); }, end: () => {} },
+        stdout: { on: (_e, cb) => { onData = cb as (d: string) => void; } },
+        on: () => {}, kill: () => {},
+      };
+    };
+    const l = createLiveSessionLauncher({ spawn });
+    await l.run("step", { sessionId: "s", resume: false }); // creates the live process
+    expect(l.interject("s", "use the cache instead")).toBe(true);
+    expect(writes.some((w) => w.includes("use the cache instead"))).toBe(true);
+    expect(l.interject("nope", "x")).toBe(false); // no live process
+  });
+
   it("streams assistant chunks to onChunk", async () => {
     const { spawn } = fakeSpawn();
     const l = createLiveSessionLauncher({ spawn });

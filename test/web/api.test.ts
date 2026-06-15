@@ -488,6 +488,21 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  it("stage run streams the live session output into the run record", async () => {
+    createTask(database, { id: "st", title: "Stream", run_mode: "manual" });
+    const sessionLauncher = {
+      run: async (_p: string, opts: { onChunk?: (c: string) => void }) => { opts.onChunk?.("live-chunk"); return { text: "done" }; },
+      denialsOf: () => [],
+    };
+    const rm = createRunManager();
+    const a = createApi(database, { sessionLauncher, runManager: rm });
+    await a.request("/api/tasks/st/start", { method: "POST" });
+    await a.request("/api/tasks/st/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "rd" }) });
+    const { runId } = (await (await a.request("/api/tasks/st/stages/rd/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect(rm.get(runId)!.output.join("")).toContain("live-chunk"); // streamed to the run → SSE
+  });
+
   it("manual: safe allowlist passed, denials surfaced, approve widens the allowlist", async () => {
     createTask(database, { id: "pm", title: "Perm", run_mode: "manual" });
     let seenAllowed: string[] | undefined;
