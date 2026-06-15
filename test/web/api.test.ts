@@ -442,6 +442,18 @@ describe("web api mutations", () => {
     expect(spec.cards.some((c: { id: string }) => c.id === "mv1")).toBe(true);
   });
 
+  it("completing a stage moves the task to the next board column", async () => {
+    await post("/api/tasks", { id: "bm", title: "BoardMove" });
+    await post("/api/tasks/bm/start"); // analysis active → card sits in the analysis column
+    const colOf = async (id: string) => {
+      const board = (await json("/api/board")).body as { columns: { stageKey: string; cards: { id: string }[] }[] };
+      return board.columns.find((c) => c.cards.some((x) => x.id === id))?.stageKey;
+    };
+    expect(await colOf("bm")).toBe("analysis");
+    await post("/api/tasks/bm/stages/analysis/accept"); // finishing analysis advances it
+    expect(await colOf("bm")).toBe("brainstorm"); // card moved on the board
+  });
+
   it("POST move with an unknown stage → 400", async () => {
     await post("/api/tasks", { id: "mv2", title: "Move2" });
     expect((await post("/api/tasks/mv2/move", { stageKey: "nope" })).status).toBe(400);
