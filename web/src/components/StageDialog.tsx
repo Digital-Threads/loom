@@ -71,10 +71,14 @@ function Brainstorm({ client, taskId }: { client: LoomClient; taskId: string }) 
     try { setSummary(await client.brainstormDone(taskId)); } finally { setBusy(false); }
   }
 
+  const readyMsg = [...msgs].reverse().find(isReady);
+  const ready = !!readyMsg;
+  const readyReason = readyMsg ? readyMsg.content.replace(/^\s*READY\s*[—:-]?\s*/i, "").trim() : "";
+
   return (
     <div>
       <div className="chat">
-        {msgs.length ? msgs.map((m) => (
+        {msgs.length ? msgs.filter((m) => !isReady(m)).map((m) => (
           <div className={`bubble ${m.role === "agent" ? "bubble-agent" : "bubble-user"}`} key={m.id}>
             <div className="bubble-role">{m.role === "agent" ? "Agent" : "You"}</div>
             <div className="bubble-text">{m.content}</div>
@@ -88,18 +92,31 @@ function Brainstorm({ client, taskId }: { client: LoomClient; taskId: string }) 
           <div className="doc">{summary.content}</div>
         </div>
       ) : (
-        <div className="chat-input">
-          <input value={input} placeholder={msgs.length ? "your answer…" : "press Start — the agent asks first"} disabled={busy || !msgs.length}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) send(input.trim()); }} />
-          <button className="btn" disabled={busy} onClick={() => send(msgs.length ? input.trim() || undefined : undefined)}>
-            {msgs.length ? "Send" : "▶ Start brainstorm"}
-          </button>
-          {msgs.length ? <button className="btn acc" disabled={busy} onClick={done}>Done → Spec</button> : null}
-        </div>
+        <>
+          {ready ? (
+            <div className="ready-note">
+              <span className="ok-dot" /> The agent has enough — ready to write the spec.
+              {readyReason ? <div className="ready-reason">{readyReason}</div> : null}
+            </div>
+          ) : null}
+          <div className="chat-input">
+            <input value={input} placeholder={ready ? "add anything else, or continue →" : msgs.length ? "your answer…" : "press Start — the agent asks first"} disabled={busy || !msgs.length}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) send(input.trim()); }} />
+            <button className="btn" disabled={busy} onClick={() => send(msgs.length ? input.trim() || undefined : undefined)}>
+              {msgs.length ? "Send" : "▶ Start brainstorm"}
+            </button>
+            {msgs.length ? <button className={`btn ${ready ? "acc" : ""}`} disabled={busy} onClick={done}>Done → Spec</button> : null}
+          </div>
+        </>
       )}
     </div>
   );
+}
+
+// The agent signals it has enough by replying "READY — <reason>".
+function isReady(m: ChatMessage): boolean {
+  return m.role === "agent" && m.content.trim().toUpperCase().startsWith("READY");
 }
 
 function Spec({ client, taskId, onChanged }: { client: LoomClient; taskId: string; onChanged?: () => void }) {
