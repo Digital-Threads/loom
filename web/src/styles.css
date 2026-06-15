@@ -40,6 +40,33 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
 .content{flex:1;overflow:auto;padding:16px;-webkit-overflow-scrolling:touch}
 .muted{color:var(--mut)} .empty{color:var(--dim);padding:24px}
 
+/* ─── section design system (Accounts/Tokens/Memory/Timeline/Connectors/…) ─── */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;max-width:1000px}
+.panel h2{font-size:15px;font-weight:650;margin:0 0 12px}
+.panel h2:not(:first-child){margin-top:24px}
+.row{display:flex;gap:10px;align-items:center}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.split{grid-template-columns:1fr}}
+.list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:var(--r2);overflow:hidden}
+.list>*{padding:10px 12px;background:var(--panel2)}
+.detail{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:12px 14px}
+.big{font-size:24px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+/* text input shared by sections (matches the workspace input) */
+.inp{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 11px;font:inherit;font-size:13px;outline:none;min-width:180px}
+.inp:focus{border-color:var(--acc)}
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-weight:600;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--txt)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr:hover td{background:var(--panel2)}
+/* small count badge (board columns, lists) */
+.n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip);color:var(--mut);font-size:11px;font-weight:600;margin-left:6px}
+/* chip status colors */
+.chip.ok{color:#56d364}.chip.ok .dotc{background:var(--ok)}
+.chip.warn{color:#e3b341}.chip.warn .dotc{background:var(--warn)}
+.chip.bad{color:#ff8a80}.chip.bad .dotc{background:var(--bad)}
+
 .board{display:flex;gap:12px;height:100%;min-width:max-content}
 .col{width:212px;flex:0 0 212px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;max-height:100%}
 .col h2{font-size:12px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--mut);font-weight:600}
