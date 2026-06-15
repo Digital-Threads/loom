@@ -512,6 +512,57 @@ describe("web api — fs browse + PR connector", () => {
     expect(qa.result?.passed).toBe(true);
   });
 
+  // Every stage must leave a readable turn in the shared transcript — otherwise
+  // running review/qa/pr/done/brainstorm shows nothing (the "done but empty" bug).
+  const transcriptOf = async (a: ReturnType<typeof createApi>, id: string) =>
+    ((await (await a.request(`/api/tasks/${id}/transcript`)).json()) as { turns: { stage: string; output: string }[] }).turns;
+
+  it("review run leaves a readable turn (findings visible in the transcript)", async () => {
+    createTask(database, { id: "rv", title: "Rev", run_mode: "manual" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm, reviewPass: (key) => ({ key, run: async () => [{ pass: key, severity: "warn" as const, message: "edge case X", file: "a.ts" }] }) });
+    await a.request("/api/tasks/rv/start", { method: "POST" });
+    await a.request("/api/tasks/rv/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const { runId } = (await (await a.request("/api/tasks/rv/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect((await transcriptOf(a, "rv")).some((t) => t.stage === "review" && /edge case X/.test(t.output))).toBe(true);
+  });
+
+  it("qa run leaves a readable turn (check results visible)", async () => {
+    createTask(database, { id: "qa1", title: "QA", run_mode: "manual" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm, qaChecks: () => [{ key: "tests", run: async () => ({ ok: true, output: "5 passed" }) }] });
+    await a.request("/api/tasks/qa1/start", { method: "POST" });
+    await a.request("/api/tasks/qa1/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "qa" }) });
+    const { runId } = (await (await a.request("/api/tasks/qa1/stages/qa/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect((await transcriptOf(a, "qa1")).some((t) => t.stage === "qa" && /tests/.test(t.output))).toBe(true);
+  });
+
+  it("pr run leaves a turn with the PR description", async () => {
+    createTask(database, { id: "pr1", title: "PRtask" });
+    const a = createApi(database, { prOptions: () => ({ describe: () => "PR: adds the thing" }) });
+    await a.request("/api/tasks/pr1/pr/run", { method: "POST", body: "{}" });
+    expect((await transcriptOf(a, "pr1")).some((t) => t.stage === "pr" && /adds the thing/.test(t.output))).toBe(true);
+  });
+
+  it("done run leaves a turn", async () => {
+    createTask(database, { id: "dn1", title: "Donetask" });
+    const a = createApi(database);
+    await a.request("/api/tasks/dn1/done/run", { method: "POST" });
+    expect((await transcriptOf(a, "dn1")).some((t) => t.stage === "done")).toBe(true);
+  });
+
+  it("brainstorm message leaves a turn (the agent's question is visible)", async () => {
+    createTask(database, { id: "bs1", title: "BS" });
+    // brainstorm runs through the task session → sessionSend records the turn.
+    const sessionLauncher = { run: async () => ({ text: "What is the expected output format?" }), denialsOf: () => [] };
+    const a = createApi(database, { sessionLauncher });
+    await a.request("/api/tasks/bs1/brainstorm/message", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "build X" }) });
+    const turns = await transcriptOf(a, "bs1");
+    expect(turns.some((t) => t.stage === "brainstorm" && /expected output format/.test(t.output))).toBe(true);
+  });
+
   it("a stage run is persisted to the runs table (durable)", async () => {
     createTask(database, { id: "dr", title: "Durable", run_mode: "manual" });
     const sessionLauncher = { run: async () => ({ text: "{}" }), denialsOf: () => [] };
@@ -603,6 +654,15 @@ describe("web api — fs browse + PR connector", () => {
     expect(bad.status).toBe(400);
     const p3 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { allowed: string[] };
     expect(p3.allowed).not.toContain("--dangerously-skip-permissions");
+
+    // MCP tool names (mcp__server__tool, hyphens allowed) must be approvable
+    const mcp = "mcp__plugin_task-journal_task-journal__event_add";
+    const okMcp = await a.request("/api/tasks/pm/permissions/allow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: mcp }) });
+    expect(okMcp.status).toBe(200);
+    expect(((await okMcp.json()) as { allowed: string[] }).allowed).toContain(mcp);
+    // but a comma (csv injection into --allowedTools) is still rejected
+    const comma = await a.request("/api/tasks/pm/permissions/allow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: "Read,Bash" }) });
+    expect(comma.status).toBe(400);
   });
 
   it("autopilot tasks bypass permissions; manual/gated do not", async () => {

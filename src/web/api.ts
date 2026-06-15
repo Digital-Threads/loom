@@ -222,6 +222,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!a) return null;
     try { return JSON.parse(a.content) as T; } catch { return null; }
   };
+  // Record a readable turn in the shared transcript. Stages that produce
+  // structured results (review/qa/pr/done/brainstorm) call this so the user
+  // actually SEES the outcome — the chat-first transcript renders only turns.
+  const recordTurn = (taskId: string, stage: string, input: string, output: string) =>
+    saveResult(taskId, stage, "turn", { input, output });
+  const fmtReview = (r: { passed: boolean; findings: { severity: string; message: string; file?: string }[]; counts: Record<string, number> }): string => {
+    if (r.passed && !r.findings.length) return "Code review: no issues found.";
+    const lines = r.findings.map((f) => `• [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`);
+    return `Code review: ${r.passed ? "passed" : "blockers found"} — ${r.counts.bug ?? 0} bug(s), ${r.counts.warn ?? 0} warning(s), ${r.counts.info ?? 0} note(s).\n${lines.join("\n")}`;
+  };
+  const fmtQa = (r: { passed: boolean; results: { key: string; ok: boolean; output?: string }[] }): string => {
+    const lines = r.results.map((c) => `${c.ok ? "✓" : "✗"} ${c.key}${c.output ? ` — ${c.output.split("\n")[0]}` : ""}`);
+    return `QA checks: ${r.passed ? "all green" : "failures"}.\n${lines.join("\n")}`;
+  };
 
   // L13 — default stage runners: each stage injects its instruction into the
   // task's ONE session. R&D = planning (decompose into self-sufficient subtasks,
@@ -259,16 +273,23 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     review: async (_d, id) => {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
       saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
+      recordTurn(id, "review", "Review the implementation", fmtReview(res));
       return { ok: res.passed, needsAttention: !res.passed };
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
       saveResult(id, "qa", "qa-result", { result: res });
+      recordTurn(id, "qa", "Run the repo's checks", fmtQa(res));
       return { ok: res.passed, needsAttention: !res.passed };
     },
-    pr: async (_d, id) => { runPr(db, id, deps.prOptions?.(id) ?? {}); return { ok: true }; },
+    pr: async (_d, id) => {
+      const pr = runPr(db, id, deps.prOptions?.(id) ?? {});
+      recordTurn(id, "pr", "Generate the PR description", pr.description);
+      return { ok: true };
+    },
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
+      recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
       if (sid) (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid);
       return { ok: true };
@@ -548,7 +569,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         sh: opts.sh ?? realSh,
       };
     }
-    return c.json({ pr: runPr(db, id, opts) });
+    const pr = runPr(db, id, opts);
+    recordTurn(id, "pr", "Generate the PR description", pr.description);
+    return c.json({ pr });
   });
 
   // ─── filesystem browse (folder pickers) ───────────────────────────────────────
@@ -557,6 +580,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     runDone(db, id, { projectId: resolveProjectId(c), closeTask: () => deps.closeTask?.(id) });
+    recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
     return c.json({ ok: true });
   });
 
@@ -574,6 +598,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { message?: unknown };
     const message = typeof body.message === "string" ? body.message : undefined;
+    // brainstormTurn runs through the task session (sessionSend), which already
+    // records the exchange as a transcript turn — no extra recordTurn needed.
     return c.json({ question: await brainstormTurn(db, id, stageAgentFor(id, "brainstorm"), message) });
   });
   app.post("/api/tasks/:id/brainstorm/done", async (c) => {
@@ -733,9 +759,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { tool?: unknown };
     const tool = typeof body.tool === "string" ? body.tool.trim() : "";
-    // strict shape (e.g. "Read", "Bash(git *)", "mcp__x__y") — never a flag/argv
-    // smuggle like "--dangerously-skip-permissions".
-    if (!/^[A-Za-z][A-Za-z0-9_]*(\([^)\n]*\))?$/.test(tool)) return c.json({ error: "invalid tool" }, 400);
+    // strict shape (e.g. "Read", "Bash(git *)", "mcp__plugin_task-journal__event_add")
+    // — must start with a letter (never a "--flag" argv smuggle) and carry no
+    // comma (which would inject extra entries into the --allowedTools csv).
+    if (!/^[A-Za-z][A-Za-z0-9_.-]*(\([^),\n]*\))?$/.test(tool)) return c.json({ error: "invalid tool" }, 400);
     const allowed = taskAllowed(id);
     if (!allowed.includes(tool)) setSetting(db, allowKey(id), [...allowed, tool]);
     return c.json({ allowed: taskAllowed(id) });
