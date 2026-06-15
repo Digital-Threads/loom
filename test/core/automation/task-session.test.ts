@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -97,6 +97,13 @@ describe("TaskSession (one session per task)", () => {
     const r = parseCompleteness("...\nИТОГ: НЕ ГОТОВО — нет доступа к API");
     expect(r.complete).toBe(false);
     expect(r.note).toContain("нет доступа");
+  });
+
+  it("declaresRemainingWork: catches a ГОТОВО that still lists leftover plan items", () => {
+    expect(declaresRemainingWork("Что из плана осталось (следующие эпики): RD-2, RD-3")).toBe(true);
+    expect(declaresRemainingWork("осталось реализовать RD-4 и RD-5")).toBe(true);
+    expect(declaresRemainingWork("remaining steps: wire the UI")).toBe(true);
+    expect(declaresRemainingWork("Всё сделано и проверено, регрессий нет.")).toBe(false);
   });
 
   it("compacts the session once the turn threshold is reached", async () => {

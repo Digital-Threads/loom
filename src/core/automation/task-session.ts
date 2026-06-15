@@ -51,6 +51,14 @@ export function parseCompleteness(text: string): { complete: boolean; note?: str
   return complete ? { complete: true } : { complete: false, note: m[2]?.trim() || "agent reported the step is not complete" };
 }
 
+/** Detect when the agent's own text admits the plan isn't finished — it lists
+ *  "remaining epics / steps", "осталось реализовать", etc. Multi-step stages
+ *  (implementation) sometimes do one chunk and still stamp ГОТОВО; this catches
+ *  that contradiction so the stage doesn't advance with work left undone. */
+export function declaresRemainingWork(text: string): boolean {
+  return /следующи[ехй]\s+(?:эпик|шаг|задач)|оста(?:лось|ётся|лись|ются)\s+(?:реализова|сдела|доде|написа|эпик|задач|шаг|подзадач)|remaining\s+(?:epic|step|task|work|item)|yet\s+to\s+(?:implement|do)|not\s+yet\s+(?:implemented|done)|todo\s*:/iu.test(text);
+}
+
 /** Per-stage reinforcement — short reminder of the rules + the step's task. */
 export function stageInstruction(stage: string | undefined, instruction: string): string {
   const head = stage ? `Стадия: ${stage}.` : "Следующий шаг.";

@@ -41,7 +41,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { createTaskSession, parseCompleteness, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
@@ -245,7 +245,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const RD_PROMPT =
     "Стадия R&D — планирование. Разбей задачу на самодостаточные подзадачи (план/DAG): для каждой опиши что именно реализуется, какие файлы затрагиваются и критерий готовности. Код пока НЕ пиши. В конце укажи статус строкой ИТОГ.";
   const IMPL_PROMPT =
-    "Стадия реализации. Выполни план: внеси реальные изменения в код (при необходимости делегируй субагентам), проверь результат. В конце укажи статус строкой ИТОГ.";
+    "Стадия реализации. Реализуй ВЕСЬ план целиком — все подзадачи/эпики, а НЕ только первый. Вноси реальные изменения в код (при необходимости делегируй субагентам), проверяй результат. Не останавливайся после одного эпика. Если по любой причине не успел доделать всё — в конце ОБЯЗАТЕЛЬНО строкой 'ИТОГ: НЕ ГОТОВО — <что осталось>'. Ставь 'ИТОГ: ГОТОВО' ТОЛЬКО когда весь план реализован и проверен.";
+  const IMPL_CONTINUE_PROMPT =
+    "Продолжай реализацию: возьми СЛЕДУЮЩИЕ невыполненные пункты плана и доведи их до конца (реальные изменения в коде + проверка). Когда весь план реализован и проверен — 'ИТОГ: ГОТОВО'; иначе 'ИТОГ: НЕ ГОТОВО — <что осталось>'.";
+  const IMPL_MAX_CONTINUES = 6; // bound the auto-continue loop so a huge/looping plan parks instead of running forever
   const doneProjectId = () => projectActive()?.projectId ?? "default";
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
@@ -264,12 +267,22 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return complete ? { ok: true } : { ok: true, needsAttention: true, note };
     },
     impl: async (_d, id) => {
-      const text = await sessionSend(id, "impl", IMPL_PROMPT); // execute in the session/worktree
+      // Implement the WHOLE plan: keep continuing while the agent reports it's
+      // not done OR its own text still lists leftover plan items, up to a cap.
+      // This stops impl from advancing after only the first epic (the agent
+      // sometimes stamps ГОТОВО while listing remaining work — that's a lie we
+      // must not trust). If the cap is hit, park for the user instead.
+      const settled = (text: string) => parseCompleteness(text).complete && !declaresRemainingWork(text);
+      let text = await sessionSend(id, "impl", IMPL_PROMPT);
+      for (let i = 0; i < IMPL_MAX_CONTINUES && !settled(text); i++) {
+        text = await sessionSend(id, "impl", IMPL_CONTINUE_PROMPT);
+      }
       const t = getTask(db, id);
       if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: ${t.title}`);
       saveResult(id, "impl", "impl-report", { report: text });
-      const { complete, note } = parseCompleteness(text);
-      return complete ? { ok: true } : { ok: true, needsAttention: true, note };
+      if (settled(text)) return { ok: true };
+      const note = parseCompleteness(text).note ?? "implementation still has remaining plan items";
+      return { ok: true, needsAttention: true, note };
     },
     review: async (_d, id) => {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));

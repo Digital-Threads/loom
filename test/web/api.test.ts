@@ -647,6 +647,32 @@ describe("web api — fs browse + PR connector", () => {
     expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active");
   });
 
+  it("impl stays active (parks) when the agent still lists remaining plan items", async () => {
+    createTask(database, { id: "im", title: "Impl", run_mode: "manual" });
+    const rm = createRunManager();
+    // a ГОТОВО that still lists leftover epics is a lie — impl must NOT advance
+    const a = createApi(database, { runManager: rm, stageAgent: async () => "Сделал RD-1.\nЧто из плана осталось (следующие эпики): RD-2, RD-3\nИТОГ: ГОТОВО" });
+    await a.request("/api/tasks/im/start", { method: "POST" });
+    await a.request("/api/tasks/im/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "impl" }) });
+    const { runId } = (await (await a.request("/api/tasks/im/stages/impl/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const stages = (await (await a.request("/api/tasks/im")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "impl")!.status).toBe("active");
+  });
+
+  it("impl completes when the agent reports the whole plan done", async () => {
+    createTask(database, { id: "im2", title: "Impl2", run_mode: "manual" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm, stageAgent: async () => "Весь план реализован и проверен, регрессий нет.\nИТОГ: ГОТОВО" });
+    await a.request("/api/tasks/im2/start", { method: "POST" });
+    await a.request("/api/tasks/im2/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "impl" }) });
+    const { runId } = (await (await a.request("/api/tasks/im2/stages/impl/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const stages = (await (await a.request("/api/tasks/im2")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "impl")!.status).toBe("done");
+    expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active");
+  });
+
   it("brainstorm Done → Spec advances to the spec stage", async () => {
     createTask(database, { id: "bd", title: "BD", run_mode: "manual" });
     const a = createApi(database, { stageAgent: async () => "requirements brief" });
