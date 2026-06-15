@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, WorkspaceData, HealthRow } from "../api";
 import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 // F1.2 — aimux accounts: subscriptions, sessions, health, with [Check health]
 // and [Set active] actions. Reads the aggregated 3-module workspace.
@@ -21,7 +22,8 @@ export function Accounts({ client }: { client: LoomClient }) {
       await client.addSubscription(newSub.trim());
       setNewSub("");
       setWs(await client.workspace());
-    } finally {
+      toast.success("Subscription added");
+    } catch { toast.error("Couldn’t add subscription"); } finally {
       setBusy(false);
     }
   }
@@ -48,6 +50,7 @@ export function Accounts({ client }: { client: LoomClient }) {
     setBusy(true);
     try {
       await client.setActive(profile);
+      toast.success(`Active profile: ${profile}`);
     } finally {
       setBusy(false);
     }

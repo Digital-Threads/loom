@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, McpServer } from "../api";
 import { StateView } from "./StateView";
+import { toast } from "../toast";
 
 // D5.3 — Connectors (MCP): list/add/enable/test the MCP servers Loom passes
 // into agent sessions.
@@ -17,13 +18,14 @@ export function Connectors({ client }: { client: LoomClient }) {
   async function add() {
     if (!id.trim() || !command.trim()) return;
     await client.mcpAdd({ id: id.trim(), command: command.trim() });
-    setId(""); setCommand(""); refresh();
+    setId(""); setCommand(""); refresh(); toast.success("MCP server added");
   }
-  async function toggle(s: McpServer) { await client.mcpToggle(s.id, !s.enabled); refresh(); }
-  async function remove(sid: string) { await client.mcpRemove(sid); refresh(); }
+  async function toggle(s: McpServer) { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? "Disabled" : "Enabled"); }
+  async function remove(sid: string) { await client.mcpRemove(sid); refresh(); toast.success("Server removed"); }
   async function test(sid: string) {
     const r = await client.mcpTest(sid);
     setStatus((m) => ({ ...m, [sid]: r.ok ? "ok" : r.error ?? "fail" }));
+    if (r.ok) toast.success(`${sid}: reachable`); else toast.error(`${sid}: ${r.error ?? "unreachable"}`);
   }
 
   if (err) return <StateView kind="error" msg={err} />;
