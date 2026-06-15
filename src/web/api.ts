@@ -123,7 +123,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
-  const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher({ sandbox: getSetting<boolean>(db, "sandbox.enabled", false) });
+  const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
   // One cwd for the whole task = its worktree (created once, reused by every
   // stage), so the live process edits in isolation. Non-git repos use the repo.
   const taskCwd = (id: string): string | undefined => {

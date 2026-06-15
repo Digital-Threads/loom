@@ -12,7 +12,7 @@ import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-i
 import type Database from "better-sqlite3";
 
 declare const Bun: {
-  serve(opts: { port: number; fetch: (req: Request) => Response | Promise<Response> }): {
+  serve(opts: { port: number; hostname?: string; fetch: (req: Request) => Response | Promise<Response> }): {
     stop(): void;
     url: URL;
   };
@@ -28,6 +28,9 @@ export function defaultDb(): Database.Database {
 export interface ServeOptions {
   db?: Database.Database;
   port?: number;
+  /** Bind address. Default 127.0.0.1 (localhost-only) — the API has no auth, so
+   *  it must not be exposed on the network. Override to "0.0.0.0" deliberately. */
+  hostname?: string;
   /** Directory of the built frontend (web/dist). Static + SPA fallback served
    *  when present; omitted in API-only / test mode. */
   webDist?: string;
@@ -48,5 +51,5 @@ export function serveApi(opts: ServeOptions = {}) {
     app.get("*", serveStatic({ path: join(root, "index.html") }));
   }
 
-  return Bun.serve({ port, fetch: app.fetch });
+  return Bun.serve({ port, hostname: opts.hostname ?? "127.0.0.1", fetch: app.fetch });
 }
