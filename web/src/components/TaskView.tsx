@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import { type LoomClient, type TaskDetail, STAGE_LABELS } from "../api";
 import { stageStateClass, stageIcon, statusLabel } from "../ui";
-import { StageDialog } from "./StageDialog";
-import { ReviewQA } from "./ReviewQA";
-import { PrDone } from "./PrDone";
 import { Approvals } from "./Approvals";
 import { Transcript } from "./Transcript";
+import { StageActions } from "./StageActions";
 
-// Short human description per stage — shown under the stage title.
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
   brainstorm: "The agent asks clarifying questions until the goal is clear.",
@@ -41,44 +38,64 @@ export function TaskView({
   const [active, setActive] = useState<string>("analysis");
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
-  const [planText, setPlanText] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
 
-  useEffect(() => {
-    if (active === "rd") client.rdGet(taskId).then(setPlanText).catch(() => {});
-    else if (active === "impl") client.implGet(taskId).then(setPlanText).catch(() => {});
-    else setPlanText(null);
-  }, [client, taskId, active]);
-
-  async function runStage() {
-    setLive([]);
-    setRunId(null);
-    const id = await client.startRun(taskId, active);
-    setRunId(id);
-    const es = new EventSource(client.runStreamUrl(id));
-    es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
-    es.addEventListener("status", () => { es.close(); onChanged?.(); });
-    es.addEventListener("error", () => es.close());
-  }
+  const refreshLocal = () => setReload((r) => r + 1);
 
   useEffect(() => {
     client
       .task(taskId)
       .then((d) => {
         setDetail(d);
-        const cur = d.stages.find((s) => s.status === "active") ?? d.stages.find((s) => s.status === "pending");
-        if (cur) setActive(cur.stage_key);
+        setActive((prev) => {
+          if (prev && d.stages.some((s) => s.stage_key === prev)) return prev; // keep selection
+          const cur = d.stages.find((s) => s.status === "active") ?? d.stages.find((s) => s.status === "pending");
+          return cur ? cur.stage_key : prev;
+        });
       })
       .catch((e) => setErr(String(e)));
-  }, [client, taskId]);
+  }, [client, taskId, reload]);
+
+  // Stream a live run of the current stage into the transcript.
+  function runStageLive() {
+    setLive([]);
+    setRunId(null);
+    client.startRun(taskId, active).then((id) => {
+      setRunId(id);
+      const es = new EventSource(client.runStreamUrl(id));
+      es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
+      es.addEventListener("status", () => { es.close(); setRunId(null); refreshLocal(); onChanged?.(); });
+      es.addEventListener("error", () => es.close());
+    });
+  }
 
   if (err) return <div className="empty">Error: {err}</div>;
   if (!detail) return <div className="state-loading">Loading task…</div>;
 
-  const stageSteps = detail.steps;
-  const costs = detail.costs;
   const task = detail.task;
+  const costs = detail.costs;
   const activeStatus = detail.stages.find((s) => s.stage_key === active)?.status ?? "";
   const lastIdx = detail.stages.length - 1;
+
+  // Context input: answer the brainstorm, or intervene in a live run.
+  const inputMode: "brainstorm" | "intervene" | null = runId
+    ? "intervene"
+    : active === "brainstorm" && task.status !== "done"
+      ? "brainstorm"
+      : null;
+
+  async function submitInput() {
+    if (inputMode === "intervene" && runId) {
+      client.sendStdin(runId, input + "\n");
+      setInput("");
+    } else if (inputMode === "brainstorm") {
+      setBusy(true);
+      try { await client.brainstormMessage(taskId, input.trim() || undefined); setInput(""); refreshLocal(); }
+      finally { setBusy(false); }
+    }
+  }
 
   return (
     <div className="task">
@@ -119,13 +136,14 @@ export function TaskView({
             <span className={`badge ${badgeClass(activeStatus)}`}>{statusLabel(activeStatus)}</span>
             <div className="ph-actions">
               {task.status === "created" ? (
-                <button className="btn acc" onClick={async () => { await client.start(taskId); onChanged?.(); }}>▶ Start task</button>
+                <button className="btn acc sm" onClick={async () => { await client.start(taskId); refreshLocal(); onChanged?.(); }}>▶ Start task</button>
               ) : task.status !== "done" ? (
                 <>
+                  <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshLocal} />
                   {activeStatus === "active" ? (
-                    <button className="btn" title="Mark this stage done and move to the next" onClick={async () => { await client.accept(taskId, active); onChanged?.(); }}>✓ Approve &amp; continue</button>
+                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshLocal(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
-                  <button className="btn acc" title="Auto-run forward through the pipeline (per run mode)" onClick={async () => { await client.advance(taskId); onChanged?.(); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode" onClick={async () => { await client.advance(taskId); refreshLocal(); onChanged?.(); }}>▶▶ Advance</button>
                 </>
               ) : null}
             </div>
@@ -134,56 +152,32 @@ export function TaskView({
         </header>
 
         <div className="pb">
-          <Approvals client={client} taskId={taskId} onChanged={onChanged} />
+          <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
+          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} />
+        </div>
 
-          {active === "rd" || active === "impl" ? (
-            <div className="card-plain">
-              <div className="card-head">
-                <span>{active === "rd" ? "Plan — subtasks / DAG" : "Implementation report"}</span>
-                <button className="btn acc sm" onClick={runStage}>▶ Run</button>
-              </div>
-              {planText ? (
-                <pre className="doc">{planText}</pre>
-              ) : (
-                <div className="state-empty">{active === "rd" ? "No plan yet — run R&D to decompose the task." : "Not implemented yet — run Implementation."}</div>
-              )}
-
-              {stageSteps.length ? (
-                <div className="steps-list">
-                  {stageSteps.map((step) => (
-                    <div className="step-row" key={step.id}>
-                      <span className="step-row-id">{step.id}</span>
-                      <span className="step-row-t">{step.title}{step.profile ? ` · ${step.profile}` : ""}{step.model ? ` · ${step.model}` : ""}</span>
-                      <span className="chip">{statusLabel(step.status)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : active === "analysis" || active === "brainstorm" || active === "spec" ? (
-            <StageDialog client={client} taskId={taskId} stage={active} onChanged={onChanged} />
-          ) : active === "review" || active === "qa" ? (
-            <ReviewQA client={client} taskId={taskId} stage={active} />
-          ) : active === "pr" || active === "done" ? (
-            <PrDone client={client} taskId={taskId} stage={active} onChanged={onChanged} />
-          ) : (
-            <div className="state-empty">{task.description || "Stage content appears as the task progresses."}</div>
-          )}
-
-          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={detail.stages.length} />
-
-          <div className="cost-bar">
-            <span className="cost-label">Cost</span>
-            {costs.length ? (
-              costs.map((c, i) => (
-                <span className="cost-stat" key={i}>
-                  <b>{c.value}{c.exact ? "" : " ≈"}</b> {c.source}/{c.metric}
-                </span>
-              ))
-            ) : (
-              <span className="muted">—</span>
-            )}
+        {inputMode ? (
+          <div className="ws-input">
+            <input
+              value={input}
+              disabled={busy}
+              placeholder={inputMode === "intervene" ? "Intervene — send guidance to the live agent…" : "Answer the agent (or send empty to get the first question)…"}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submitInput(); }}
+            />
+            <button className="btn acc" disabled={busy} onClick={submitInput}>{inputMode === "intervene" ? "Send" : "▶"}</button>
           </div>
+        ) : null}
+
+        <div className="cost-bar">
+          <span className="cost-label">Cost</span>
+          {costs.length ? (
+            costs.map((c, i) => (
+              <span className="cost-stat" key={i}><b>{c.value}{c.exact ? "" : " ≈"}</b> {c.source}/{c.metric}</span>
+            ))
+          ) : (
+            <span className="muted">—</span>
+          )}
         </div>
       </section>
     </div>
