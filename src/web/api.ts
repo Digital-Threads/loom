@@ -61,7 +61,7 @@ import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from ".
 import { beadsConnector } from "../core/connectors/beads.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
-import { runReview, reviewAction } from "../core/quality/review-runner.js";
+import { runReview, reviewAction, reviewHolds } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, type ReviewPass } from "../core/quality/review.js";
 
@@ -288,7 +288,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
       saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
       recordTurn(id, "review", "Review the implementation", fmtReview(res));
-      return { ok: res.passed, needsAttention: !res.passed };
+      // Hold on findings (not just blockers) so the user can Fix before QA — the
+      // review stage stays current and surfaces the "Fix findings" button.
+      // Autopilot runs through non-blockers (reviewHolds handles the mode).
+      return { ok: res.passed, needsAttention: reviewHolds(res, getTask(db, id)?.run_mode) };
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
