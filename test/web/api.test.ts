@@ -524,6 +524,9 @@ describe("web api — fs browse + PR connector", () => {
     const { runId } = (await (await a.request("/api/tasks/st/stages/rd/run", { method: "POST", body: "{}" })).json()) as { runId: string };
     await rm.wait(runId);
     expect(rm.get(runId)!.output.join("")).toContain("live-chunk"); // streamed to the run → SSE
+    // "Run" runs the stage's agent but does NOT auto-advance — user approves to move on.
+    const stages = (await (await a.request("/api/tasks/st")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "rd")!.status).toBe("active");
   });
 
   it("manual: safe allowlist passed, denials surfaced, approve widens the allowlist", async () => {

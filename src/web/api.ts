@@ -52,7 +52,7 @@ import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join as pathJoin } from "node:path";
-import { advanceTask, runAndAdvance, runStage, type RunnerRegistry } from "../core/pipeline/conductor.js";
+import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -303,8 +303,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
         });
         try {
-          const { outcome, next } = await runStage(db, taskId, stageKey, runners);
-          return { outcome, next };
+          // run the stage's agent and STREAM it; do NOT auto-complete/advance —
+          // the user reviews the output, then approves to move on.
+          const runner = runners[stageKey];
+          const outcome = runner ? await runner(db, taskId, stageKey) : { ok: true };
+          return { outcome };
         } finally {
           streamSinks.delete(taskId);
         }
