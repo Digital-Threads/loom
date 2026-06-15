@@ -13,13 +13,15 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
   if (err) return <div className="empty">Can’t reach the core: {err}</div>;
   if (!cols) return <div className="empty">Loading…</div>;
 
-  // DnD: drag a card onto a column → move the task to that stage and refresh.
-  // Repositions only (no run started); start the stage from the task view.
+  // DnD: drag a card onto a column → move the task to that stage AND start it.
+  // The drag IS the approval: the agent runs the dropped stage right away in the
+  // task's one session (prior steps' context carries over). Open the task to
+  // watch the live output. Then refresh the board so the card lands in its column.
   function onDrop(stageKey: string, e: DragEvent) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
     if (!taskId) return;
-    client.moveTask(taskId, stageKey).then(() => client.board().then(setCols)).catch(() => {});
+    client.moveTask(taskId, stageKey, true).then(() => client.board().then(setCols)).catch(() => {});
   }
 
   return (

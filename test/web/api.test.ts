@@ -447,6 +447,29 @@ describe("web api mutations", () => {
     expect((await post("/api/tasks/mv2/move", { stageKey: "nope" })).status).toBe(400);
   });
 
+  it("POST move with run:true starts the dropped stage in the task session (board DnD)", async () => {
+    const calls: [string, string][] = [];
+    const app2 = createApi(db, { startRun: (id, key) => { calls.push([id, key]); return "run_dnd"; } });
+    const mk = (p: string, b?: unknown) => app2.request(p, { method: "POST", headers: { "content-type": "application/json" }, body: b === undefined ? undefined : JSON.stringify(b) });
+    await mk("/api/tasks", { id: "dnd1", title: "DnD" });
+    await mk("/api/tasks/dnd1/start");
+    const out = await (await mk("/api/tasks/dnd1/move", { stageKey: "rd", run: true })).json();
+    expect(out.current).toBe("rd");
+    expect(out.runId).toBe("run_dnd");
+    expect(calls).toEqual([["dnd1", "rd"]]);
+  });
+
+  it("POST move without run does not start a run (repositions only)", async () => {
+    const calls: string[] = [];
+    const app2 = createApi(db, { startRun: (id) => { calls.push(id); return "x"; } });
+    const mk = (p: string, b?: unknown) => app2.request(p, { method: "POST", headers: { "content-type": "application/json" }, body: b === undefined ? undefined : JSON.stringify(b) });
+    await mk("/api/tasks", { id: "dnd2", title: "D2" });
+    await mk("/api/tasks/dnd2/start");
+    const out = await (await mk("/api/tasks/dnd2/move", { stageKey: "rd" })).json();
+    expect(out.runId).toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
   it("POST gate toggles the stage gate", async () => {
     await post("/api/tasks", { id: "m2", title: "M2" });
     await post("/api/tasks/m2/stages/spec/gate", { gate: false });

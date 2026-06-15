@@ -410,16 +410,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ ok: true });
   });
 
-  // Move a task to a stage (board drag-drop). Body: { stageKey }. Repositions
-  // only — does not start a run.
+  // Move a task to a stage (board drag-drop). Body: { stageKey, run? }.
+  // Repositions the task; with run:true it also starts the dropped stage right
+  // away in the task's ONE session (prior stages' context already lives there —
+  // that's how "results of previous steps" carry over). run omitted = move only.
   app.post("/api/tasks/:id/move", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { stageKey?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { stageKey?: unknown; run?: unknown };
     const stageKey = typeof body.stageKey === "string" ? body.stageKey : "";
     const current = moveToStage(db, id, stageKey);
     if (current === null && stageKey !== "done") return c.json({ error: "unknown stage" }, 400);
-    return c.json({ current });
+    const runId = body.run === true ? startRun(id, stageKey) : undefined;
+    return c.json({ current, runId });
   });
 
   // ─── module actions (F1.5) ────────────────────────────────────────────────
