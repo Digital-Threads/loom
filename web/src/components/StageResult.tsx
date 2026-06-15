@@ -35,7 +35,7 @@ export function StageResult({
           <span className={`badge ${r.passed ? "badge-ok" : "badge-warn"}`}>{r.passed ? "passed" : "blockers"}</span>
           <span className="result-counts">{r.counts.bug ?? 0} bug · {r.counts.warn ?? 0} warn · {r.counts.info ?? 0} info</span>
           {review.action ? <span className="chip">{review.action}</span> : null}
-          {!r.passed ? <button className="btn acc sm" style={{ marginLeft: "auto" }} onClick={onFix}>🔧 Fix findings</button> : null}
+          {r.findings.length ? <button className="btn acc sm" style={{ marginLeft: "auto" }} onClick={onFix}>🔧 Fix findings</button> : null}
         </div>
         {r.findings.length ? (
           <ul className="finding-list">

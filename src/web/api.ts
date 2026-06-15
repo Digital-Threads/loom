@@ -556,10 +556,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // ─── conductor (L13) ──────────────────────────────────────────────────────────
   // Drive the task per run_mode (manual parks, gated stops at gate=1, autopilot
   // runs through). run-stage runs the current stage (manual Run / gate approval).
-  app.post("/api/tasks/:id/advance", async (c) => {
+  // Auto-run forward per run_mode (gated stops at gates, autopilot runs through).
+  // Streamed via the run-manager so automatic mode shows live progress and can be
+  // reconnected to — returns { runId } immediately.
+  app.post("/api/tasks/:id/advance", (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json(await advanceTask(db, id, runners));
+    const projectId = projectActive()?.projectId ?? "default";
+    const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
+      streamSinks.set(id, ctx.appendOutput);
+      ctx.onInput((data) => {
+        const sid = getTaskSession(db, id).sessionId;
+        if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+      });
+      try {
+        const res = await advanceTask(db, id, runners);
+        return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt };
+      } finally {
+        streamSinks.delete(id);
+      }
+    });
+    return c.json({ runId });
   });
   app.post("/api/tasks/:id/run-stage", async (c) => {
     const id = c.req.param("id");

@@ -233,7 +233,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),
     // L13 — conductor
     advance: (id: string) =>
-      postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/advance`, {}, f),
+      postJson<{ runId: string }>(`${base}/api/tasks/${id}/advance`, {}, f).then((d) => d.runId),
     runStageNext: (id: string) =>
       postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/run-stage`, {}, f),
     // L14 — PR / Done

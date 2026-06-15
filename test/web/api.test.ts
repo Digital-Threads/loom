@@ -215,10 +215,14 @@ describe("web api", () => {
     startTask(db, "tc");
     const ran: string[] = [];
     const mk = (k: string) => async () => { ran.push(k); return { ok: true }; };
-    const app2 = createApi(db, { runners: { analysis: mk("analysis"), impl: mk("impl"), done: mk("done") } });
-    const r = (await (await app2.request("/api/tasks/tc/advance", { method: "POST" })).json()) as { ran: string[]; stoppedAt: string | null };
-    expect(r.ran).toEqual(["analysis", "impl", "done"]);
-    expect(r.stoppedAt).toBeNull();
+    const rm = createRunManager();
+    const app2 = createApi(db, { runManager: rm, runners: { analysis: mk("analysis"), impl: mk("impl"), done: mk("done") } });
+    const { runId } = (await (await app2.request("/api/tasks/tc/advance", { method: "POST" })).json()) as { runId: string };
+    const rec = await rm.wait(runId); // advance streams via the run-manager now
+    const res = rec.result as { ran: string[]; stoppedAt: string | null };
+    expect(res.ran).toEqual(["analysis", "impl", "done"]);
+    expect(res.stoppedAt).toBeNull();
+    expect(ran).toEqual(["analysis", "impl", "done"]);
   });
 
   // ── PR / Done (L14) ──

@@ -211,7 +211,7 @@ export function TaskView({
                   {activeStatus === "active" ? (
                     <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode" onClick={async () => { await client.advance(taskId); refreshAndFollow(); onChanged?.(); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch(() => {}); }}>▶▶ Advance</button>
                 </>
               ) : null}
               {task.repo ? (
