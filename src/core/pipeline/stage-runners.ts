@@ -95,11 +95,18 @@ export async function brainstormTurn(
   return question;
 }
 
+/** The agent emits this (as its whole reply) once it has enough to write the
+ *  spec — the UI watches for it to offer "move to spec". */
+export const BRAINSTORM_READY = "READY";
+
 export function brainstormPrompt(history: string): string {
   return [
     "You are running a brainstorming dialog, ONE question at a time.",
-    "Given the conversation so far, ask the single most useful next question.",
-    "Return only the question text, no preamble.",
+    "Ask the single most useful next question to pin down the task.",
+    "When you already have ENOUGH to write a clear spec, do NOT ask another question —",
+    `instead reply with exactly: ${BRAINSTORM_READY} — <one short sentence on why it's clear enough>.`,
+    "Keep the dialog short: stop as soon as the goal, scope and constraints are clear.",
+    "Return only the question (or the READY line), no preamble.",
     "",
     "CONVERSATION:",
     history || "(empty)",

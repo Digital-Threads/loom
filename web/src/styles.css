@@ -193,3 +193,6 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
 .turn-out{padding:11px 12px;white-space:pre-wrap;font-size:13px;line-height:1.55;color:var(--txt);max-height:340px;overflow:auto}
 .turn-out.mono{font:12px/1.5 ui-monospace,Menlo,monospace;color:#c8d3e0}
 .turn-live{border-color:rgba(91,155,255,.35)}
+.ready-note{display:flex;flex-direction:column;gap:4px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:9px;padding:10px 13px;margin:12px 0 10px;font-size:13px;color:var(--txt)}
+.ready-note .ok-dot{margin-right:6px}
+.ready-reason{color:var(--mut);font-size:12px}
