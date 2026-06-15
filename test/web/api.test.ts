@@ -566,6 +566,33 @@ describe("web api — fs browse + PR connector", () => {
     expect((await transcriptOf(a, "rv")).some((t) => t.stage === "review" && /edge case X/.test(t.output))).toBe(true);
   });
 
+  it("review fix moves to impl, re-reviews, and returns to review (clean)", async () => {
+    createTask(database, { id: "rf", title: "RF", run_mode: "manual" });
+    const rm = createRunManager();
+    let calls = 0;
+    const a = createApi(database, {
+      runManager: rm,
+      stageAgent: async () => "исправил\nИТОГ: ГОТОВО",
+      reviewPass: (key) => ({ key, run: async () => (calls++ === 0 ? [{ pass: key, severity: "bug" as const, message: "boom" }] : []) }),
+    });
+    await a.request("/api/tasks/rf/start", { method: "POST" });
+    await a.request("/api/tasks/rf/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const r1 = (await (await a.request("/api/tasks/rf/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(r1.runId); // first review finds a bug → parks on review
+    const r2 = (await (await a.request("/api/tasks/rf/review/fix", { method: "POST" })).json()) as { runId: string };
+    await rm.wait(r2.runId);
+    const stages = (await (await a.request("/api/tasks/rf")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active"); // back on review
+    const rev = (await (await a.request("/api/tasks/rf/review")).json()) as { result: { passed: boolean } };
+    expect(rev.result.passed).toBe(true); // re-review came back clean
+  });
+
+  it("review fix with no findings → 400", async () => {
+    createTask(database, { id: "rf0", title: "RF0" });
+    const a = createApi(database);
+    expect((await a.request("/api/tasks/rf0/review/fix", { method: "POST" })).status).toBe(400);
+  });
+
   it("qa run leaves a readable turn (check results visible)", async () => {
     createTask(database, { id: "qa1", title: "QA", run_mode: "manual" });
     const rm = createRunManager();

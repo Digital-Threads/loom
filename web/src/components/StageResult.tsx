@@ -9,11 +9,13 @@ export function StageResult({
   taskId,
   stage,
   reloadKey,
+  onFix,
 }: {
   client: LoomClient;
   taskId: string;
   stage: string;
   reloadKey: number;
+  onFix: () => void;
 }) {
   const [review, setReview] = useState<{ result: ReviewResult | null; action?: string } | null>(null);
   const [qa, setQa] = useState<QaResult | null>(null);
@@ -33,6 +35,7 @@ export function StageResult({
           <span className={`badge ${r.passed ? "badge-ok" : "badge-warn"}`}>{r.passed ? "passed" : "blockers"}</span>
           <span className="result-counts">{r.counts.bug ?? 0} bug · {r.counts.warn ?? 0} warn · {r.counts.info ?? 0} info</span>
           {review.action ? <span className="chip">{review.action}</span> : null}
+          {!r.passed ? <button className="btn acc sm" style={{ marginLeft: "auto" }} onClick={onFix}>🔧 Fix findings</button> : null}
         </div>
         {r.findings.length ? (
           <ul className="finding-list">

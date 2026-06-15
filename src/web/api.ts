@@ -730,6 +730,36 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "review", "review-result", payload);
     return c.json(payload);
   });
+  // Fix the findings from the last review. The fix IS implementation work, so the
+  // task moves back to the implementation stage while the agent fixes (board shows
+  // it there), then we re-review and move back to review. Streams into the
+  // transcript (→ SSE); stops on review for the user to approve. Returns { runId }.
+  app.post("/api/tasks/:id/review/fix", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const stored = loadResult<{ result: { findings: { severity: string; message: string; file?: string }[] } }>(id, "review-result");
+    const findings = stored?.result?.findings ?? [];
+    if (!findings.length) return c.json({ error: "no findings to fix" }, 400);
+    const projectId = projectActive()?.projectId ?? "default";
+    const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
+      streamSinks.set(id, ctx.appendOutput);
+      try {
+        moveToStage(db, id, "impl"); // back to implementation: the card shows the fix is dev work
+        const list = findings.map((f) => `- [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
+        await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`); // sessionSend records the turn
+        const t = getTask(db, id);
+        if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
+        const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id))); // re-review
+        saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
+        recordTurn(id, "review", "Re-review after fixes", fmtReview(res));
+        moveToStage(db, id, "review"); // back to review for the user to see the result + approve
+        return { outcome: { ok: res.passed } };
+      } finally {
+        streamSinks.delete(id);
+      }
+    });
+    return c.json({ runId });
+  });
   app.post("/api/tasks/:id/qa/run", async (c) => {
     const id = c.req.param("id");
     const t = getTask(db, id);

@@ -194,6 +194,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ result: ReviewResult; action: string }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
     reviewGet: (id: string) =>
       getJson<{ result: ReviewResult | null; action?: string }>(`${base}/api/tasks/${id}/review`, f),
+    // agent fixes the review findings in-session, then auto re-reviews (streamed)
+    reviewFix: (id: string) =>
+      postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
     qaGet: (id: string) =>

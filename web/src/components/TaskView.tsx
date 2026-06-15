@@ -209,7 +209,7 @@ export function TaskView({
 
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
-          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} />
+          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={() => { setLive([]); client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch(() => {}); }} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>
 
