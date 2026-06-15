@@ -673,7 +673,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { tool?: unknown };
     const tool = typeof body.tool === "string" ? body.tool.trim() : "";
-    if (!tool) return c.json({ error: "tool required" }, 400);
+    // strict shape (e.g. "Read", "Bash(git *)", "mcp__x__y") — never a flag/argv
+    // smuggle like "--dangerously-skip-permissions".
+    if (!/^[A-Za-z][A-Za-z0-9_]*(\([^)\n]*\))?$/.test(tool)) return c.json({ error: "invalid tool" }, 400);
     const allowed = taskAllowed(id);
     if (!allowed.includes(tool)) setSetting(db, allowKey(id), [...allowed, tool]);
     return c.json({ allowed: taskAllowed(id) });

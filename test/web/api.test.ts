@@ -522,6 +522,12 @@ describe("web api — fs browse + PR connector", () => {
     const p2 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { denials: string[]; allowed: string[] };
     expect(p2.allowed).toContain("Bash"); // approved → in the allowlist
     expect(p2.denials).not.toContain("Bash"); // no longer pending
+
+    // argv smuggling rejected: a flag-shaped "tool" must not be persisted
+    const bad = await a.request("/api/tasks/pm/permissions/allow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: "--dangerously-skip-permissions" }) });
+    expect(bad.status).toBe(400);
+    const p3 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { allowed: string[] };
+    expect(p3.allowed).not.toContain("--dangerously-skip-permissions");
   });
 
   it("autopilot tasks bypass permissions; manual/gated do not", async () => {

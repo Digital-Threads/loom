@@ -57,10 +57,12 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
     // autopilot → full access (user-warned); manual/gated → safe allowlist, the
     // rest is denied and surfaced for approval in the UI.
+    // --allowedTools=<csv> as ONE arg so a value can never be read as a flag
+    // (defence against argv smuggling); endpoint also validates each tool's shape.
     const permArgs = bypassPermissions
       ? ["--dangerously-skip-permissions"]
       : allowedTools && allowedTools.length
-        ? ["--allowedTools", ...allowedTools]
+        ? [`--allowedTools=${allowedTools.join(",")}`]
         : [];
     const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
