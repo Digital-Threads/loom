@@ -201,6 +201,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ report: string | null }>(`${base}/api/tasks/${id}/impl`, f).then((d) => d.report),
     transcript: (id: string) =>
       getJson<{ turns: { stage: string; input: string; output: string }[] }>(`${base}/api/tasks/${id}/transcript`, f).then((d) => d.turns),
+    // free-form chat with the task's agent at any stage → streams a reply turn
+    chat: (id: string, message: string, stage?: string) =>
+      postJson<{ runId: string }>(`${base}/api/tasks/${id}/chat`, { message, stage }, f).then((d) => d.runId),
     permissions: (id: string) =>
       getJson<{ denials: string[]; allowed: string[] }>(`${base}/api/tasks/${id}/permissions`, f),
     permissionAllow: (id: string, tool: string) =>

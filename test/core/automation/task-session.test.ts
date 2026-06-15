@@ -72,6 +72,17 @@ describe("TaskSession (one session per task)", () => {
     expect(calls[1].prompt).toMatch(/token-pilot.*task-journal|task-journal/);
   });
 
+  it("raw send skips the stage wrapper (user chats with the agent verbatim)", async () => {
+    const { launcher, calls } = recordingLauncher();
+    const s = createTaskSession(db, "t1", { launcher });
+    await s.send("kick off", { stage: "analysis" }); // create the session first
+    await s.send("посмотри в файл X, ты ошибся в анализе", { raw: true });
+    // resumed → no preamble; raw → the message goes through verbatim, no "Стадия:" head
+    expect(calls[1].resume).toBe(true);
+    expect(calls[1].prompt).toBe("посмотри в файл X, ты ошибся в анализе");
+    expect(calls[1].prompt).not.toContain("Стадия");
+  });
+
   it("passes streamed chunks through to onChunk", async () => {
     const { launcher } = recordingLauncher();
     const s = createTaskSession(db, "t1", { launcher });

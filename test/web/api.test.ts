@@ -552,6 +552,32 @@ describe("web api — fs browse + PR connector", () => {
     expect(stages.stages.find((s) => s.stage_key === "rd")!.status).toBe("active");
   });
 
+  it("chat sends the message verbatim into the session and records a turn", async () => {
+    createTask(database, { id: "ch", title: "Chat", run_mode: "manual" });
+    let seenPrompt = "";
+    const sessionLauncher = {
+      run: async (p: string, opts: { onChunk?: (c: string) => void }) => { seenPrompt = p; opts.onChunk?.("reply"); return { text: "Понял, посмотрю файл X" }; },
+      denialsOf: () => [],
+    };
+    const rm = createRunManager();
+    const a = createApi(database, { sessionLauncher, runManager: rm });
+    const res = await a.request("/api/tasks/ch/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "ты ошибся, глянь файл X", stage: "analysis" }) });
+    const { runId } = (await res.json()) as { runId: string };
+    await rm.wait(runId);
+    expect(seenPrompt).toContain("ты ошибся, глянь файл X"); // verbatim, no stage wrapper
+    expect(seenPrompt).not.toContain("Стадия:");
+    expect(rm.get(runId)!.output.join("")).toContain("reply"); // streamed → SSE
+    const turns = (await (await a.request("/api/tasks/ch/transcript")).json()) as { turns: { output: string }[] };
+    expect(turns.turns.some((t) => t.output.includes("посмотрю файл X"))).toBe(true);
+  });
+
+  it("chat without a message → 400", async () => {
+    createTask(database, { id: "ch2", title: "Chat2" });
+    const a = createApi(database);
+    const res = await a.request("/api/tasks/ch2/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "  " }) });
+    expect(res.status).toBe(400);
+  });
+
   it("manual: safe allowlist passed, denials surfaced, approve widens the allowlist", async () => {
     createTask(database, { id: "pm", title: "Perm", run_mode: "manual" });
     let seenAllowed: string[] | undefined;

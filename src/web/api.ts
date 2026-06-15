@@ -166,7 +166,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Live output sinks per task: when a stage runs via the run-manager, its
   // session output streams here → run-manager record → SSE to the UI.
   const streamSinks = new Map<string, (chunk: string) => void>();
-  const sessionSend = async (id: string, stage: string, prompt: string): Promise<string> => {
+  const sessionSend = async (id: string, stage: string, prompt: string, opts?: { raw?: boolean }): Promise<string> => {
     if (deps.stageAgent) return deps.stageAgent(prompt);
     const t = getTask(db, id);
     const repoRoot = t?.repo || process.cwd();
@@ -174,6 +174,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const autopilot = t?.run_mode === "autopilot";
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
       stage,
+      raw: opts?.raw,
       cwd: taskCwd(id),
       env: spineEnv(ids),
       bypassPermissions: autopilot,
@@ -423,6 +424,34 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (current === null && stageKey !== "done") return c.json({ error: "unknown stage" }, 400);
     const runId = body.run === true ? startRun(id, stageKey) : undefined;
     return c.json({ current, runId });
+  });
+
+  // Free-form chat with the task's agent at ANY stage. The message goes verbatim
+  // into the task's ONE session (raw — no stage wrapper), so the user can answer
+  // the agent's questions or redirect it. Streams the reply into the transcript
+  // (→ SSE) and records it as a turn. Body: { message, stage? }. Returns runId.
+  app.post("/api/tasks/:id/chat", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { message?: unknown; stage?: unknown };
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) return c.json({ error: "message required" }, 400);
+    const stage = typeof body.stage === "string" && body.stage ? body.stage : "chat";
+    const projectId = projectActive()?.projectId ?? "default";
+    const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
+      streamSinks.set(id, ctx.appendOutput);
+      ctx.onInput((data) => {
+        const sid = getTaskSession(db, id).sessionId;
+        if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+      });
+      try {
+        const text = await sessionSend(id, stage, message, { raw: true });
+        return { outcome: { ok: true }, text };
+      } finally {
+        streamSinks.delete(id);
+      }
+    });
+    return c.json({ runId });
   });
 
   // ─── module actions (F1.5) ────────────────────────────────────────────────

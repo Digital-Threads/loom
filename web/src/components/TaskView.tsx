@@ -58,17 +58,20 @@ export function TaskView({
       .catch((e) => setErr(String(e)));
   }, [client, taskId, reload]);
 
+  // Attach an SSE stream of a run to the live transcript pane.
+  function attachStream(id: string) {
+    setRunId(id);
+    const es = new EventSource(client.runStreamUrl(id));
+    es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
+    es.addEventListener("status", () => { es.close(); setRunId(null); refreshLocal(); onChanged?.(); });
+    es.addEventListener("error", () => es.close());
+  }
+
   // Stream a live run of the current stage into the transcript.
   function runStageLive() {
     setLive([]);
     setRunId(null);
-    client.startRun(taskId, active).then((id) => {
-      setRunId(id);
-      const es = new EventSource(client.runStreamUrl(id));
-      es.addEventListener("event", (e) => setLive((l) => [...l, (e as MessageEvent).data]));
-      es.addEventListener("status", () => { es.close(); setRunId(null); refreshLocal(); onChanged?.(); });
-      es.addEventListener("error", () => es.close());
-    });
+    client.startRun(taskId, active).then(attachStream);
   }
 
   if (err) return <div className="empty">Error: {err}</div>;
@@ -79,20 +82,30 @@ export function TaskView({
   const activeStatus = detail.stages.find((s) => s.stage_key === active)?.status ?? "";
   const lastIdx = detail.stages.length - 1;
 
-  // Context input: answer the brainstorm, or intervene in a live run.
-  const inputMode: "brainstorm" | "intervene" | null = runId
+  // Context input: intervene in a live run, answer the brainstorm, or — at any
+  // other stage — chat with the agent freely (talk to it about its work).
+  const inputMode: "brainstorm" | "intervene" | "chat" | null = runId
     ? "intervene"
-    : active === "brainstorm" && task.status !== "done"
-      ? "brainstorm"
-      : null;
+    : task.status === "done" || task.status === "created"
+      ? null
+      : active === "brainstorm"
+        ? "brainstorm"
+        : "chat";
 
   async function submitInput() {
+    const text = input.trim();
     if (inputMode === "intervene" && runId) {
       client.sendStdin(runId, input + "\n");
       setInput("");
     } else if (inputMode === "brainstorm") {
       setBusy(true);
-      try { await client.brainstormMessage(taskId, input.trim() || undefined); setInput(""); refreshLocal(); }
+      try { await client.brainstormMessage(taskId, text || undefined); setInput(""); refreshLocal(); }
+      finally { setBusy(false); }
+    } else if (inputMode === "chat") {
+      if (!text) return;
+      setBusy(true);
+      setLive([]);
+      try { const id = await client.chat(taskId, text, active); setInput(""); attachStream(id); }
       finally { setBusy(false); }
     }
   }
@@ -161,11 +174,17 @@ export function TaskView({
             <input
               value={input}
               disabled={busy}
-              placeholder={inputMode === "intervene" ? "Intervene — send guidance to the live agent…" : "Answer the agent (or send empty to get the first question)…"}
+              placeholder={
+                inputMode === "intervene"
+                  ? "Intervene — send guidance to the live agent…"
+                  : inputMode === "brainstorm"
+                    ? "Answer the agent (or send empty to get the first question)…"
+                    : "Message the agent — answer it, correct it, or point it somewhere…"
+              }
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") submitInput(); }}
             />
-            <button className="btn acc" disabled={busy} onClick={submitInput}>{inputMode === "intervene" ? "Send" : "▶"}</button>
+            <button className="btn acc" disabled={busy} onClick={submitInput}>{inputMode === "brainstorm" ? "▶" : "Send"}</button>
           </div>
         ) : null}
 

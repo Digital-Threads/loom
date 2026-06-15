@@ -64,6 +64,9 @@ export function stageInstruction(stage: string | undefined, instruction: string)
 
 export interface SendOptions {
   stage?: string;
+  /** Send the message verbatim — skip the per-stage instruction wrapper. Used
+   *  for free-form chat where the user talks to the agent directly. */
+  raw?: boolean;
   cwd?: string;
   env?: Record<string, string>;
   bypassPermissions?: boolean;
@@ -105,7 +108,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
         await deps.compact({ sessionId, cwd: opts.cwd });
       }
 
-      const body = stageInstruction(opts.stage, instruction);
+      const body = opts.raw ? instruction : stageInstruction(opts.stage, instruction);
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
       const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk });
 
