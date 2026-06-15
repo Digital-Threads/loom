@@ -24,6 +24,7 @@
     "build": "tsc -p tsconfig.json && bun run build:web && bun run copy:manifests",
     "start": "bun dist/cli.js",
     "test": "vitest run",
+    "smoke:bun": "bun test/bun-smoke.mjs",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
