@@ -43,7 +43,7 @@ import {
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { createTaskSession, parseCompleteness, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
-import { getChatMessages, latestArtifact, createArtifact } from "../core/store/artifacts.js";
+import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
@@ -182,6 +182,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
     recordSessionCost(id, repoRoot);
     recordDenials(id);
+    saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
     return text;
   };
   const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
@@ -665,6 +666,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const a = latestArtifact(db, c.req.param("id"), "analysis");
     const text = a?.content ?? null; // the agent's full readable analysis
     return c.json({ result: text ? parseAnalysis(text) : null, text });
+  });
+  // Full session transcript: every turn (stage + input + the agent's output),
+  // in order — the live conversation of the task's one session.
+  app.get("/api/tasks/:id/transcript", (c) => {
+    const turns = getArtifacts(db, c.req.param("id"))
+      .filter((a) => a.kind === "turn")
+      .map((a) => {
+        let d: { input?: string; output?: string } = {};
+        try { d = JSON.parse(a.content); } catch { /* skip */ }
+        return { stage: a.stage, input: d.input ?? "", output: d.output ?? "" };
+      });
+    return c.json({ turns });
   });
   app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));

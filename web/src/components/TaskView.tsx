@@ -5,6 +5,7 @@ import { StageDialog } from "./StageDialog";
 import { ReviewQA } from "./ReviewQA";
 import { PrDone } from "./PrDone";
 import { Approvals } from "./Approvals";
+import { Transcript } from "./Transcript";
 
 // Short human description per stage — shown under the stage title.
 const STAGE_DESC: Record<string, string> = {
@@ -40,7 +41,6 @@ export function TaskView({
   const [active, setActive] = useState<string>("analysis");
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
-  const [stdin, setStdin] = useState("");
   const [planText, setPlanText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -148,22 +148,6 @@ export function TaskView({
                 <div className="state-empty">{active === "rd" ? "No plan yet — run R&D to decompose the task." : "Not implemented yet — run Implementation."}</div>
               )}
 
-              {runId ? (
-                <div className="term">
-                  <div className="term-head"><span className="dotc run" /> Live · {runId.slice(0, 12)}</div>
-                  <pre className="term-body">{live.length ? live.join("\n") : "starting…"}</pre>
-                  <div className="term-input">
-                    <input
-                      value={stdin}
-                      onChange={(e) => setStdin(e.target.value)}
-                      placeholder="Intervene — send guidance to the live agent…"
-                      onKeyDown={(e) => { if (e.key === "Enter" && stdin) { client.sendStdin(runId, stdin + "\n"); setStdin(""); } }}
-                    />
-                    <button className="btn sm" disabled={!stdin} onClick={() => { client.sendStdin(runId, stdin + "\n"); setStdin(""); }}>Send</button>
-                  </div>
-                </div>
-              ) : null}
-
               {stageSteps.length ? (
                 <div className="steps-list">
                   {stageSteps.map((step) => (
@@ -185,6 +169,8 @@ export function TaskView({
           ) : (
             <div className="state-empty">{task.description || "Stage content appears as the task progresses."}</div>
           )}
+
+          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={detail.stages.length} />
 
           <div className="cost-bar">
             <span className="cost-label">Cost</span>
