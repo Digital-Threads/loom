@@ -525,6 +525,14 @@ describe("web api — fs browse + PR connector", () => {
     expect(sym.status).toBe(403);
   });
 
+  it("GET /diff returns empty for a non-git repo (no crash)", async () => {
+    createTask(database, { id: "df", title: "Diff", repo: d }); // d is a plain dir, not a git repo
+    const a = createApi(database);
+    const r = (await (await a.request("/api/tasks/df/diff")).json()) as { diff: string; base: string | null };
+    expect(r.diff).toBe("");
+    expect(r.base).toBeNull();
+  });
+
   it("review/qa results persist and re-display via GET (stage history)", async () => {
     createTask(database, { id: "h1", title: "History" });
     const a = createApi(database, {

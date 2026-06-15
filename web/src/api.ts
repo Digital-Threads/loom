@@ -207,6 +207,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // read a file the agent produced (restricted to the task's repo) for the viewer
     readFile: (id: string, path: string) =>
       getJson<{ path: string; content: string }>(`${base}/api/tasks/${id}/file?path=${encodeURIComponent(path)}`, f),
+    // colored git diff of the task's work (whole worktree, or one file)
+    readDiff: (id: string, path?: string) =>
+      getJson<{ diff: string; base: string | null }>(`${base}/api/tasks/${id}/diff${path ? `?path=${encodeURIComponent(path)}` : ""}`, f),
     permissions: (id: string) =>
       getJson<{ denials: string[]; allowed: string[] }>(`${base}/api/tasks/${id}/permissions`, f),
     permissionAllow: (id: string, tool: string) =>

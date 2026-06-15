@@ -43,7 +43,7 @@ export function TaskView({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  const [openFile, setOpenFile] = useState<string | null>(null);
+  const [openFile, setOpenFile] = useState<{ path: string; mode: "file" | "diff" } | null>(null);
 
   const refreshLocal = () => setReload((r) => r + 1);
 
@@ -187,6 +187,9 @@ export function TaskView({
                   <button className="btn sm" title="Auto-run forward per run mode" onClick={async () => { await client.advance(taskId); refreshAndFollow(); onChanged?.(); }}>▶▶ Advance</button>
                 </>
               ) : null}
+              {task.repo ? (
+                <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
+              ) : null}
             </div>
           </div>
           <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>
@@ -195,7 +198,7 @@ export function TaskView({
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} />
-          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} onOpenFile={setOpenFile} />
+          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>
 
         {inputMode ? (
@@ -228,7 +231,7 @@ export function TaskView({
           )}
         </div>
       </section>
-      {openFile ? <DocPanel client={client} taskId={taskId} path={openFile} onClose={() => setOpenFile(null)} /> : null}
+      {openFile ? <DocPanel client={client} taskId={taskId} path={openFile.path} mode={openFile.mode} onClose={() => setOpenFile(null)} /> : null}
     </div>
   );
 }

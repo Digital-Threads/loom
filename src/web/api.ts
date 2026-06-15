@@ -783,6 +783,23 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return c.json({ error: "cannot read file" }, 404);
     }
   });
+  // Unified git diff of the task's work (whole worktree, or one file with ?path=)
+  // vs its base branch — for the in-app colored diff viewer.
+  app.get("/api/tasks/:id/diff", (c) => {
+    const id = c.req.param("id");
+    const t = getTask(db, id);
+    if (!t) return c.json({ error: "not found" }, 404);
+    const wt = taskCwd(id);
+    if (!wt || !isGitRepo(wt)) return c.json({ diff: "", base: null });
+    const exists = (ref: string) => realSh("git", ["rev-parse", "--verify", "--quiet", ref], wt).code === 0;
+    const base = [t.branch, "master", "main"].find((r): r is string => !!r && exists(r)) ?? null;
+    const rel = c.req.query("path");
+    const safeRel = typeof rel === "string" && rel && safeResolveAny([wt, t.repo].filter((r): r is string => !!r), rel) ? rel : undefined;
+    const args = ["diff", ...(base ? [base] : []), ...(safeRel ? ["--", safeRel] : [])];
+    const out = realSh("git", args, wt).stdout;
+    const diff = out.length > 400_000 ? `${out.slice(0, 400_000)}\n… (diff truncated)` : out;
+    return c.json({ diff, base });
+  });
   app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));
   app.get("/api/tasks/:id/rd", (c) => c.json(loadResult(c.req.param("id"), "rd-plan") ?? { plan: null }));
