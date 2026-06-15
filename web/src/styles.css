@@ -40,6 +40,8 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .top{min-height:52px;flex:0 0 auto;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel)}
 .burger{display:none;background:var(--chip);border:1px solid var(--line);color:var(--txt);width:36px;height:36px;border-radius:8px;font-size:16px;cursor:pointer}
 .top h1{font-size:15px;margin:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page-title{display:flex;flex-direction:column;gap:1px;min-width:0}
+.page-sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top .crumb{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .top .right{margin-left:auto;display:flex;gap:8px}
 .btn{background:var(--chip);border:1px solid var(--line);color:var(--txt);padding:8px 13px;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap}

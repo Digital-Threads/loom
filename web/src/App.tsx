@@ -31,6 +31,22 @@ const SECTION_TITLES: Record<string, string> = {
   settings: "Settings",
 };
 
+// One-line "what is this" per section, shown under the title so a screen reads
+// as intentional instead of a bare table.
+const SECTION_DESC: Record<string, string> = {
+  board: "Tasks as pipeline stages — drag a card onto a column to run that stage.",
+  projects: "Repositories Loom works in — switch the active project.",
+  accounts: "aimux subscriptions, sessions and health.",
+  tokens: "token-pilot usage — tokens spent and saved per session.",
+  memory: "task-journal reasoning — decisions, findings and rejections per task.",
+  connectors: "MCP servers passed into agent sessions — add, enable, test.",
+  knowledge: "Recall prior reasoning across projects — what was decided or rejected.",
+  skills: "Which skill backs each pipeline stage.",
+  layers: "Registered plugins, by category and capability.",
+  timeline: "Event stream, board totals and agent performance.",
+  settings: "Loom configuration.",
+};
+
 export function App() {
   const client = useMemo(() => createClient(), []);
   const [view, setView] = useState<string>("board");
@@ -77,7 +93,10 @@ export function App() {
               </span>
             </h1>
           ) : (
-            <h1>{SECTION_TITLES[view] ?? view}</h1>
+            <div className="page-title">
+              <h1>{SECTION_TITLES[view] ?? view}</h1>
+              {SECTION_DESC[view] ? <span className="page-sub">{SECTION_DESC[view]}</span> : null}
+            </div>
           )}
           {inTask ? <span className="crumb">  {taskId}</span> : <span className="crumb" />}
           {view === "board" && !inTask ? (
