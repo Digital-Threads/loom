@@ -6,6 +6,7 @@ import { Transcript } from "./Transcript";
 import { StageActions } from "./StageActions";
 import { StageResult } from "./StageResult";
 import { DocPanel } from "./DocPanel";
+import { CostBar } from "./CostBar";
 
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
@@ -247,16 +248,7 @@ export function TaskView({
           </div>
         ) : null}
 
-        <div className="cost-bar">
-          <span className="cost-label">Cost</span>
-          {costs.length ? (
-            costs.map((c, i) => (
-              <span className="cost-stat" key={i}><b>{c.value}{c.exact ? "" : " ≈"}</b> {c.source}/{c.metric}</span>
-            ))
-          ) : (
-            <span className="muted">—</span>
-          )}
-        </div>
+        <CostBar costs={costs} />
       </section>
       {openFile ? <DocPanel client={client} taskId={taskId} path={openFile.path} mode={openFile.mode} onClose={() => setOpenFile(null)} /> : null}
     </div>

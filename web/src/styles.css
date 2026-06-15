@@ -227,6 +227,12 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
 /* cost row — tabular numbers, cleaner divider */
 .cost-bar{border-top:1px solid var(--line)}
 .cost-stat b{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+.cost-spend{font-size:13px;color:var(--mut)}
+.cost-spend b{color:var(--ok);font-weight:700;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cost-tokens{font-size:12.5px;color:var(--mut)}
+.cost-tokens b{color:var(--txt);font-weight:650;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cost-saved{color:var(--dim)}
+.cost-approx{color:var(--dim)}
 
 /* ── session transcript ───────────────────────────────────────────────────── */
 .transcript{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
@@ -255,6 +261,20 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13.5px}h5.md-h,h6.md-h{font-size:12.5px
 .turn-live{border-color:rgba(91,155,255,.35)}
 .turn-reconnect{border-color:rgba(210,153,34,.45)}
 .turn-reconnect .turn-head{color:var(--warn)}
+/* live stream: prose blocks + collapsible tool-call groups */
+.livestream{padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:360px;overflow:auto}
+.live-text{margin:0;padding:3px 2px;white-space:pre-wrap;font:12px/1.5 ui-monospace,Menlo,monospace;color:#c8d3e0}
+.live-tool{font-size:12px}
+.live-tool-head{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:none;border:0;color:var(--txt);cursor:pointer;padding:3px 2px;font:inherit}
+.live-tool-head:disabled{cursor:default}
+.live-tool-arrow{color:var(--acc)}
+.live-tool-head b{font-weight:650}
+.live-tool-count{background:var(--chip);color:var(--mut);border-radius:20px;font-size:11px;font-weight:600;padding:0 7px}
+.live-tool-inline{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.live-tool-toggle{margin-left:auto;color:var(--dim);font-size:11px;white-space:nowrap}
+.live-tool-head:hover:not(:disabled) .live-tool-toggle{color:var(--acc)}
+.live-tool-calls{margin:2px 0 4px 18px;border-left:1px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:2px}
+.live-tool-call{font:11.5px/1.5 ui-monospace,Menlo,monospace;color:var(--mut);white-space:pre-wrap;word-break:break-all}
 .ready-note{display:flex;flex-direction:column;gap:4px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:9px;padding:10px 13px;margin:12px 0 10px;font-size:13px;color:var(--txt)}
 .ready-note .ok-dot{margin-right:6px}
 .ready-reason{color:var(--mut);font-size:12px}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type LoomClient, STAGE_LABELS } from "../api";
 import { Markdown } from "./Markdown";
+import { LiveStream } from "./LiveStream";
 import { filePaths } from "../paths";
 
 // The task's one live session as a single conversation: every turn (stage input
@@ -95,7 +96,11 @@ export function Transcript({
             <span className={`dotc ${reconnecting ? "wait" : "run"}`} />
             {reconnecting ? "reconnecting…" : <>working… {elapsed > 0 ? `${elapsed}s` : ""}</>}
           </div>
-          <pre className="turn-out mono">{live.length ? live.join("\n") : "The agent is starting — tool activity will appear here as it works…"}</pre>
+          {live.length ? (
+            <LiveStream lines={live} />
+          ) : (
+            <div className="muted">The agent is starting — tool activity will appear here as it works…</div>
+          )}
         </div>
       ) : null}
       <div ref={bottomRef} />
