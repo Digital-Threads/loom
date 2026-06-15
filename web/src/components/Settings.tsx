@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient } from "../api";
+import { StateView } from "./StateView";
 
 // D6.2 — Settings: default run_mode, token-pilot on/off, notifications on/off.
 // (Per-column flow defaults reuse the L6 flow-config; surfaced here later.)
@@ -14,8 +15,8 @@ export function Settings({ client }: { client: LoomClient }) {
     setS((cur) => ({ ...(cur ?? {}), [key]: value }));
   }
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!s) return <div className="empty">Loading…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!s) return <StateView kind="loading" />;
 
   const runMode = (s["run_mode"] as string) ?? "gated";
   const tokenPilot = (s["tokenPilot.enabled"] as boolean) ?? true;

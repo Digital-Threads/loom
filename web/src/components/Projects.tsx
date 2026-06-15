@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, ProjectEntry } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
+import { StateView } from "./StateView";
 
 // D3.5 — project registry: list projects, add by path, switch the active one.
 export function Projects({ client, onSwitched }: { client: LoomClient; onSwitched?: () => void }) {
@@ -29,7 +30,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     finally { setBusy(false); }
   }
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
+  if (err) return <StateView kind="error" msg={err} />;
 
   return (
     <div className="panel">
@@ -42,7 +43,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
         <DirectoryPicker client={client} onCancel={() => setPicking(false)} onPick={(p) => { setRoot(p); setPicking(false); }} />
       ) : null}
       {projects.length === 0 ? (
-        <div className="empty">No projects yet — add a repo path above.</div>
+        <StateView kind="empty" msg="No projects yet — add a repo path above." />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
           <thead><tr><th>Project</th><th>Root</th><th></th></tr></thead>

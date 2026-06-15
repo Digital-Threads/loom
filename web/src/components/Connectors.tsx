@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, McpServer } from "../api";
+import { StateView } from "./StateView";
 
 // D5.3 — Connectors (MCP): list/add/enable/test the MCP servers Loom passes
 // into agent sessions.
@@ -25,7 +26,7 @@ export function Connectors({ client }: { client: LoomClient }) {
     setStatus((m) => ({ ...m, [sid]: r.ok ? "ok" : r.error ?? "fail" }));
   }
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
+  if (err) return <StateView kind="error" msg={err} />;
 
   return (
     <div className="panel">
@@ -37,7 +38,7 @@ export function Connectors({ client }: { client: LoomClient }) {
       </div>
       {status.import ? <div className="muted">{status.import}</div> : null}
       {servers.length === 0 ? (
-        <div className="empty">No MCP servers yet.</div>
+        <StateView kind="empty" msg="No MCP servers yet." />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
           <thead><tr><th>Server</th><th>Command</th><th></th></tr></thead>

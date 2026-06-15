@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, LayerInfo } from "../api";
+import { StateView } from "./StateView";
 
 // L11.2 — Layers: registered plugins by category, capability badges.
 export function Layers({ client }: { client: LoomClient }) {
@@ -7,8 +8,8 @@ export function Layers({ client }: { client: LoomClient }) {
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { client.layers().then(setLayers).catch((e) => setErr(String(e))); }, [client]);
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!layers) return <div className="empty">Loading…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!layers) return <StateView kind="loading" />;
 
   return (
     <div className="panel">

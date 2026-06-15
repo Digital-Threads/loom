@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, WorkspaceData, HealthRow } from "../api";
+import { StateView } from "./StateView";
 
 // F1.2 — aimux accounts: subscriptions, sessions, health, with [Check health]
 // and [Set active] actions. Reads the aggregated 3-module workspace.
@@ -25,8 +26,8 @@ export function Accounts({ client }: { client: LoomClient }) {
     }
   }
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!ws) return <div className="empty">Loading…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!ws) return <StateView kind="loading" />;
   if (ws.subscriptions.length === 0 && ws.sessions.length === 0)
     return <div className="empty">No aimux subscriptions yet — add one to get started.</div>;
 

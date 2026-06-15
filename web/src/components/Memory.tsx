@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, WorkspaceData, MemoryDetail } from "../api";
+import { StateView } from "./StateView";
 
 // F1.4 — task-journal memory: list tj tasks, click to drill into a task's
 // decisions/findings/rejections.
@@ -19,10 +20,10 @@ export function Memory({ client }: { client: LoomClient }) {
     client.memoryTask(sel).then(setDetail).catch(() => setDetail(null));
   }, [client, sel]);
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!ws) return <div className="empty">Loading…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!ws) return <StateView kind="loading" />;
   if (ws.tasks.length === 0)
-    return <div className="empty">No task-journal tasks yet.</div>;
+    return <StateView kind="empty" msg="No task-journal tasks yet." />;
 
   return (
     <div className="split">
@@ -36,9 +37,9 @@ export function Memory({ client }: { client: LoomClient }) {
       </div>
       <div className="detail">
         {!sel ? (
-          <div className="empty">Pick a task to see its reasoning.</div>
+          <StateView kind="empty" msg="Pick a task to see its reasoning." />
         ) : !detail ? (
-          <div className="empty">Loading…</div>
+          <StateView kind="loading" />
         ) : (
           <>
             <h2>Decisions <span className="n">{detail.decisions.length}</span></h2>

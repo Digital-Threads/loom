@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, TimelineEvent, AgentPerf, FailureReason } from "../api";
+import { StateView } from "./StateView";
 
 // L9.5 — unified timeline (event stream) + board totals + agent performance.
 export function Timeline({ client }: { client: LoomClient }) {
@@ -15,8 +16,8 @@ export function Timeline({ client }: { client: LoomClient }) {
     client.agentMetrics().then((m) => { setAgents(m.agents); setFailures(m.failures); }).catch(() => {});
   }, [client]);
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!events) return <div className="empty">Loading…</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!events) return <StateView kind="loading" />;
 
   return (
     <div className="panel">

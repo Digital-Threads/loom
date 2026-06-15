@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, SkillSlot } from "../api";
 import { STAGE_LABELS } from "../api";
+import { StateView } from "./StateView";
 
 // L11.3 — Skills: which skill backs which pipeline stage slot.
 export function Skills({ client }: { client: LoomClient }) {
@@ -8,9 +9,9 @@ export function Skills({ client }: { client: LoomClient }) {
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { client.skills().then(setSlots).catch((e) => setErr(String(e))); }, [client]);
 
-  if (err) return <div className="empty">Can’t reach the core: {err}</div>;
-  if (!slots) return <div className="empty">Loading…</div>;
-  if (slots.length === 0) return <div className="empty">No skill slots contributed yet — layers register them via the contract.</div>;
+  if (err) return <StateView kind="error" msg={err} />;
+  if (!slots) return <StateView kind="loading" />;
+  if (slots.length === 0) return <StateView kind="empty" msg="No skill slots contributed yet — layers register them via the contract." />;
 
   return (
     <div className="panel">
