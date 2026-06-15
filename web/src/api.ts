@@ -198,6 +198,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ plan: string | null }>(`${base}/api/tasks/${id}/rd`, f).then((d) => d.plan),
     implGet: (id: string) =>
       getJson<{ report: string | null }>(`${base}/api/tasks/${id}/impl`, f).then((d) => d.report),
+    transcript: (id: string) =>
+      getJson<{ turns: { stage: string; input: string; output: string }[] }>(`${base}/api/tasks/${id}/transcript`, f).then((d) => d.turns),
     permissions: (id: string) =>
       getJson<{ denials: string[]; allowed: string[] }>(`${base}/api/tasks/${id}/permissions`, f),
     permissionAllow: (id: string, tool: string) =>
