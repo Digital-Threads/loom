@@ -1,6 +1,30 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, WorkspaceData, MemoryDetail } from "../api";
+import type { LoomClient, WorkspaceData, MemoryDetail, MemoryEntry } from "../api";
 import { StateView } from "./StateView";
+
+// One group of reasoning entries (decisions / findings / rejections) — the
+// actual text, not just a count.
+function MemGroup({ title, items, tone }: { title: string; items: MemoryEntry[]; tone?: string }) {
+  return (
+    <div className="mem-group">
+      <h2>{title} <span className="n">{items.length}</span></h2>
+      {items.length === 0 ? (
+        <div className="muted mem-none">none</div>
+      ) : (
+        items.map((e, i) => (
+          <div className={`mem-entry ${tone ?? ""}`} key={e.event_id ?? i}>
+            <div className="mem-text">{e.text}</div>
+            {e.timestamp ? (
+              <div className="mem-meta">
+                {new Date(e.timestamp).toLocaleString()}{e.source ? ` · ${e.source}` : ""}
+              </div>
+            ) : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
 // F1.4 — task-journal memory: list tj tasks, click to drill into a task's
 // decisions/findings/rejections.
@@ -42,9 +66,9 @@ export function Memory({ client }: { client: LoomClient }) {
           <StateView kind="loading" />
         ) : (
           <>
-            <h2>Decisions <span className="n">{detail.decisions.length}</span></h2>
-            <h2>Findings <span className="n">{detail.findings.length}</span></h2>
-            <h2>Rejections <span className="n">{detail.rejections.length}</span></h2>
+            <MemGroup title="Decisions" items={detail.decisions} />
+            <MemGroup title="Findings" items={detail.findings} />
+            <MemGroup title="Rejections" items={detail.rejections} tone="warn" />
           </>
         )}
       </div>

@@ -18,7 +18,7 @@ export function Layers({ client }: { client: LoomClient }) {
         <tbody>
           {layers.map((l) => (
             <tr key={l.id}>
-              <td>{l.title}<span className="crumb" style={{ marginLeft: 8 }}>{l.id}</span></td>
+              <td>{l.title}{l.id !== l.title ? <span className="crumb" style={{ marginLeft: 8 }}>{l.id}</span> : null}</td>
               <td>{l.category ?? "—"}</td>
               <td>
                 {l.executes ? <span className="chip ok" style={{ marginRight: 6 }}>execute</span> : null}

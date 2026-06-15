@@ -117,10 +117,18 @@ export interface WorkspaceData {
   errors: string[];
   projectId: string;
 }
+export interface MemoryEntry {
+  event_id?: string;
+  type?: string;
+  timestamp?: string;
+  text?: string;
+  source?: string;
+  [k: string]: unknown;
+}
 export interface MemoryDetail {
-  decisions: unknown[];
-  findings: unknown[];
-  rejections: unknown[];
+  decisions: MemoryEntry[];
+  findings: MemoryEntry[];
+  rejections: MemoryEntry[];
   [k: string]: unknown;
 }
 
