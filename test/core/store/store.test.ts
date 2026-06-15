@@ -30,6 +30,21 @@ afterEach(() => {
 });
 
 describe("core-store", () => {
+  it("self-heals an older store missing the session columns (no 500)", () => {
+    const p = join(dir, "old.db");
+    // build a v0-shaped tasks table WITHOUT the session columns + a row.
+    const seed = openStore(p);
+    seed.exec("DROP TABLE tasks");
+    seed.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, status TEXT, run_mode TEXT, route TEXT, repo TEXT, branch TEXT, description TEXT, created_at INTEGER, updated_at INTEGER)");
+    seed.prepare("INSERT INTO tasks (id,title,status,created_at,updated_at) VALUES ('t','Old','created',1,1)").run();
+    seed.close();
+    // reopen → ensureColumns must add session_id / session_started.
+    const db2 = openStore(p);
+    expect(() => setTaskSession(db2, "t", "sess-1")).not.toThrow(); // was the 500
+    expect(getTaskSession(db2, "t")).toEqual({ sessionId: "sess-1", started: true });
+    db2.close();
+  });
+
   it("a new task has no session yet (created on first stage call)", () => {
     createTask(db, { id: "ts0", title: "Sess" });
     expect(getTaskSession(db, "ts0")).toEqual({ sessionId: null, started: false });

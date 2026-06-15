@@ -39,11 +39,31 @@ export function storePath(projectId: string): string {
   return join(storeDir(), `${projectId}.db`);
 }
 
+/** Expected columns that may be missing on an older db (pre-live we evolve the
+ *  schema directly, no version chain). Add any that are absent — idempotent, so
+ *  the live schema always converges without breaking existing stores. */
+const ENSURE_COLUMNS: Record<string, Array<{ name: string; ddl: string }>> = {
+  tasks: [
+    { name: "session_id", ddl: "session_id TEXT" },
+    { name: "session_started", ddl: "session_started INTEGER NOT NULL DEFAULT 0" },
+  ],
+};
+
+function ensureColumns(db: Database.Database): void {
+  for (const [table, cols] of Object.entries(ENSURE_COLUMNS)) {
+    const have = new Set(
+      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name),
+    );
+    for (const c of cols) if (!have.has(c.name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${c.ddl}`);
+  }
+}
+
 export function openStore(path?: string, projectId?: string): Database.Database {
   const p = path ?? storePath(projectId ?? "default");
   mkdirSync(dirname(p), { recursive: true });
   const db = newDatabase(p);
   db.exec(CREATE_TABLES);
+  ensureColumns(db); // self-heal: add any columns missing on an older store
 
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
     | { value: string }
