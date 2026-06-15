@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
-import { getCosts } from "../core/store/execute.js";
+import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
@@ -274,7 +274,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const runners = deps.runners ?? defaultRunners;
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
-  const rm = deps.runManager ?? createRunManager();
+  // Durable runs: persist run records to the store so they survive a restart;
+  // mark any 'running' rows interrupted on boot (their process is gone).
+  if (!deps.runManager) reconcileInterruptedRuns(db);
+  const rm =
+    deps.runManager ??
+    createRunManager({
+      start: (rec) => {
+        if (rec.taskId) insertRun(db, { id: rec.runId, taskId: rec.taskId, sessionId: getTaskSession(db, rec.taskId).sessionId ?? undefined });
+      },
+      settle: (rec) => {
+        if (rec.taskId) completeRun(db, rec.runId, rec.status === "done" ? 0 : 1, rec.output.join("\n"), rec.error);
+      },
+    });
   // Run a single stage in the background, streaming the live session's output to
   // the run record (→ SSE). Intervene (stdin) injects guidance into the live
   // session mid-run. Returns a runId immediately.
@@ -282,7 +294,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     deps.startRun ??
     ((taskId: string, stageKey: string) => {
       const projectId = projectActive()?.projectId ?? "default";
-      return rm.start({ projectId }, async (ctx) => {
+      return rm.start({ projectId, taskId }, async (ctx) => {
         streamSinks.set(taskId, ctx.appendOutput);
         ctx.onInput((data) => {
           const sid = getTaskSession(db, taskId).sessionId;
