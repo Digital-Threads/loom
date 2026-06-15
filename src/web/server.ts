@@ -12,7 +12,7 @@ import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-i
 import type Database from "better-sqlite3";
 
 declare const Bun: {
-  serve(opts: { port: number; hostname?: string; fetch: (req: Request) => Response | Promise<Response> }): {
+  serve(opts: { port: number; hostname?: string; idleTimeout?: number; fetch: (req: Request) => Response | Promise<Response> }): {
     stop(): void;
     url: URL;
   };
@@ -51,5 +51,7 @@ export function serveApi(opts: ServeOptions = {}) {
     app.get("*", serveStatic({ path: join(root, "index.html") }));
   }
 
-  return Bun.serve({ port, hostname: opts.hostname ?? "127.0.0.1", fetch: app.fetch });
+  // idleTimeout 0 disables Bun's default 10s idle cutoff: SSE run streams stay
+  // open while the agent thinks (first output can take far longer than 10s).
+  return Bun.serve({ port, hostname: opts.hostname ?? "127.0.0.1", idleTimeout: 0, fetch: app.fetch });
 }
