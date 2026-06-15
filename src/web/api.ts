@@ -37,6 +37,7 @@ import {
   draftSpec,
   reviseSpec,
   acceptSpec,
+  parseAnalysis,
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
@@ -662,9 +663,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Stored stage results (history re-display when revisiting a completed stage).
   app.get("/api/tasks/:id/analysis", (c) => {
     const a = latestArtifact(db, c.req.param("id"), "analysis");
-    let result: unknown = null;
-    if (a) { try { result = JSON.parse(a.content); } catch { result = null; } }
-    return c.json({ result });
+    const text = a?.content ?? null; // the agent's full readable analysis
+    return c.json({ result: text ? parseAnalysis(text) : null, text });
   });
   app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));

@@ -35,7 +35,9 @@ export async function runAnalysis(
 ): Promise<AnalysisResult> {
   const raw = await agent(analysisPrompt(spec));
   const parsed = parseAnalysis(raw);
-  createArtifact(db, { id: id("art"), taskId, stage: "analysis", kind: "analysis", content: JSON.stringify(parsed) });
+  // store the agent's full readable analysis (the user reads this), not just the
+  // parsed class/route — the route is derived from the JSON line at the end.
+  createArtifact(db, { id: id("art"), taskId, stage: "analysis", kind: "analysis", content: raw });
   if (parsed.route.length) {
     db.prepare("UPDATE tasks SET route = ?, updated_at = ? WHERE id = ?").run(
       JSON.stringify(parsed.route),

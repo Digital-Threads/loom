@@ -154,3 +154,30 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacS
 .cost-bar{display:flex;align-items:center;gap:14px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
 .cost-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
 .cost-stat{font-size:12.5px;color:var(--mut)} .cost-stat b{color:var(--txt);font-weight:650}
+
+/* ── stage dialog: progress, results, chat ────────────────────────────────── */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.run-note{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13px;padding:12px 2px}
+.result-card{border:1px solid var(--line);border-radius:var(--r2);background:var(--panel2);overflow:hidden;margin-top:12px}
+.result-head{display:flex;align-items:center;gap:8px;padding:11px 13px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line)}
+.result-head b{color:var(--acc)}
+.ok-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(63,185,80,.15)}
+.route{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 13px}
+.route-step{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt);background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:3px 9px;text-transform:capitalize}
+.route-arrow{color:var(--dim);margin:0 1px}
+
+.chat{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow:auto;padding:2px}
+.bubble{max-width:82%;border-radius:10px;padding:9px 12px}
+.bubble-agent{align-self:flex-start;background:var(--panel2);border:1px solid var(--line)}
+.bubble-user{align-self:flex-end;background:rgba(91,155,255,.12);border:1px solid rgba(91,155,255,.28)}
+.bubble-role{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:3px}
+.bubble-text{font-size:13.5px;line-height:1.5;white-space:pre-wrap}
+.chat-input{display:flex;gap:8px;margin-top:12px}
+.chat-input input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:9px 11px;font:inherit;outline:none}
+.chat-input input:focus{border-color:var(--acc)}
+.chat-input input:disabled{opacity:.6}
+
+/* cost row — tabular numbers, cleaner divider */
+.cost-bar{border-top:1px solid var(--line)}
+.cost-stat b{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}

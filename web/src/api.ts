@@ -173,7 +173,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
     analysisGet: (id: string) =>
-      getJson<{ result: { class: string; route: string[] } | null }>(`${base}/api/tasks/${id}/analysis`, f).then((d) => d.result),
+      getJson<{ result: { class: string; route: string[] } | null; text: string | null }>(`${base}/api/tasks/${id}/analysis`, f),
     brainstormMessages: (id: string) =>
       getJson<{ messages: ChatMessage[] }>(`${base}/api/tasks/${id}/brainstorm/messages`, f).then((d) => d.messages),
     brainstormMessage: (id: string, message?: string) =>
