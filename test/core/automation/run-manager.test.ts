@@ -39,6 +39,18 @@ describe("run-manager (L4.3)", () => {
     expect(rm.childrenOf(parent).map((r) => r.runId).sort()).toEqual([child1, child2].sort());
   });
 
+  it("calls persist.start on start and persist.settle on settle (durable runs)", async () => {
+    const events: Array<[string, string]> = [];
+    const rm = createRunManager({
+      start: (rec) => events.push(["start", rec.status]),
+      settle: (rec) => events.push(["settle", rec.status]),
+    });
+    const runId = rm.start({ projectId: "p1", taskId: "t1", toBus: false }, async (ctx) => { ctx.appendOutput("x"); return 1; });
+    const rec = await rm.wait(runId);
+    expect(rec.taskId).toBe("t1");
+    expect(events).toEqual([["start", "running"], ["settle", "done"]]);
+  });
+
   it("delivers injected stdin to the registered onInput handler (loom-isd.13)", async () => {
     const rm = createRunManager();
     const received: string[] = [];

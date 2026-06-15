@@ -66,6 +66,15 @@ export function listRunsForTask(db: Database.Database, taskId: string): RunRow[]
     .all(taskId) as RunRow[];
 }
 
+/** On boot, any run still 'running' is from a process that died (restart/crash):
+ *  mark it interrupted so the board/history is honest. Returns the count fixed. */
+export function reconcileInterruptedRuns(db: Database.Database): number {
+  const res = db
+    .prepare("UPDATE runs SET status = 'interrupted', finished_at = ? WHERE status = 'running'")
+    .run(Date.now());
+  return res.changes ?? 0;
+}
+
 // ─── Cost rollup ────────────────────────────────────────────────────────────
 
 export interface CostRow {

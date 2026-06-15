@@ -17,6 +17,7 @@ export interface RunRecord<T = unknown> {
   runId: string;
   parentRunId?: string;
   projectId: string;
+  taskId?: string;
   status: RunStatus;
   events: LoomEvent[];
   output: string[];
@@ -27,8 +28,17 @@ export interface RunRecord<T = unknown> {
 export interface StartOptions {
   projectId: string;
   parentRunId?: string;
+  /** The task this run belongs to (for durable persistence). */
+  taskId?: string;
   /** Mirror emitted events to the file event bus (default true). */
   toBus?: boolean;
+}
+
+/** Optional durable persistence: called when a run starts and settles, so run
+ *  records survive a host restart (the live in-memory buffer otherwise is lost). */
+export interface RunPersist {
+  start(rec: RunRecord): void;
+  settle(rec: RunRecord): void;
 }
 
 /** The context a run task receives: an event sink and an output appender. */
@@ -56,7 +66,7 @@ function newRunId(): string {
   return `run_${randomBytes(8).toString("hex")}`;
 }
 
-export function createRunManager(): RunManager {
+export function createRunManager(persist?: RunPersist): RunManager {
   const runs = new Map<string, RunRecord>();
   const settled = new Map<string, Promise<RunRecord>>();
   const inputHandlers = new Map<string, (data: string) => void>();
@@ -68,11 +78,13 @@ export function createRunManager(): RunManager {
         runId,
         parentRunId: opts.parentRunId,
         projectId: opts.projectId,
+        taskId: opts.taskId,
         status: "running",
         events: [],
         output: [],
       };
       runs.set(runId, rec);
+      try { persist?.start(rec); } catch { /* persistence is best-effort */ }
 
       const bus = opts.toBus === false ? null : busSink(opts.projectId);
       const ctx: RunContext = {
@@ -97,7 +109,10 @@ export function createRunManager(): RunManager {
             rec.error = e instanceof Error ? e.message : String(e);
             return rec;
           })
-          .finally(() => inputHandlers.delete(runId)),
+          .finally(() => {
+            inputHandlers.delete(runId);
+            try { persist?.settle(rec); } catch { /* best-effort */ }
+          }),
       );
       return runId;
     },

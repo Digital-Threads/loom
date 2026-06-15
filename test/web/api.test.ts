@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../src/core/store/db.js";
+import { listRunsForTask, insertRun, reconcileInterruptedRuns } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { startTask } from "../../src/core/pipeline/engine.js";
 import { createApi } from "../../src/web/api.js";
@@ -486,6 +487,28 @@ describe("web api — fs browse + PR connector", () => {
     const qa = (await (await a.request("/api/tasks/h1/qa")).json()) as { result: { passed: boolean } | null };
     expect(review.result?.passed).toBe(true);
     expect(qa.result?.passed).toBe(true);
+  });
+
+  it("a stage run is persisted to the runs table (durable)", async () => {
+    createTask(database, { id: "dr", title: "Durable", run_mode: "manual" });
+    const sessionLauncher = { run: async () => ({ text: "{}" }), denialsOf: () => [] };
+    const a = createApi(database, { sessionLauncher }); // api's own persist-wired run-manager
+    await a.request("/api/tasks/dr/start", { method: "POST" });
+    await a.request("/api/tasks/dr/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "rd" }) });
+    const { runId } = (await (await a.request("/api/tasks/dr/stages/rd/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    let done = false;
+    for (let i = 0; i < 50 && !done; i++) {
+      await new Promise((r) => setTimeout(r, 5));
+      done = listRunsForTask(database, "dr").some((r) => r.id === runId && r.status === "done");
+    }
+    expect(done).toBe(true); // run row inserted on start + completed on settle
+  });
+
+  it("reconcileInterruptedRuns marks stale running rows interrupted on boot", () => {
+    createTask(database, { id: "rc", title: "Recon" });
+    insertRun(database, { id: "run_stale", taskId: "rc" }); // left 'running' by a dead process
+    expect(reconcileInterruptedRuns(database)).toBeGreaterThanOrEqual(1);
+    expect(listRunsForTask(database, "rc")[0].status).toBe("interrupted");
   });
 
   it("stage run streams the live session output into the run record", async () => {
