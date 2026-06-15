@@ -67,7 +67,7 @@ export function App() {
       <Sidebar client={client} view={inTask ? "" : view} onNav={nav} open={drawer} />
       <div className="main">
         <header className="top">
-          <button className="burger" onClick={() => setDrawer((d) => !d)}>
+          <button className="burger" aria-label="Toggle menu" aria-expanded={drawer} onClick={() => setDrawer((d) => !d)}>
             ☰
           </button>
           {inTask ? (
