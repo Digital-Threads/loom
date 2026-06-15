@@ -36,6 +36,13 @@ describe("L12.1 runAnalysis", () => {
     const r = await runAnalysis(db, "t1", "x", async () => "not json");
     expect(r.route.length).toBeGreaterThan(0);
   });
+  it("keeps the human prose analysis and parses the trailing JSON line", async () => {
+    const out = 'This is a chore: tidy the greet() helper in src/greet.ts. Low risk.\n{ "class": "chore", "route": ["analysis","impl","review","qa","done"] }';
+    const r = await runAnalysis(db, "t1", "tidy greet", async () => out);
+    expect(r.class).toBe("chore"); // parsed from the trailing JSON
+    expect(r.route).toEqual(["analysis", "impl", "review", "qa", "done"]);
+    expect(latestArtifact(db, "t1", "analysis")!.content).toContain("tidy the greet()"); // prose stored, not just JSON
+  });
 });
 
 describe("L12.2 brainstorm", () => {

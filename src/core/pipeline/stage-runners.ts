@@ -50,10 +50,15 @@ export async function runAnalysis(
 
 export function analysisPrompt(spec: string): string {
   return [
-    "Classify this task and propose the pipeline route it needs.",
-    `Valid stages: ${STAGE_KEYS.join(", ")}.`,
-    'Return ONLY JSON: { "class": "feature|bug|chore", "route": ["analysis", ...] }.',
-    "A bug may skip brainstorm/spec/rd. No prose.",
+    "Analyze this task for a developer who will READ your analysis.",
+    "Write a short, clear analysis in plain language:",
+    "- what the task actually is (in your words),",
+    "- where in the codebase it likely lands (files/areas),",
+    "- what's involved and any risks or open questions.",
+    "",
+    "Then, on the LAST line ONLY, output the machine routing as compact JSON:",
+    `{ "class": "feature|bug|chore", "route": [${STAGE_KEYS.map((s) => `"${s}"`).join(", ")}] }`,
+    "(a bug may skip brainstorm/spec/rd). The prose is for the human; the final JSON line is for the pipeline.",
     "",
     "TASK:",
     spec,
@@ -61,10 +66,13 @@ export function analysisPrompt(spec: string): string {
 }
 
 export function parseAnalysis(text: string): AnalysisResult {
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) return { class: "feature", route: [...STAGE_KEYS] };
+  // take the LAST flat {...} that carries "class" — so prose with braces above
+  // it doesn't break parsing.
+  const objs = text.match(/\{[^{}]*\}/g) ?? [];
+  const cand = [...objs].reverse().find((o) => o.includes('"class"'));
+  if (!cand) return { class: "feature", route: [...STAGE_KEYS] };
   try {
-    const o = JSON.parse(m[0]) as { class?: unknown; route?: unknown };
+    const o = JSON.parse(cand) as { class?: unknown; route?: unknown };
     const route = Array.isArray(o.route) ? o.route.filter((s): s is string => typeof s === "string" && KEYS.has(s)) : [];
     return {
       class: typeof o.class === "string" ? o.class : "feature",
