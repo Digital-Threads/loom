@@ -21,7 +21,7 @@ export function Timeline({ client }: { client: LoomClient }) {
 
   return (
     <div className="panel">
-      {board ? (
+      {board && (board.used || board.saved) ? (
         <div className="row" style={{ gap: 24 }}>
           <div><div className="grp">Spent</div><div className="big">{board.used.toLocaleString()}</div></div>
           <div><div className="grp">Saved ≈</div><div className="big">{board.saved.toLocaleString()}</div></div>
@@ -52,10 +52,14 @@ export function Timeline({ client }: { client: LoomClient }) {
         <div className="empty">No events yet — run a task to see its trail.</div>
       ) : (
         events.map((e, i) => (
-          <div className={`kv ${e.severity === "error" ? "warn" : ""}`} key={i}>
-            <b>{e.type}</b>
-            <span>
-              {e.source}{e.profileId ? ` · ${e.profileId}` : ""}{e.message ? ` · ${e.message}` : ""}
+          <div className={`tl-row ${e.severity === "error" ? "warn" : ""}`} key={i}>
+            <span className="tl-time mono" title={new Date(e.ts).toLocaleString()}>{new Date(e.ts).toLocaleTimeString()}</span>
+            <span className="tl-type">{e.type}</span>
+            <span className="tl-meta">
+              {e.source}
+              {e.taskId ? <span className="crumb"> · {e.taskId}</span> : null}
+              {e.profileId ? ` · ${e.profileId}` : ""}
+              {e.message ? ` · ${e.message}` : ""}
               {e.metrics ? ` · ${Object.entries(e.metrics).map(([k, v]) => `${k}=${v}`).join(" ")}` : ""}
             </span>
           </div>

@@ -36,6 +36,15 @@ export function Accounts({ client }: { client: LoomClient }) {
   const healthFor = (profile: string): HealthRow | undefined =>
     ws.health.find((h) => h.profile === profile);
 
+  // HealthReport has no boolean — derive it: a profile is healthy when nothing
+  // is broken, missing, or conflicting.
+  function healthState(h?: HealthRow): { cls: string; label: string } {
+    if (!h) return { cls: "warn", label: "unknown" };
+    const bad = (h.broken?.length ?? 0) + (h.missing?.length ?? 0) + (h.conflicts?.length ?? 0);
+    if (bad > 0) return { cls: "bad", label: `${bad} issue${bad > 1 ? "s" : ""}` };
+    return { cls: "ok", label: "healthy" };
+  }
+
   async function checkHealth() {
     setBusy(true);
     try {
@@ -67,19 +76,21 @@ export function Accounts({ client }: { client: LoomClient }) {
         </span>
       </div>
       <table className="tbl">
-        <thead><tr><th>Profile</th><th>Health</th><th></th></tr></thead>
+        <thead><tr><th>Profile</th><th>CLI</th><th>Health</th><th></th></tr></thead>
         <tbody>
           {ws.subscriptions.map((s) => {
-            const h = healthFor(s.profile);
+            const st = healthState(healthFor(s.name));
             return (
-              <tr key={s.profile}>
-                <td>{s.profile}</td>
+              <tr key={s.name}>
                 <td>
-                  <span className={`chip ${h?.ok ? "ok" : "warn"}`}>
-                    <span className="dotc" />{h?.ok ? "healthy" : "unknown"}
-                  </span>
+                  {s.name || <span className="muted">(unnamed)</span>}
+                  {s.isSource ? <span className="chip ok" style={{ marginLeft: 8 }}>source</span> : null}
                 </td>
-                <td><button className="btn" disabled={busy} onClick={() => setActive(s.profile)}>Set active</button></td>
+                <td className="crumb">{s.cli ?? "—"}</td>
+                <td>
+                  <span className={`chip ${st.cls}`}><span className="dotc" />{st.label}</span>
+                </td>
+                <td style={{ textAlign: "right" }}><button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button></td>
               </tr>
             );
           })}

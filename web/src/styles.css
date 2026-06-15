@@ -109,6 +109,13 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .pane .ph{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pane .pb{padding:16px;overflow:auto;flex:1}
 .kv{display:flex;gap:8px;margin:5px 0;flex-wrap:wrap}.kv b{color:var(--mut);min-width:120px;font-weight:500}
+/* timeline event row: time | type | meta — scannable, not a wall of text */
+.tl-row{display:grid;grid-template-columns:84px 130px 1fr;gap:10px;align-items:baseline;padding:5px 6px;border-radius:6px;font-size:13px}
+.tl-row:hover{background:var(--panel2)}
+.tl-row.warn{color:#ff8a80}
+.tl-time{color:var(--dim);font-size:11px}
+.tl-type{font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-meta{color:var(--mut);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tag{font-size:11px;color:var(--mut);background:var(--chip);padding:2px 8px;border-radius:6px}
 
 @media (max-width:820px){
