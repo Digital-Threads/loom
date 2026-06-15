@@ -839,6 +839,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ runId });
   });
 
+  // The task's currently-running run, if any — so returning to a task (reload,
+  // navigation) reconnects to the live stream instead of losing it.
+  app.get("/api/tasks/:id/active-run", (c) => {
+    const id = c.req.param("id");
+    const run = rm.list().find((r) => r.taskId === id && r.status === "running");
+    return c.json({ runId: run?.runId ?? null });
+  });
+
   // Inject stdin into a live run (loom-isd.13 — intervene in the session).
   app.post("/api/runs/:runId/stdin", async (c) => {
     const b = (await c.req.json().catch(() => ({}))) as { data?: unknown };
@@ -859,12 +867,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const runId = c.req.param("runId");
     return streamSSE(c, async (stream) => {
       let cursor = 0;
-      // Stream until the run settles (or the client disconnects).
+      let outCursor = 0;
+      // Stream until the run settles (or the client disconnects). Output starts at
+      // 0, so a client that (re)connects mid-run replays the whole buffer — this
+      // is how returning to a task picks the live run back up.
       for (;;) {
         const rec = rm.get(runId);
         if (!rec) {
           await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "unknown run" }) });
           return;
+        }
+        while (outCursor < rec.output.length) {
+          await stream.writeSSE({ event: "event", data: rec.output[outCursor] }); // agent's streamed text/tool activity
+          outCursor += 1;
         }
         while (cursor < rec.events.length) {
           await stream.writeSSE({ event: "event", data: JSON.stringify(rec.events[cursor]) });

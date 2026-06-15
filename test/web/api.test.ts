@@ -616,6 +616,21 @@ describe("web api — fs browse + PR connector", () => {
     expect(done).toBe(true); // run row inserted on start + completed on settle
   });
 
+  it("active-run returns the task's running run, then null once it settles", async () => {
+    createTask(database, { id: "ar", title: "AR" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const runId = rm.start({ projectId: "p", taskId: "ar", toBus: false }, async () => { await gate; return 0; });
+    const r1 = (await (await a.request("/api/tasks/ar/active-run")).json()) as { runId: string | null };
+    expect(r1.runId).toBe(runId);
+    release();
+    await rm.wait(runId);
+    const r2 = (await (await a.request("/api/tasks/ar/active-run")).json()) as { runId: string | null };
+    expect(r2.runId).toBeNull();
+  });
+
   it("reconcileInterruptedRuns marks stale running rows interrupted on boot", () => {
     createTask(database, { id: "rc", title: "Recon" });
     insertRun(database, { id: "run_stale", taskId: "rc" }); // left 'running' by a dead process

@@ -151,6 +151,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
     startRun: (taskId: string, stageKey: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${taskId}/stages/${stageKey}/run`, {}, f).then((d) => d.runId),
     runStreamUrl: (runId: string) => `${base}/api/runs/${runId}/stream`,
+    // the task's currently-running run (to reconnect after reload/navigation)
+    activeRun: (taskId: string) =>
+      getJson<{ runId: string | null }>(`${base}/api/tasks/${taskId}/active-run`, f).then((d) => d.runId),
     // loom-isd.13 — inject input into a live run (intervene)
     sendStdin: (runId: string, data: string) =>
       postJson<{ ok?: boolean; error?: string }>(`${base}/api/runs/${runId}/stdin`, { data }, f),

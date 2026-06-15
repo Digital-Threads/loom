@@ -102,6 +102,18 @@ export function TaskView({
     client.startRun(taskId, active).then((id) => attachStream(id, true));
   }
 
+  // Reconnect to a run that's still going when we (re)open the task — the stream
+  // replays its buffered output, so a run started before a reload/navigation is
+  // picked back up instead of looking lost.
+  useEffect(() => {
+    let cancelled = false;
+    client.activeRun(taskId).then((rid) => {
+      if (!cancelled && rid) { setLive([]); attachStream(rid, true); }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, taskId]);
+
   if (err) return <div className="empty">Error: {err}</div>;
   if (!detail) return <div className="state-loading">Loading task…</div>;
 
