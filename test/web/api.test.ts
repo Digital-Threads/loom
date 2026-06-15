@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../src/core/store/db.js";
@@ -519,6 +519,10 @@ describe("web api — fs browse + PR connector", () => {
     expect(bad.status).toBe(403);
     // missing path → 400
     expect((await a.request("/api/tasks/fr/file")).status).toBe(400);
+    // a symlink planted in the repo that points OUTSIDE it → 403 (realpath check)
+    symlinkSync("/etc/hostname", join(d, "escape.md"));
+    const sym = await a.request("/api/tasks/fr/file?path=escape.md");
+    expect(sym.status).toBe(403);
   });
 
   it("review/qa results persist and re-display via GET (stage history)", async () => {

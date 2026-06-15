@@ -51,7 +51,7 @@ import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
-import { safeResolveAny } from "../core/security/path-safety.js";
+import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { join as pathJoin } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
@@ -757,12 +757,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!rel) return c.json({ error: "path required" }, 400);
     const roots = [taskCwd(id), t.repo].filter((r): r is string => !!r);
     const abs = roots.length ? safeResolveAny(roots, rel) : null;
-    if (!abs) return c.json({ error: "path outside the task" }, 403);
+    // lexical check, then resolve symlinks and re-verify containment so a symlink
+    // planted in the repo can't read a file outside it.
+    const real = abs ? realContained(roots, abs) : null;
+    if (!real) return c.json({ error: "path outside the task" }, 403);
     try {
-      const st = statSync(abs);
+      const st = statSync(real);
       if (!st.isFile()) return c.json({ error: "not a file" }, 400);
       if (st.size > 512_000) return c.json({ error: "file too large to preview" }, 413);
-      return c.json({ path: rel, content: readFileSync(abs, "utf8") });
+      return c.json({ path: rel, content: readFileSync(real, "utf8") });
     } catch {
       return c.json({ error: "cannot read file" }, 404);
     }

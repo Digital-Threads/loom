@@ -3,6 +3,7 @@
 // via "../" or an absolute path elsewhere on disk.
 
 import { isAbsolute, resolve, sep } from "node:path";
+import { realpathSync } from "node:fs";
 
 /** Resolve `rel` against `root` and return the absolute path ONLY if it stays
  *  inside `root`; otherwise null. Defeats "../" traversal and absolute escapes
@@ -20,6 +21,23 @@ export function safeResolveAny(roots: string[], rel: string): string | null {
     if (!r) continue;
     const hit = safeResolve(r, rel);
     if (hit) return hit;
+  }
+  return null;
+}
+
+/** Resolve symlinks on `abs` and the roots, and verify the REAL path still sits
+ *  inside one of the roots. This defeats a symlink planted in the repo that
+ *  points outside it (the lexical safeResolve alone would miss that). Returns
+ *  the real path if contained, else null. */
+export function realContained(roots: string[], abs: string): string | null {
+  let realAbs: string;
+  try { realAbs = realpathSync(abs); } catch { return null; }
+  for (const r of roots) {
+    if (!r) continue;
+    try {
+      const realRoot = realpathSync(r);
+      if (realAbs === realRoot || realAbs.startsWith(realRoot + sep)) return realAbs;
+    } catch { /* root missing → skip */ }
   }
   return null;
 }
