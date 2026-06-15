@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type LoomClient, STAGE_LABELS } from "../api";
 import { Markdown } from "./Markdown";
+import { filePaths } from "../paths";
 
 // The task's one live session as a single conversation: every turn (stage input
 // + the agent's full output) in order, plus the live stream of the running turn.
@@ -11,12 +12,14 @@ export function Transcript({
   live,
   runId,
   reloadKey,
+  onOpenFile,
 }: {
   client: LoomClient;
   taskId: string;
   live: string[];
   runId: string | null;
   reloadKey: number;
+  onOpenFile: (path: string) => void;
 }) {
   const [turns, setTurns] = useState<{ stage: string; input: string; output: string }[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -38,6 +41,7 @@ export function Transcript({
         // instead of a plain turn, so the user knows it's time for the spec.
         const ready = t.stage === "brainstorm" && /^\s*READY\b/.test(t.output);
         const reason = ready ? t.output.replace(/^\s*READY\s*[—:-]?\s*/, "").trim() : "";
+        const files = filePaths(t.output);
         return (
           <div className="turn" key={i}>
             <div className="turn-head">
@@ -56,6 +60,13 @@ export function Transcript({
             ) : (
               <div className="turn-out">{t.output ? <Markdown text={t.output} /> : <span className="muted">(no output)</span>}</div>
             )}
+            {files.length ? (
+              <div className="turn-files">
+                {files.map((p) => (
+                  <button key={p} className="file-chip" title={`Open ${p}`} onClick={() => onOpenFile(p)}>📄 {p}</button>
+                ))}
+              </div>
+            ) : null}
           </div>
         );
       })}

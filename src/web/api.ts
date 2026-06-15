@@ -50,7 +50,8 @@ import { commitWorktree } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
+import { safeResolveAny } from "../core/security/path-safety.js";
 import { join as pathJoin } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
@@ -745,6 +746,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         return { stage: a.stage, input: d.input ?? "", output: d.output ?? "" };
       });
     return c.json({ turns });
+  });
+  // Read a file the agent produced/touched, for the in-app viewer. Restricted to
+  // the task's own roots (worktree + repo) — no path traversal, no arbitrary FS.
+  app.get("/api/tasks/:id/file", (c) => {
+    const id = c.req.param("id");
+    const t = getTask(db, id);
+    if (!t) return c.json({ error: "not found" }, 404);
+    const rel = c.req.query("path") ?? "";
+    if (!rel) return c.json({ error: "path required" }, 400);
+    const roots = [taskCwd(id), t.repo].filter((r): r is string => !!r);
+    const abs = roots.length ? safeResolveAny(roots, rel) : null;
+    if (!abs) return c.json({ error: "path outside the task" }, 403);
+    try {
+      const st = statSync(abs);
+      if (!st.isFile()) return c.json({ error: "not a file" }, 400);
+      if (st.size > 512_000) return c.json({ error: "file too large to preview" }, 413);
+      return c.json({ path: rel, content: readFileSync(abs, "utf8") });
+    } catch {
+      return c.json({ error: "cannot read file" }, 404);
+    }
   });
   app.get("/api/tasks/:id/review", (c) => c.json(loadResult(c.req.param("id"), "review-result") ?? { result: null }));
   app.get("/api/tasks/:id/qa", (c) => c.json(loadResult(c.req.param("id"), "qa-result") ?? { result: null }));

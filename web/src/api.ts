@@ -204,6 +204,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // free-form chat with the task's agent at any stage → streams a reply turn
     chat: (id: string, message: string, stage?: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/chat`, { message, stage }, f).then((d) => d.runId),
+    // read a file the agent produced (restricted to the task's repo) for the viewer
+    readFile: (id: string, path: string) =>
+      getJson<{ path: string; content: string }>(`${base}/api/tasks/${id}/file?path=${encodeURIComponent(path)}`, f),
     permissions: (id: string) =>
       getJson<{ denials: string[]; allowed: string[] }>(`${base}/api/tasks/${id}/permissions`, f),
     permissionAllow: (id: string, tool: string) =>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../src/core/store/db.js";
@@ -505,6 +505,20 @@ describe("web api — fs browse + PR connector", () => {
   afterEach(() => {
     database.close();
     rmSync(d, { recursive: true, force: true });
+  });
+
+  it("GET /file reads a file inside the task repo; rejects traversal", async () => {
+    writeFileSync(join(d, "spec.md"), "# Hello\n\nbody");
+    createTask(database, { id: "fr", title: "FileRead", repo: d });
+    const a = createApi(database);
+    const ok = await a.request("/api/tasks/fr/file?path=spec.md");
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { content: string }).content).toContain("# Hello");
+    // traversal out of the repo → 403
+    const bad = await a.request(`/api/tasks/fr/file?path=${encodeURIComponent("../../etc/passwd")}`);
+    expect(bad.status).toBe(403);
+    // missing path → 400
+    expect((await a.request("/api/tasks/fr/file")).status).toBe(400);
   });
 
   it("review/qa results persist and re-display via GET (stage history)", async () => {

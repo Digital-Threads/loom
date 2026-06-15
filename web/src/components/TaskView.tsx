@@ -5,6 +5,7 @@ import { Approvals } from "./Approvals";
 import { Transcript } from "./Transcript";
 import { StageActions } from "./StageActions";
 import { StageResult } from "./StageResult";
+import { DocPanel } from "./DocPanel";
 
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
@@ -42,6 +43,7 @@ export function TaskView({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  const [openFile, setOpenFile] = useState<string | null>(null);
 
   const refreshLocal = () => setReload((r) => r + 1);
 
@@ -193,7 +195,7 @@ export function TaskView({
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} />
-          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} />
+          <Transcript client={client} taskId={taskId} live={live} runId={runId} reloadKey={reload} onOpenFile={setOpenFile} />
         </div>
 
         {inputMode ? (
@@ -226,6 +228,7 @@ export function TaskView({
           )}
         </div>
       </section>
+      {openFile ? <DocPanel client={client} taskId={taskId} path={openFile} onClose={() => setOpenFile(null)} /> : null}
     </div>
   );
 }
