@@ -5,6 +5,7 @@
 // scrape the auth URL from its output, and feed the pasted code back to stdin.
 // On success the CLI writes .credentials.json into the profile dir → done.
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig, expandHome } from "@digital-threads/aimux/core";
@@ -69,10 +70,11 @@ export function createAuthManager(deps: AuthManagerDeps = {}) {
   const spawnAuth = deps.spawnAuth ?? defaultSpawn;
   const profilePathOf = deps.profilePath ?? defaultProfilePath;
   const credsExist = deps.credsExist ?? ((p) => !!p && existsSync(join(p, ".credentials.json")));
-  let seq = 0;
 
   function start(name: string): string {
-    const id = `auth-${++seq}-${name}`;
+    // Unguessable capability token (128-bit CSPRNG); the profile name is kept in
+    // the session map only, never in the id, so sessions aren't enumerable.
+    const id = `auth-${randomBytes(16).toString("hex")}`;
     const proc = spawnAuth(name); // throws on invalid name → caller maps to 400
     const s: AuthSession = { id, proc, buf: "", status: "starting", profilePath: profilePathOf(name) };
     sessions.set(id, s);
