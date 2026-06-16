@@ -43,7 +43,7 @@ import {
   parseAnalysis,
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
-import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
+// createAimuxStageAgent removed — review now runs in the task session
 import { createTaskSession, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
@@ -134,7 +134,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
   const search =
     deps.search ?? ((query: string) => askSearch(resolveProjectRoot(process.cwd()), query));
-  const stageAgent = deps.stageAgent ?? createAimuxStageAgent();
+  // In production, review runs through the task's session (stageAgentFor) so the
+  // agent has full context. Tests inject deps.reviewPass / deps.stageAgent to
+  // avoid spawning real processes.
+  // Build a review pass factory. Tests inject deps.reviewPass (sync mock);
+  // production runs review in the task's session so the agent has full context.
+  const makeReviewPass = (id: string, targetHint: string) => (key: string): ReviewPass => {
+    if (deps.reviewPass) return deps.reviewPass(key, targetHint);
+    if (deps.stageAgent) return { key, run: async () => parseFindings(key, await deps.stageAgent!(reviewPrompt(key, targetHint))) };
+    const agent = stageAgentFor(id, "review");
+    return { key, run: async () => parseFindings(key, await agent(reviewPrompt(key, targetHint))) };
+  };
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
@@ -207,12 +217,6 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, id);
     return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
   };
-  const reviewPass =
-    deps.reviewPass ??
-    ((key: string, target: string): ReviewPass => ({
-      key,
-      run: async () => parseFindings(key, await stageAgent(reviewPrompt(key, target))),
-    }));
   const isGitRepo = (p: string) => existsSync(pathJoin(p, ".git"));
   const realSh: Sh = (cmd, args, cwd) => {
     try {
@@ -300,7 +304,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { ok: true, needsAttention: true, note };
     },
     review: async (_d, id) => {
-      const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id)));
+      // Review runs IN THE TASK'S SESSION (same context, same worktree) so the
+      // agent sees the actual code and remembers what it implemented. The old
+      // one-shot stageAgent was a fresh process with no context and a static
+      // description as "target" — it produced the same findings every time.
+      const reviewTarget = `Review the CURRENT code changes in this worktree using the lens. You have full access to the code — read the relevant files and the diff. Focus on real bugs, not style.`;
+      const res = await runReview(resolveFlow("review"), makeReviewPass(id, reviewTarget));
       saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
       recordTurn(id, "review", "Review the implementation", fmtReview(res));
       // Hold on findings (not just blockers) so the user can Fix before QA — the
@@ -918,7 +927,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const body = (await c.req.json().catch(() => ({}))) as { mode?: unknown; passes?: unknown };
     const override = Array.isArray(body.passes) ? { passes: body.passes as string[] } : undefined;
     const keys = resolveFlow("review", undefined, override);
-    const result = await runReview(keys, (key) => reviewPass(key, taskSpec(id)));
+    const reviewTarget = `Review the CURRENT code changes in this worktree. Read the relevant files and the diff. Focus on real bugs, not style.`;
+    const result = await runReview(keys, makeReviewPass(id, reviewTarget));
     const mode = body.mode === "autofix" ? "autofix" : "triage";
     const payload = { result, action: reviewAction(result, mode) };
     saveResult(id, "review", "review-result", payload);
@@ -943,7 +953,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`); // sessionSend records the turn
         const t = getTask(db, id);
         if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
-        const res = await runReview(resolveFlow("review"), (k) => reviewPass(k, taskSpec(id))); // re-review
+        // Re-review in the task's session — the agent knows what it just fixed.
+        // Pass the prior findings so it verifies each one ("fixed or remaining?")
+        // instead of inventing new ones from scratch.
+        const priorList = findings.map((f) => `[${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
+        const reReviewTarget =
+          `You just fixed the issues listed below. Now re-review the CURRENT code. ` +
+          `For each prior finding, verify whether it's fixed. ` +
+          `Return ONLY a JSON array of findings that STILL REMAIN (not fixed). ` +
+          `Do NOT re-report fixed issues. Empty array if all fixed.\n\n` +
+          `PRIOR FINDINGS:\n${priorList}\n\nReturn JSON array only, no prose.`;
+        const res = await runReview(resolveFlow("review"), makeReviewPass(id, reReviewTarget)); // re-review
         saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
         recordTurn(id, "review", "Re-review after fixes", fmtReview(res));
         moveToStage(db, id, "review"); // back to review for the user to see the result + approve
