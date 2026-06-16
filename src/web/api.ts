@@ -200,6 +200,29 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "review", "review-result", payload);
     return payload;
   };
+
+  /** Fix ALL accumulated findings in one impl-session pass, then commit. Shared
+   *  by /review/fix (manual) and the autopilot review runner (auto-fix). */
+  const fixAllFindings = async (id: string, findings: Finding[]): Promise<void> => {
+    const list = findings.map((f) => `- [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
+    await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`);
+    const t = getTask(db, id);
+    if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
+  };
+
+  /** Re-review (fresh "self" pass, pipeline reset) verifying the prior findings
+   *  against the now-fixed code; returns only what still remains. */
+  const reReviewAfterFix = async (id: string, priorFindings: Finding[]): Promise<ReviewPayload> => {
+    const priorList = priorFindings.map((f) => `[${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
+    const reReviewTarget =
+      `You just fixed the issues listed below. Now re-review the CURRENT code. ` +
+      `For each prior finding, verify whether it's fixed. ` +
+      `Return ONLY a JSON array of findings that STILL REMAIN (not fixed). ` +
+      `Do NOT re-report fixed issues. Empty array if all fixed.\n\n` +
+      `PRIOR FINDINGS:\n${priorList}\n\nReturn JSON array only, no prose.`;
+    const verifyFindings = await makeReviewPass(id, reReviewTarget)("self").run();
+    return recordReviewer(id, "self", verifyFindings, { reset: true });
+  };
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
@@ -375,6 +398,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           payload = recordReviewer(id, REVIEWERS[i].key, findings, { reset: i === 0 });
         }
         recordTurn(id, "review", "Review (self → ralph → adversarial)", fmtReview(payload!.result));
+        // Autopilot fixes the accumulated findings once, then re-reviews — no
+        // human gate, so it must resolve the work rather than park on it.
+        if (payload!.result.findings.length) {
+          await fixAllFindings(id, payload!.result.findings);
+          payload = await reReviewAfterFix(id, payload!.result.findings);
+          recordTurn(id, "review", "Auto-fix + re-review (autopilot)", fmtReview(payload.result));
+        }
         return { ok: payload!.result.passed, needsAttention: reviewHolds(payload!.result, "autopilot") };
       }
       const findings = await runReviewer(id, REVIEWERS[0]);
@@ -1029,25 +1059,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       streamSinks.set(id, ctx.appendOutput);
       try {
         moveToStage(db, id, "impl"); // back to implementation: the card shows the fix is dev work
-        const list = findings.map((f) => `- [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
-        await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`); // sessionSend records the turn
-        const t = getTask(db, id);
-        if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
-        // Re-review in the task's session — the agent knows what it just fixed.
-        // Pass the prior findings so it verifies each one ("fixed or remaining?")
-        // instead of inventing new ones from scratch.
-        const priorList = findings.map((f) => `[${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
-        const reReviewTarget =
-          `You just fixed the issues listed below. Now re-review the CURRENT code. ` +
-          `For each prior finding, verify whether it's fixed. ` +
-          `Return ONLY a JSON array of findings that STILL REMAIN (not fixed). ` +
-          `Do NOT re-report fixed issues. Empty array if all fixed.\n\n` +
-          `PRIOR FINDINGS:\n${priorList}\n\nReturn JSON array only, no prose.`;
-        // Re-review as a fresh "self" pass (reset the pipeline): verify the prior
-        // findings against the now-fixed code. The user can re-run ralph /
-        // adversarial afterwards for another full sweep.
-        const verifyFindings = await makeReviewPass(id, reReviewTarget)("self").run();
-        const payload = recordReviewer(id, "self", verifyFindings, { reset: true });
+        await fixAllFindings(id, findings as Finding[]); // fix every accumulated finding at once
+        // Re-review (fresh "self" pass) verifying the prior findings; the user can
+        // re-run ralph / adversarial afterwards for another full sweep.
+        const payload = await reReviewAfterFix(id, findings as Finding[]);
         recordTurn(id, "review", "Re-review after fixes", fmtReview(payload.result));
         moveToStage(db, id, "review"); // back to review for the user to see the result + approve
         return { outcome: { ok: payload.result.passed } };

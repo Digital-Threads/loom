@@ -120,7 +120,10 @@ export function taskPack(projectRoot: string, id: string, mode: "compact" | "ful
     return execFileSync(
       "task-journal",
       ["pack", id, "--mode", mode],
-      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      // ignore stderr: an unknown task makes tj write "task not found" to stderr,
+      // which execFileSync would otherwise pass through to our console. We already
+      // degrade to "" on failure — the noise is not actionable.
+      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
     );
   } catch {
     return "";
@@ -136,7 +139,9 @@ export function taskPackByLoomId(projectRoot: string, boardTaskId: string, mode:
     return execFileSync(
       "task-journal",
       ["pack", "--external", `loom:${boardTaskId}`, "--mode", mode],
-      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      // ignore stderr (see taskPack): no linked journal → tj writes to stderr,
+      // which we'd otherwise echo. "" is the graceful "no journal yet" result.
+      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
     );
   } catch {
     return "";

@@ -597,22 +597,29 @@ describe("web api — fs browse + PR connector", () => {
     expect(rev.result.passed).toBe(true); // re-review came back clean
   });
 
-  it("autopilot review runs all three reviewers and accumulates findings", async () => {
+  it("autopilot review runs all three reviewers, then auto-fixes and re-reviews", async () => {
     createTask(database, { id: "rap", title: "RAP", run_mode: "autopilot" });
     const rm = createRunManager();
     const ran: string[] = [];
+    let sweep = 0; // first sweep finds; the re-review self pass comes back clean
     const a = createApi(database, {
       runManager: rm,
-      reviewPass: (key) => ({ key, run: async () => { ran.push(key); return key === "ralph" ? [{ pass: key, severity: "warn" as const, message: "loop found Y" }] : []; } }),
+      stageAgent: async () => "исправил\nИТОГ: ГОТОВО", // drives the auto-fix sessionSend
+      reviewPass: (key) => ({ key, run: async () => {
+        ran.push(key);
+        if (key === "adversarial") sweep = 1; // after the first full sweep, fixes land
+        return key === "ralph" && sweep === 0 ? [{ pass: key, severity: "warn" as const, message: "loop found Y" }] : [];
+      } }),
     });
     await a.request("/api/tasks/rap/start", { method: "POST" });
     await a.request("/api/tasks/rap/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
     const { runId } = (await (await a.request("/api/tasks/rap/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
     await rm.wait(runId);
-    expect(ran).toEqual(["self", "ralph", "adversarial"]); // all three, in order
+    // all three reviewers, then a 4th "self" verify pass after the auto-fix
+    expect(ran).toEqual(["self", "ralph", "adversarial", "self"]);
     const rev = (await (await a.request("/api/tasks/rap/review")).json()) as { result: { findings: unknown[] }; reviewersDone: string[] };
-    expect(rev.reviewersDone).toEqual(["self", "ralph", "adversarial"]);
-    expect(rev.result.findings.length).toBe(1); // ralph's finding accumulated
+    expect(rev.reviewersDone).toEqual(["self"]); // pipeline reset by the re-review
+    expect(rev.result.findings.length).toBe(0); // re-review came back clean
   });
 
   it("review fix with no findings → 400", async () => {
