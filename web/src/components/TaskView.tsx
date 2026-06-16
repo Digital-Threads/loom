@@ -52,6 +52,7 @@ export function TaskView({
   const [profiles, setProfiles] = useState<string[]>([]);
   const [activeProfile, setActiveProfile] = useState<string>("");
   const [projectName, setProjectName] = useState<string>("");
+  const [reviewFindings, setReviewFindings] = useState(0);
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
 
@@ -157,6 +158,20 @@ export function TaskView({
     setRunId(null);
     client.startRun(taskId, active).then((id) => attachStream(id, true)).catch((e) => toast.error(`Couldn’t start the stage: ${e}`));
   }
+
+  // Send the review findings back to the agent to fix (impl round-trip → re-review).
+  function fixFindings() {
+    setLive([]);
+    client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the fix: ${e}`));
+  }
+
+  // How many review findings the current review produced — drives the header
+  // "Fix findings" action (shown only on the review stage when there's something
+  // to fix, since the result card itself scrolls out of view).
+  useEffect(() => {
+    if (active !== "review") { setReviewFindings(0); return; }
+    client.reviewGet(taskId).then((r) => setReviewFindings(r.result?.findings?.length ?? 0)).catch(() => setReviewFindings(0));
+  }, [client, taskId, active, reload]);
 
   // Reconnect to a run that's still going when we (re)open the task — the stream
   // replays its buffered output, so a run started before a reload/navigation is
@@ -282,6 +297,9 @@ export function TaskView({
               ) : task.status !== "done" ? (
                 <>
                   <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
+                  {active === "review" && reviewFindings > 0 ? (
+                    <button className="btn acc sm" title="Send the findings back to the agent to fix, then re-review" onClick={fixFindings}>🔧 Fix findings ({reviewFindings})</button>
+                  ) : null}
                   {activeStatus === "active" ? (
                     <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
@@ -298,7 +316,7 @@ export function TaskView({
 
         <div className="pb">
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
-          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={() => { setLive([]); client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the fix: ${e}`)); }} />
+          <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={fixFindings} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>
 
