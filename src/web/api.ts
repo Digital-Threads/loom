@@ -56,7 +56,7 @@ import { execFile } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { join as pathJoin, isAbsolute } from "node:path";
-import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
+import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -443,6 +443,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
   };
   const runners = deps.runners ?? defaultRunners;
+  // Cost-cap guard for the conductor: read the configured USD cap + the task's
+  // real aimux spend, so autopilot stops before a runaway bill (cap 0 = off).
+  const advanceOpts = (): AdvanceOptions => ({
+    costCapUsd: getSetting<number>(db, "cost.capUsd", 0),
+    spentUsd: (taskId: string) =>
+      getCosts(db, taskId)
+        .filter((r) => r.source === "aimux" && r.metric === "spent")
+        .reduce((sum, r) => sum + r.value, 0),
+  });
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
   // Durable runs: persist run records to the store so they survive a restart;
@@ -896,8 +905,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
       });
       try {
-        const res = await advanceTask(db, id, runners);
-        return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt };
+        const res = await advanceTask(db, id, runners, advanceOpts());
+        if (res.reason?.kind === "cost_cap") {
+          saveResult(id, res.stoppedAt ?? "advance", "stop-reason", res.reason); // surfaced as a banner
+          recordTurn(id, res.stoppedAt ?? "advance", "Cost cap", `Прогон остановлен: достигнут лимит стоимости $${res.reason.cap} (потрачено $${res.reason.spent?.toFixed(2)}).`);
+        }
+        return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {
         streamSinks.delete(id);
       }
@@ -907,7 +920,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/run-stage", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json(await runAndAdvance(db, id, runners));
+    return c.json(await runAndAdvance(db, id, runners, advanceOpts()));
   });
 
   // ─── PR / Done (L14) ──────────────────────────────────────────────────────────

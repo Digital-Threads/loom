@@ -60,7 +60,7 @@ export interface CostRow {
   value: number;
   exact: number;
 }
-export interface StopReason { kind: string; resetsAt?: string | null; profile?: string | null }
+export interface StopReason { kind: string; resetsAt?: string | null; profile?: string | null; cap?: number; spent?: number }
 export interface TaskDetail {
   task: TaskRow;
   stages: StageRow[];

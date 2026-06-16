@@ -38,6 +38,16 @@ export interface AdvanceResult {
   ran: string[];
   /** Where the task parked (null = reached done). */
   stoppedAt: string | null;
+  /** Why it stopped, when notable (e.g. the cost cap tripped). */
+  reason?: { kind: string; cap?: number; spent?: number };
+}
+
+export interface AdvanceOptions {
+  /** Stop before starting another stage once spend reaches this many USD
+   *  (0/undefined = no cap). Guards autopilot against runaway cost. */
+  costCapUsd?: number;
+  /** Current total USD spent on the task (injected; reads the cost rows). */
+  spentUsd?: (taskId: string) => number;
 }
 
 /**
@@ -51,6 +61,7 @@ export async function advanceTask(
   db: Database.Database,
   taskId: string,
   runners: RunnerRegistry,
+  opts: AdvanceOptions = {},
 ): Promise<AdvanceResult> {
   const task = getTask(db, taskId);
   const ran: string[] = [];
@@ -62,6 +73,14 @@ export async function advanceTask(
     if (!cur) return { ran, stoppedAt: null };
     if (mode === "manual") return { ran, stoppedAt: cur.stage_key };
     if (mode === "gated" && cur.gate === 1) return { ran, stoppedAt: cur.stage_key };
+
+    // Cost cap: stop before starting another (expensive) stage when over budget.
+    if (opts.costCapUsd && opts.spentUsd) {
+      const spent = opts.spentUsd(taskId);
+      if (spent >= opts.costCapUsd) {
+        return { ran, stoppedAt: cur.stage_key, reason: { kind: "cost_cap", cap: opts.costCapUsd, spent } };
+      }
+    }
 
     const { outcome, next } = await runStage(db, taskId, cur.stage_key, runners);
     ran.push(cur.stage_key);
@@ -76,6 +95,7 @@ export async function runAndAdvance(
   db: Database.Database,
   taskId: string,
   runners: RunnerRegistry,
+  opts: AdvanceOptions = {},
 ): Promise<AdvanceResult> {
   const cur = currentStage(getStages(db, taskId));
   if (!cur) return { ran: [], stoppedAt: null };
@@ -84,8 +104,8 @@ export async function runAndAdvance(
   if (!outcome.ok || outcome.needsAttention || next === cur.stage_key) {
     return { ran, stoppedAt: cur.stage_key };
   }
-  const rest = await advanceTask(db, taskId, runners);
-  return { ran: [...ran, ...rest.ran], stoppedAt: rest.stoppedAt };
+  const rest = await advanceTask(db, taskId, runners, opts);
+  return { ran: [...ran, ...rest.ran], stoppedAt: rest.stoppedAt, reason: rest.reason };
 }
 
 /** Toggle a stage gate on the fly. */

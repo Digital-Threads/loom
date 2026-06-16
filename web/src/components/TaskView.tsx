@@ -384,6 +384,11 @@ export function TaskView({
               ⚠ Прогон остановлен: лимит аккаунта{detail.stopReason.profile ? ` «${detail.stopReason.profile}»` : ""} исчерпан
               {detail.stopReason.resetsAt ? ` — сброс ${detail.stopReason.resetsAt}` : ""}. Смени аккаунт (выше) или подожди, затем ▶▶ Advance.
             </div>
+          ) : detail.stopReason?.kind === "cost_cap" ? (
+            <div className="banner banner-warn" role="status">
+              ⚠ Прогон остановлен: достигнут лимит стоимости ${detail.stopReason.cap}
+              {detail.stopReason.spent != null ? ` (потрачено $${detail.stopReason.spent.toFixed(2)})` : ""}. Подними лимит в Settings или ▶▶ Advance чтобы продолжить.
+            </div>
           ) : null}
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={fixFindings} />

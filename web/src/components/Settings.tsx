@@ -24,6 +24,7 @@ export function Settings({ client }: { client: LoomClient }) {
   const tokenPilot = (s["tokenPilot.enabled"] as boolean) ?? true;
   const notify = (s["notify.enabled"] as boolean) ?? true;
   const sandbox = (s["sandbox.enabled"] as boolean) ?? false;
+  const costCap = (s["cost.capUsd"] as number) ?? 0;
 
   return (
     <div className="panel">
@@ -33,6 +34,14 @@ export function Settings({ client }: { client: LoomClient }) {
           {(["manual", "gated", "autopilot"] as const).map((m) => (
             <button key={m} className={`btn ${runMode === m ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("run_mode", m)}>{m}</button>
           ))}
+        </span>
+      </div>
+      <div className="kv">
+        <b>Cost cap (per task, $)</b>
+        <span>
+          <input type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80 }}
+            onBlur={(e) => save("cost.capUsd", Number(e.target.value) || 0)} />
+          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = без лимита; autopilot остановится при достижении</span>
         </span>
       </div>
       <div className="kv">

@@ -65,4 +65,22 @@ describe("conductor (L13)", () => {
     expect(r.stoppedAt).toBe("impl");
     expect(getTask(db, "t1")?.status).not.toBe("done");
   });
+
+  it("cost cap: stops the pipeline when spend exceeds the cap", async () => {
+    createTask(db, { id: "tc", title: "Cap", route: ["analysis", "impl", "done"], run_mode: "autopilot" });
+    startTask(db, "tc");
+    const calls: string[] = [];
+    const runners: RunnerRegistry = {
+      analysis: async () => { calls.push("analysis"); return { ok: true }; },
+      impl: async () => { calls.push("impl"); return { ok: true }; },
+    };
+    const r = await advanceTask(db, "tc", runners, {
+      costCapUsd: 5,
+      spentUsd: () => 7.5, // already over
+    });
+    expect(calls).toEqual([]); // never even ran analysis
+    expect(r.stoppedAt).toBe("analysis");
+    expect(r.reason?.kind).toBe("cost_cap");
+    expect(r.reason?.cap).toBe(5);
+  });
 });
