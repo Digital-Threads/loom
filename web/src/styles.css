@@ -73,6 +73,12 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .mem-text{font-size:13px;line-height:1.5;color:var(--txt);white-space:pre-wrap}
 .mem-meta{font-size:11px;color:var(--dim);margin-top:5px}
 .big{font-size:24px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+/* dashboard stat cards + tabular numeric table cells (design-system helpers) */
+.stat-row{display:flex;flex-wrap:wrap;gap:12px}
+.stat{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:12px 14px}
+.stat-sub{font-size:12px;font-weight:500;color:var(--mut);margin-left:6px;letter-spacing:0}
+.tbl th.num,.tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl td.num{font-family:var(--mono);color:var(--txt)}
 /* text input shared by sections (matches the workspace input) */
 .inp{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 11px;font:inherit;font-size:13px;outline:none;min-width:180px}
 .inp:focus{border-color:var(--acc)}
