@@ -19,6 +19,7 @@ export function Board({
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  const [stopping, setStopping] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     client.board().then(setCols).catch((e) => setErr(String(e)));
@@ -64,6 +65,19 @@ export function Board({
       .finally(() => setDeleting((s) => { const n = new Set(s); n.delete(id); return n; }));
   }
 
+  // Stop button on a running card → stop the task's active run + live session,
+  // then refresh the board. stopPropagation keeps the click from opening the task.
+  function onStop(id: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (stopping.has(id)) return; // a request is already in flight for this card
+    setStopping((s) => new Set(s).add(id));
+    client
+      .stopTask(id)
+      .then(() => client.board().then(setCols))
+      .catch((er) => toast.error(`Couldn’t stop the task: ${er}`))
+      .finally(() => setStopping((s) => { const n = new Set(s); n.delete(id); return n; }));
+  }
+
   return (
     <div className="board">
       {cols.map((col) => (
@@ -97,6 +111,17 @@ export function Board({
                   >
                     🗑
                   </button>
+                  {card.status === "running" ? (
+                    <button
+                      className="card-stop"
+                      title="Stop task"
+                      aria-label="Stop task"
+                      disabled={stopping.has(card.id)}
+                      onClick={(e) => onStop(card.id, e)}
+                    >
+                      ⏹
+                    </button>
+                  ) : null}
                   <div className="t">{card.title}</div>
                   <div className="meta">
                     <span className={`chip ${statusClass(card.status)}`}>

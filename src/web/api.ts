@@ -650,6 +650,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ ok: true });
   });
 
+  // Stop the task's active run + its live session process. Idempotent: no active
+  // run → still { ok:true }. 404 only when the task itself is unknown.
+  app.post("/api/tasks/:id/stop", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const run = rm.list().find((r) => r.taskId === id && r.status === "running");
+    if (run) rm.stop(run.runId);
+    const sid = getTaskSession(db, id).sessionId;
+    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    return c.json({ ok: true });
+  });
+
   // Switch the subscription a task runs under. Body: { profile, resume? }.
   //  - resume omitted/true: mid-session switch — stop the live process, repoint
   //    the profile, then resume (--resume) under it with a "Continue" nudge
