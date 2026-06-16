@@ -14,6 +14,7 @@ import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
 import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
+import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
   listProjects,
   addProject,
@@ -126,6 +127,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
   const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
+  const authMgr = createAuthManager(); // in-UI profile authorization (aimux auth login via PTY)
   // One cwd for the whole task = its worktree (created once, reused by every
   // stage), so the live process edits in isolation. Non-git repos use the repo.
   const taskCwd = (id: string): string | undefined => {
@@ -576,6 +578,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
     const res = removeSubscription(b.name);
     return res.ok ? c.json(res) : c.json(res, 400);
+  });
+
+  // In-UI profile authorization (aimux auth login via a PTY). Start → poll status
+  // (returns the OAuth URL once it appears) → submit the pasted code. On success
+  // the CLI writes the profile's credentials → status "done".
+  app.post("/api/accounts/:name/auth/start", (c) => {
+    try {
+      return c.json({ authId: authMgr.start(c.req.param("name")) });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+  app.get("/api/accounts/auth/:authId", (c) => {
+    const v = authMgr.get(c.req.param("authId"));
+    return v ? c.json(v) : c.json({ error: "not found" }, 404);
+  });
+  app.post("/api/accounts/auth/:authId/code", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { code?: unknown };
+    const code = typeof b.code === "string" ? b.code : "";
+    if (!code) return c.json({ error: "code required" }, 400);
+    return authMgr.submitCode(c.req.param("authId"), code) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
   });
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.

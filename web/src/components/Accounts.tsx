@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, WorkspaceData, HealthRow, RateLimit } from "../api";
 import { StateView } from "./StateView";
+import { AuthModal } from "./AuthModal";
 import { toast } from "../toast";
 
 // Color a utilization % like aimux's status bar: green under 70, amber to 90, red above.
@@ -18,6 +19,7 @@ export function Accounts({ client }: { client: LoomClient }) {
   const [removeInput, setRemoveInput] = useState("");
   const [limits, setLimits] = useState<Record<string, RateLimit>>({});
   const [limitsLoading, setLimitsLoading] = useState(true);
+  const [authProfile, setAuthProfile] = useState<string | null>(null);
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
@@ -136,6 +138,9 @@ export function Accounts({ client }: { client: LoomClient }) {
                     : <span className="crumb">{limitsLoading ? "…" : "—"}</span>}
                 </td>
                 <td style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  {st.cls !== "ok" ? (
+                    <button className="btn acc" disabled={busy} title="Sign in to this subscription" onClick={() => setAuthProfile(s.name)}>Authorize</button>
+                  ) : null}
                   {active
                     ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
                     : <button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
@@ -189,6 +194,15 @@ export function Accounts({ client }: { client: LoomClient }) {
       ) : (
         <div className="empty">No sessions recorded.</div>
       )}
+
+      {authProfile ? (
+        <AuthModal
+          client={client}
+          profile={authProfile}
+          onClose={() => setAuthProfile(null)}
+          onDone={() => { client.accountsHealth().then((health) => setWs((w) => (w ? { ...w, health } : w))).catch(() => {}); }}
+        />
+      ) : null}
     </div>
   );
 }

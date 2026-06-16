@@ -108,6 +108,7 @@ export interface TokenUsageRow { sessionId: string; used: number; saved: number;
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
 export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
 export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
+export interface AuthView { status: "starting" | "awaiting_code" | "done" | "error"; url?: string; authorized: boolean; error?: string }
 export interface RateLimit {
   profile: string;
   fiveHourPct: number;
@@ -169,6 +170,12 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription`, { name, ...opts }, f),
     removeSubscription: (name: string) =>
       postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription/remove`, { name }, f),
+    authStart: (name: string) =>
+      postJson<{ authId: string }>(`${base}/api/accounts/${encodeURIComponent(name)}/auth/start`, {}, f).then((d) => d.authId),
+    authStatus: (authId: string) =>
+      getJson<AuthView>(`${base}/api/accounts/auth/${authId}`, f),
+    authCode: (authId: string, code: string) =>
+      postJson<{ ok: boolean }>(`${base}/api/accounts/auth/${authId}/code`, { code }, f),
     memoryTask: (id: string) =>
       getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
     // D3 — projects
