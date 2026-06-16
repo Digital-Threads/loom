@@ -120,8 +120,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
   // A project root must be an absolute, existing directory — guards against junk
-  // like a relative "app" that silently resolves to the server's cwd.
-  const validRoot = (r: string) => isAbsolute(r) && existsSync(r);
+  // like a relative "app" that silently resolves to the server's cwd. Only
+  // enforced with the real project store (injected addProject owns validation).
+  const validRoot = (r: string) => !!deps.addProject || (isAbsolute(r) && existsSync(r));
   // Backfill: tasks created before project_id → assign to the home project (this
   // server's db is its cwd project) so the cross-project board groups/filters them.
   try {
