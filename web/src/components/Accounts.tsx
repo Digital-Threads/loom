@@ -200,7 +200,12 @@ export function Accounts({ client }: { client: LoomClient }) {
           client={client}
           profile={authProfile}
           onClose={() => setAuthProfile(null)}
-          onDone={() => { client.accountsHealth().then((health) => setWs((w) => (w ? { ...w, health } : w))).catch(() => {}); }}
+          onDone={() => {
+            // Re-read the full workspace so authKind (Authorize button) + health update,
+            // and refresh limits — without a manual page reload.
+            client.workspace().then(setWs).catch(() => {});
+            client.accountLimits().then((ls) => setLimits(Object.fromEntries(ls.map((l) => [l.profile, l])))).catch(() => {});
+          }}
         />
       ) : null}
     </div>
