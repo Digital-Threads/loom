@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -181,6 +181,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       bypassPermissions: autopilot,
       allowedTools: autopilot ? undefined : allowedToolsFor(id),
       onChunk: streamSinks.get(id),
+      profile: t?.profile ?? undefined, // run under the task's current subscription
     });
     recordSessionCost(id, repoRoot);
     recordDenials(id);
@@ -425,8 +426,37 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       description: typeof body.description === "string" ? body.description : undefined,
       run_mode: typeof body.run_mode === "string" ? body.run_mode : undefined,
       route: Array.isArray(body.route) ? (body.route as string[]) : undefined,
+      profile: typeof body.profile === "string" && body.profile ? body.profile : (loadActiveProfile() ?? undefined),
     });
     return c.json({ task }, 201);
+  });
+
+  // Switch the subscription a task runs under, mid-session. The conversation is
+  // preserved: we stop the live process, repoint the task's profile, then resume
+  // (--resume) under the new profile with a "Continue" nudge. Streams into the
+  // transcript (→ SSE). Body: { profile }. Returns { runId }.
+  app.post("/api/tasks/:id/switch-profile", async (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { profile?: unknown };
+    const profile = typeof body.profile === "string" ? body.profile.trim() : "";
+    if (!profile) return c.json({ error: "profile required" }, 400);
+    const sid = getTaskSession(db, id).sessionId;
+    // Kill the live process so the next send respawns under the new profile.
+    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    setTaskProfile(db, id, profile);
+    const projectId = projectActive()?.projectId ?? "default";
+    const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
+      streamSinks.set(id, ctx.appendOutput);
+      try {
+        // raw resume of the same conversation under the new subscription
+        await sessionSend(id, "chat", "Continue — продолжай с того места, где остановился.", { raw: true });
+        return { outcome: { ok: true } };
+      } finally {
+        streamSinks.delete(id);
+      }
+    });
+    return c.json({ runId });
   });
 
   // Start a task (activate its first stage).

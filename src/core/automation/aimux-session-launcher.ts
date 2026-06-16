@@ -51,12 +51,12 @@ function emptyProc(): ProcLike {
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
-  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools }) => {
+  const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools, profile: runProfile }) => {
     const cfg = load();
-    // Which subscription runs this session: explicit dep → the user's active
-    // profile (Accounts → Set active) → first subscription. So "Set active"
-    // actually decides which account is billed, not just a cosmetic marker.
-    const profile = deps.profile ?? loadActiveProfile() ?? listSubscriptions()[0]?.name;
+    // Which subscription runs this session: the task's current profile (per-run,
+    // set at creation / changed by a mid-session switch) → explicit dep → the
+    // user's active profile (Accounts → Set active) → first subscription.
+    const profile = runProfile ?? deps.profile ?? loadActiveProfile() ?? listSubscriptions()[0]?.name;
     if (!cfg || !profile) return emptyProc();
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
     // autopilot → full access (user-warned); manual/gated → safe allowlist, the

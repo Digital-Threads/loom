@@ -46,6 +46,7 @@ const ENSURE_COLUMNS: Record<string, Array<{ name: string; ddl: string }>> = {
   tasks: [
     { name: "session_id", ddl: "session_id TEXT" },
     { name: "session_started", ddl: "session_started INTEGER NOT NULL DEFAULT 0" },
+    { name: "profile", ddl: "profile TEXT" },
   ],
 };
 
@@ -95,6 +96,7 @@ export interface TaskRow {
   repo: string | null;
   branch: string | null;
   description: string | null;
+  profile: string | null;
   session_id: string | null;
   session_started: number;
   created_at: number;
@@ -109,6 +111,7 @@ export interface CreateTaskInput {
   repo?: string;
   branch?: string;
   description?: string;
+  profile?: string;
 }
 
 export const STAGE_KEYS = [
@@ -127,8 +130,8 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
   const now = Date.now();
   const route = input.route ?? STAGE_KEYS.slice();
   db.prepare(
-    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, created_at, updated_at)
-     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, profile, created_at, updated_at)
+     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.id,
     input.title,
@@ -137,6 +140,7 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
     input.repo ?? null,
     input.branch ?? null,
     input.description ?? null,
+    input.profile ?? null,
     now,
     now,
   );
@@ -184,6 +188,13 @@ export function setTaskSession(db: Database.Database, id: string, sessionId: str
     Date.now(),
     id,
   );
+}
+
+/** Switch the subscription this task's session runs under. The sessionId is
+ *  unchanged — the caller re-launches with --resume so the conversation
+ *  continues under the new profile. */
+export function setTaskProfile(db: Database.Database, id: string, profile: string): void {
+  db.prepare("UPDATE tasks SET profile = ?, updated_at = ? WHERE id = ?").run(profile, Date.now(), id);
 }
 
 /** The task's session: its id and whether it has been created yet (resume vs new). */

@@ -24,6 +24,7 @@ export interface SpawnSessionOpts {
   env?: Record<string, string>; // spine env (LOOM_TASK_ID …) so plugin telemetry attributes to the task
   bypassPermissions?: boolean; // autopilot only — full access, user-warned at task creation
   allowedTools?: string[]; // manual/gated — safe set auto-allowed; the rest is denied (surfaced for approval)
+  profile?: string; // aimux subscription to run under (else the launcher's default)
 }
 export type SpawnSession = (opts: SpawnSessionOpts) => ProcLike;
 
@@ -98,11 +99,11 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
     l.proc.on("error", () => live.delete(sessionId));
   }
 
-  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined, allowedTools: string[] | undefined): Live {
+  function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined, allowedTools: string[] | undefined, profile: string | undefined): Live {
     const existing = live.get(sessionId);
     if (existing) return existing;
     // No live process: create (resume=false) or recover (resume=true).
-    const proc = deps.spawn({ sessionId, resume, cwd, env, bypassPermissions, allowedTools });
+    const proc = deps.spawn({ sessionId, resume, cwd, env, bypassPermissions, allowedTools, profile });
     const l: Live = { proc, buf: "", pending: null, cost: 0, denials: [] };
     live.set(sessionId, l);
     attach(sessionId, l);
@@ -111,7 +112,7 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
 
   return {
     async run(prompt, opts) {
-      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions, opts.allowedTools);
+      const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions, opts.allowedTools, opts.profile);
       l.onChunk = opts.onChunk;
       const text = await new Promise<string>((resolve) => {
         l.pending = resolve;

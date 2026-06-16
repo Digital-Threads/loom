@@ -14,7 +14,7 @@ import { getTaskSession, setTaskSession } from "../store/db.js";
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void },
+    opts: { sessionId: string; resume: boolean; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string },
   ): Promise<{ text: string }>;
 }
 
@@ -80,6 +80,8 @@ export interface SendOptions {
   bypassPermissions?: boolean;
   allowedTools?: string[];
   onChunk?: (chunk: string) => void;
+  /** aimux subscription to run this turn under (else the launcher's default). */
+  profile?: string;
 }
 
 export interface TaskSession {
@@ -118,7 +120,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
 
       const body = opts.raw ? instruction : stageInstruction(opts.stage, instruction);
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
-      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
 
       if (!resume) setTaskSession(db, taskId, sessionId); // created → next send resumes
       turns += 1;

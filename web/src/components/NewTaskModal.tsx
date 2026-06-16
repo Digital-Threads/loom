@@ -17,6 +17,8 @@ export function NewTaskModal({
   const [description, setDescription] = useState("");
   const [runMode, setRunMode] = useState("gated");
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [profiles, setProfiles] = useState<string[]>([]);
+  const [profile, setProfile] = useState("");
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -26,6 +28,11 @@ export function NewTaskModal({
       setProjects(d.projects);
       const active = d.projects.find((p) => p.projectId === d.active) ?? d.projects[0];
       if (active) setRepo(active.root);
+    }).catch(() => {});
+    // Subscriptions to choose which account the task runs under (default = active).
+    client.workspace().then((w) => {
+      setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean));
+      if (w.activeProfile) setProfile(w.activeProfile);
     }).catch(() => {});
   }, [client]);
 
@@ -43,6 +50,7 @@ export function NewTaskModal({
         branch: branch.trim() || undefined,
         description: description.trim() || undefined,
         run_mode: runMode,
+        profile: profile || undefined,
       });
       onCreated();
       onClose();
@@ -106,6 +114,17 @@ export function NewTaskModal({
               <option value="autopilot">Autopilot — run end-to-end</option>
             </select>
           </label>
+          {profiles.length ? (
+            <label className="fld">
+              <span>Account</span>
+              <select value={profile} onChange={(e) => setProfile(e.target.value)}>
+                {profiles.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <span className="fld-hint">Subscription this task runs under. You can switch it any time while it runs.</span>
+            </label>
+          ) : null}
           {runMode === "autopilot" ? (
             <div className="modal-warn" style={{ fontSize: 12, color: "var(--warn)" }}>
               ⚠ Autopilot grants the agent <b>full access</b> — it runs end-to-end without per-action approval. Use only on a repo you trust.

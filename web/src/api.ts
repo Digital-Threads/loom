@@ -26,6 +26,7 @@ export interface TaskRow {
   repo: string | null;
   branch: string | null;
   description: string | null;
+  profile?: string | null;
   session_id?: string | null;
   created_at: number;
   updated_at: number;
@@ -95,6 +96,7 @@ export interface NewTask {
   branch?: string;
   description?: string;
   run_mode?: string;
+  profile?: string;
 }
 
 // ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────
@@ -215,6 +217,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // agent fixes the review findings in-session, then auto re-reviews (streamed)
     reviewFix: (id: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),
+    switchProfile: (id: string, profile: string) =>
+      postJson<{ runId: string }>(`${base}/api/tasks/${id}/switch-profile`, { profile }, f).then((d) => d.runId),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
     qaGet: (id: string) =>
