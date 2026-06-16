@@ -309,6 +309,7 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .turn-reconnect .turn-head{color:var(--warn)}
 /* live stream: prose blocks + collapsible tool-call groups */
 .livestream{padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:360px;overflow:auto}
+.live-empty{padding:11px 12px;font-size:13px}
 .live-text{margin:0;padding:3px 2px;white-space:pre-wrap;font:12px/1.5 var(--mono);color:#c8d3e0}
 .live-tool{font-size:12px}
 .live-tool-head{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:none;border:0;color:var(--txt);cursor:pointer;padding:3px 2px;font:inherit}

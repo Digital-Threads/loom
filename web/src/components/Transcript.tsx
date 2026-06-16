@@ -99,7 +99,7 @@ export function Transcript({
           {live.length ? (
             <LiveStream lines={live} />
           ) : (
-            <div className="muted">The agent is starting — tool activity will appear here as it works…</div>
+            <div className="live-empty muted">The agent is starting — tool activity will appear here as it works…</div>
           )}
         </div>
       ) : null}

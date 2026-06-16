@@ -237,8 +237,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // agent fixes the review findings in-session, then auto re-reviews (streamed)
     reviewFix: (id: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),
-    switchProfile: (id: string, profile: string) =>
-      postJson<{ runId: string }>(`${base}/api/tasks/${id}/switch-profile`, { profile }, f).then((d) => d.runId),
+    switchProfile: (id: string, profile: string, resume = true) =>
+      postJson<{ runId?: string }>(`${base}/api/tasks/${id}/switch-profile`, { profile, resume }, f).then((d) => d.runId ?? null),
     tokensReport: (project?: string) =>
       getJson<TokensReport>(`${base}/api/tokens${project ? `?project=${encodeURIComponent(project)}` : ""}`, f),
     accountLimits: (profile?: string) =>

@@ -222,8 +222,14 @@ export function TaskView({
                     onChange={(e) => {
                       const p = e.target.value;
                       if (!p || p === effective) return;
-                      setLive([]);
-                      client.switchProfile(taskId, p).then((rid) => attachStream(rid, true)).catch((err) => toast.error(`Couldn’t switch account: ${err}`));
+                      // Mid-run → resume under the new account (Continue). Idle →
+                      // just pin it for the next run, no agent run.
+                      const live = !!runId;
+                      if (live) setLive([]);
+                      client.switchProfile(taskId, p, live).then((rid) => {
+                        if (rid) attachStream(rid, true);
+                        else { refreshLocal(); toast.success(`Account set to ${p} for this task`); }
+                      }).catch((err) => toast.error(`Couldn’t switch account: ${err}`));
                     }}
                   >
                     {!effective ? <option value="">account…</option> : null}
@@ -319,7 +325,7 @@ export function TaskView({
             setLimit(null);
             dismissedRef.current = "";
             setLive([]);
-            client.switchProfile(taskId, p).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t switch account: ${e}`));
+            client.switchProfile(taskId, p, true).then((rid) => { if (rid) attachStream(rid, true); }).catch((e) => toast.error(`Couldn’t switch account: ${e}`));
           }}
           onDismiss={() => { dismissedRef.current = limit.profile; setLimit(null); }}
         />

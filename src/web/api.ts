@@ -464,20 +464,24 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ task }, 201);
   });
 
-  // Switch the subscription a task runs under, mid-session. The conversation is
-  // preserved: we stop the live process, repoint the task's profile, then resume
-  // (--resume) under the new profile with a "Continue" nudge. Streams into the
-  // transcript (→ SSE). Body: { profile }. Returns { runId }.
+  // Switch the subscription a task runs under. Body: { profile, resume? }.
+  //  - resume omitted/true: mid-session switch — stop the live process, repoint
+  //    the profile, then resume (--resume) under it with a "Continue" nudge
+  //    (streams; returns { runId }). For the limits flow / a running task.
+  //  - resume:false: just pin the profile for the next run, no agent run
+  //    (returns { ok }). For changing the account on an idle task.
   app.post("/api/tasks/:id/switch-profile", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { profile?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { profile?: unknown; resume?: unknown };
     const profile = typeof body.profile === "string" ? body.profile.trim() : "";
     if (!profile) return c.json({ error: "profile required" }, 400);
+    const resume = body.resume !== false;
     const sid = getTaskSession(db, id).sessionId;
-    // Kill the live process so the next send respawns under the new profile.
+    // Kill any live process so the next send respawns under the new profile.
     (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
     setTaskProfile(db, id, profile);
+    if (!resume) return c.json({ ok: true });
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
       streamSinks.set(id, ctx.appendOutput);
