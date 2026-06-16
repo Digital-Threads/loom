@@ -21,4 +21,16 @@ describe("ensureWorktree (one worktree per task, idempotent)", () => {
     expect(wt).toEqual({ path: worktreePath("t1"), branch: worktreeBranch("t1") });
     expect(calls).toEqual([]); // no git invoked on reuse
   });
+
+  it("symlinks the repo's node_modules into a fresh worktree (deps without install)", () => {
+    const links: string[][] = [];
+    ensureWorktree("/repo", "t2", {
+      git: () => "",
+      // worktree itself absent; the repo's node_modules dirs present.
+      exists: (p) => p === "/repo/node_modules" || p === "/repo/web/node_modules",
+      link: (src, dst) => { links.push([src, dst]); },
+    });
+    expect(links.map((l) => l[0])).toEqual(["/repo/node_modules", "/repo/web/node_modules"]);
+    expect(links[0][1]).toBe(`${worktreePath("t2")}/node_modules`);
+  });
 });
