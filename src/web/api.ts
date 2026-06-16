@@ -13,7 +13,7 @@ import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
-import { addSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
+import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import {
   listProjects,
   addProject,
@@ -567,6 +567,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const b = (await c.req.json().catch(() => ({}))) as { name?: unknown; cli?: unknown; model?: unknown };
     if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
     const res = addSub(b.name, { cli: typeof b.cli === "string" ? b.cli : undefined, model: typeof b.model === "string" ? b.model : undefined });
+    return res.ok ? c.json(res) : c.json(res, 400);
+  });
+
+  // Remove an aimux subscription (non-source only). Body: { name }.
+  app.post("/api/accounts/subscription/remove", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: unknown };
+    if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
+    const res = removeSubscription(b.name);
     return res.ok ? c.json(res) : c.json(res, 400);
   });
 

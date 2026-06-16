@@ -2,6 +2,7 @@ import {
   loadConfig,
   saveConfig,
   addProfile,
+  removeProfile,
   checkAllProfiles,
   unifyAllSessions,
   launchProfile,
@@ -68,6 +69,18 @@ export function addSubscription(
     const cfg = loadConfig();
     if (!cfg) return { ok: false, error: "no aimux config" };
     const updated = addProfile(cfg, name, opts);
+    saveConfig(updated);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export function removeSubscription(name: string): AddSubscriptionResult {
+  try {
+    const cfg = loadConfig();
+    if (!cfg) return { ok: false, error: "no aimux config" };
+    const updated = removeProfile(cfg, name);
     saveConfig(updated);
     return { ok: true };
   } catch (e) {

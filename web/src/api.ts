@@ -167,6 +167,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ active: string }>(`${base}/api/accounts/active`, { profileId }, f).then((d) => d.active),
     addSubscription: (name: string, opts?: { cli?: string; model?: string }) =>
       postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription`, { name, ...opts }, f),
+    removeSubscription: (name: string) =>
+      postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription/remove`, { name }, f),
     memoryTask: (id: string) =>
       getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
     // D3 — projects
