@@ -60,11 +60,13 @@ export interface CostRow {
   value: number;
   exact: number;
 }
+export interface StopReason { kind: string; resetsAt?: string | null; profile?: string | null }
 export interface TaskDetail {
   task: TaskRow;
   stages: StageRow[];
   steps: StepRow[];
   costs: CostRow[];
+  stopReason?: StopReason | null;
 }
 
 export type Fetcher = typeof fetch;

@@ -51,6 +51,18 @@ export const TOOLS_ANCHOR =
   "(smart_read, read_symbol, read_for_edit, find_usages, smart_diff, smart_log, test_summary) — " +
   "НЕ Read/Grep/cat/raw-git. Решения, отклонения и находки фиксируй в task-journal по ходу.]";
 
+/** Detect a provider rate-limit / usage-limit message in an agent turn, so the
+ *  pipeline can surface WHY a task stopped (limit vs parked vs error) instead of
+ *  burying "You've hit your session limit" in the transcript. Returns the reset
+ *  hint when the provider includes one. */
+export function detectRateLimit(text: string): { hit: boolean; resetsAt?: string } {
+  if (!/\b(hit (your|the) (session|usage) limit|rate limit|usage limit reached|too many requests|429)\b/i.test(text)) {
+    return { hit: false };
+  }
+  const reset = text.match(/resets?\s+(?:at\s+)?([0-9][^\n.]{0,40})/i);
+  return { hit: true, resetsAt: reset?.[1]?.trim() };
+}
+
 /** Parse the mandatory completeness marker the agent appends as the last line.
  *  Conservative: only an explicit "НЕ ГОТОВО" parks the stage; an explicit
  *  "ГОТОВО" or a missing marker is treated as complete (we don't block on a

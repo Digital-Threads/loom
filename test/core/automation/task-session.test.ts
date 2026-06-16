@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -97,6 +97,13 @@ describe("TaskSession (one session per task)", () => {
     const r = parseCompleteness("...\nИТОГ: НЕ ГОТОВО — нет доступа к API");
     expect(r.complete).toBe(false);
     expect(r.note).toContain("нет доступа");
+  });
+
+  it("detectRateLimit: flags a provider session-limit message + reset hint", () => {
+    const r = detectRateLimit("…working…\nYou've hit your session limit · resets 6:30pm (Asia/Yerevan)");
+    expect(r.hit).toBe(true);
+    expect(r.resetsAt).toContain("6:30pm");
+    expect(detectRateLimit("all good, tests pass").hit).toBe(false);
   });
 
   it("declaresRemainingWork: catches a ГОТОВО that still lists leftover plan items", () => {

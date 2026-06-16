@@ -44,7 +44,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 // createAimuxStageAgent removed — review now runs in the task session
-import { createTaskSession, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
@@ -293,6 +293,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     recordSessionCost(id, repoRoot);
     recordDenials(id);
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
+    // Surface a provider rate-limit so a stop reads as "limited, resets X" rather
+    // than an ambiguous park. Cleared by the next non-limited turn (latest wins).
+    const rl = detectRateLimit(text);
+    saveResult(id, stage, "stop-reason", rl.hit ? { kind: "rate_limit", resetsAt: rl.resetsAt ?? null, profile: t?.profile ?? null } : { kind: "none" });
     return text;
   };
   const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
@@ -580,11 +584,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     const task = getTask(db, id);
     if (!task) return c.json({ error: "not found" }, 404);
+    const stop = loadResult<{ kind: string; resetsAt?: string | null; profile?: string | null }>(id, "stop-reason");
     return c.json({
       task,
       stages: getStages(db, id),
       steps: getSteps(db, id),
       costs: getCosts(db, id),
+      stopReason: stop && stop.kind !== "none" ? stop : null, // why the task last stopped (e.g. rate_limit)
     });
   });
 

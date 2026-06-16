@@ -379,6 +379,12 @@ export function TaskView({
         </header>
 
         <div className="pb">
+          {detail.stopReason?.kind === "rate_limit" ? (
+            <div className="banner banner-warn" role="status">
+              ⚠ Прогон остановлен: лимит аккаунта{detail.stopReason.profile ? ` «${detail.stopReason.profile}»` : ""} исчерпан
+              {detail.stopReason.resetsAt ? ` — сброс ${detail.stopReason.resetsAt}` : ""}. Смени аккаунт (выше) или подожди, затем ▶▶ Advance.
+            </div>
+          ) : null}
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={fixFindings} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
