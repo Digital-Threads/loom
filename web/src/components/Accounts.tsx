@@ -138,7 +138,7 @@ export function Accounts({ client }: { client: LoomClient }) {
                     : <span className="crumb">{limitsLoading ? "…" : "—"}</span>}
                 </td>
                 <td style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  {st.cls !== "ok" ? (
+                  {s.authKind === "none" ? (
                     <button className="btn acc" disabled={busy} title="Sign in to this subscription" onClick={() => setAuthProfile(s.name)}>Authorize</button>
                   ) : null}
                   {active
@@ -154,21 +154,21 @@ export function Accounts({ client }: { client: LoomClient }) {
         </tbody>
       </table>
 
-      {/* Remove confirmation — type the profile name to confirm, no accidental deletes */}
+      {/* Remove confirmation — modal; type the profile name to confirm, no accidental deletes */}
       {removing ? (
-        <div className="result-card" style={{ marginTop: 12 }}>
-          <div className="result-head" style={{ color: "var(--bad)" }}>
-            Remove "{removing}"?
-          </div>
-          <div style={{ padding: "12px 13px" }}>
-            <p style={{ margin: "0 0 10px", fontSize: 13 }}>
-              This removes the profile entry from aimux config. Credentials on disk are not deleted.
-              Type <b>{removing}</b> to confirm:
-            </p>
-            <div className="row" style={{ gap: 8 }}>
-              <input className="inp" value={removeInput} placeholder={removing} onChange={(e) => setRemoveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmRemove(); }} style={{ flex: 1 }} />
-              <button className="btn" disabled={busy || removeInput.trim() !== removing} style={{ color: "var(--bad)" }} onClick={confirmRemove}>Remove</button>
+        <div className="overlay" onClick={() => setRemoving(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h" style={{ color: "var(--bad)" }}>Remove "{removing}"?</div>
+            <div className="modal-b">
+              <p style={{ margin: "0 0 12px", fontSize: 13 }}>
+                This removes the profile entry from aimux config. Credentials on disk are not deleted.
+                Type <b>{removing}</b> to confirm:
+              </p>
+              <input className="inp" autoFocus value={removeInput} placeholder={removing} onChange={(e) => setRemoveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmRemove(); }} style={{ width: "100%" }} />
+            </div>
+            <div className="modal-f">
               <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
+              <button className="btn" disabled={busy || removeInput.trim() !== removing} style={{ color: "var(--bad)" }} onClick={confirmRemove}>Remove</button>
             </div>
           </div>
         </div>

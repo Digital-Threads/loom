@@ -100,7 +100,7 @@ export interface NewTask {
 }
 
 // ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────
-export interface Subscription { name: string; cli?: string; isSource?: boolean; [k: string]: unknown }
+export interface Subscription { name: string; cli?: string; isSource?: boolean; authKind?: "oauth" | "api" | "none"; [k: string]: unknown }
 export interface SessionRow { sessionId?: string; profile?: string; lastUsedAtMs?: number; [k: string]: unknown }
 // aimux HealthReport: a profile is healthy when nothing is broken/missing/conflicting.
 export interface HealthRow { profile: string; valid?: string[]; broken?: string[]; missing?: string[]; conflicts?: string[]; [k: string]: unknown }

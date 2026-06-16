@@ -3,6 +3,8 @@ import {
   saveConfig,
   addProfile,
   removeProfile,
+  classifyProfile,
+  expandHome,
   checkAllProfiles,
   unifyAllSessions,
   launchProfile,
@@ -16,6 +18,8 @@ export interface Subscription {
   name: string;
   cli: string;
   isSource: boolean;
+  /** How the profile authenticates: oauth (creds) / api (key) / none (needs login). */
+  authKind: "oauth" | "api" | "none";
 }
 
 export function listSubscriptions(): Subscription[] {
@@ -25,6 +29,7 @@ export function listSubscriptions(): Subscription[] {
     name,
     cli: p.cli,
     isSource: Boolean(p.is_source),
+    authKind: classifyProfile(p, expandHome(p.path)),
   }));
 }
 
