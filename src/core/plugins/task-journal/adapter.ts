@@ -110,6 +110,10 @@ export function taskDetail(projectRoot: string, id: string): TaskDetail {
  *  is task-journal's `pack` render — the canonical, clean view of a task's
  *  history. Empty string on any failure (tj missing / unknown task). */
 export function taskPack(projectRoot: string, id: string, mode: "compact" | "full" = "full"): string {
+  // `id` comes from the request path — reject anything that isn't a plain
+  // task id so it can't be smuggled in as a CLI flag, and stop option parsing
+  // with `--` before the value.
+  if (!/^[A-Za-z0-9._-]+$/.test(id) || id.startsWith("-")) return "";
   try {
     return execFileSync(
       "task-journal",
