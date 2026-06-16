@@ -115,10 +115,12 @@ export function taskPack(projectRoot: string, id: string, mode: "compact" | "ful
   // with `--` before the value.
   if (!/^[A-Za-z0-9._-]+$/.test(id) || id.startsWith("-")) return "";
   try {
+    // `pack` resolves the project from cwd (no --project flag), so run it in the
+    // project root.
     return execFileSync(
       "task-journal",
-      ["pack", id, "--mode", mode, "--project", projectRoot],
-      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      ["pack", id, "--mode", mode],
+      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
     );
   } catch {
     return "";
@@ -133,8 +135,8 @@ export function taskPackByLoomId(projectRoot: string, boardTaskId: string, mode:
   try {
     return execFileSync(
       "task-journal",
-      ["pack", "--external", `loom:${boardTaskId}`, "--mode", mode, "--project", projectRoot],
-      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      ["pack", "--external", `loom:${boardTaskId}`, "--mode", mode],
+      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
     );
   } catch {
     return "";
