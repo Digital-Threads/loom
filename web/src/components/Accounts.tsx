@@ -3,13 +3,14 @@ import type { LoomClient, WorkspaceData, HealthRow } from "../api";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
 
-// F1.2 — aimux accounts: subscriptions, sessions, health, with [Check health]
-// and [Set active] actions. Reads the aggregated 3-module workspace.
 export function Accounts({ client }: { client: LoomClient }) {
   const [ws, setWs] = useState<WorkspaceData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newSub, setNewSub] = useState("");
+  // Remove-confirmation: the profile name being confirmed (null = not removing).
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeInput, setRemoveInput] = useState("");
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
@@ -22,22 +23,18 @@ export function Accounts({ client }: { client: LoomClient }) {
       await client.addSubscription(newSub.trim());
       setNewSub("");
       setWs(await client.workspace());
-      toast.success("Subscription added");
-    } catch { toast.error("Couldn’t add subscription"); } finally {
-      setBusy(false);
-    }
+      toast.success("Subscription added — authorize it with: aimux auth login " + newSub.trim());
+    } catch { toast.error("Couldn't add subscription"); } finally { setBusy(false); }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
   if (!ws) return <StateView kind="loading" />;
   if (ws.subscriptions.length === 0 && ws.sessions.length === 0)
-    return <div className="empty">No aimux subscriptions yet — add one to get started.</div>;
+    return <StateView kind="empty" msg="No aimux subscriptions yet — add one to get started." />;
 
   const healthFor = (profile: string): HealthRow | undefined =>
     ws.health.find((h) => h.profile === profile);
 
-  // HealthReport has no boolean — derive it: a profile is healthy when nothing
-  // is broken, missing, or conflicting.
   function healthState(h?: HealthRow): { cls: string; label: string } {
     if (!h) return { cls: "warn", label: "unknown" };
     const bad = (h.broken?.length ?? 0) + (h.missing?.length ?? 0) + (h.conflicts?.length ?? 0);
@@ -50,9 +47,7 @@ export function Accounts({ client }: { client: LoomClient }) {
     try {
       const health = await client.accountsHealth();
       setWs((w) => (w ? { ...w, health } : w));
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   async function setActive(profile: string) {
@@ -61,24 +56,21 @@ export function Accounts({ client }: { client: LoomClient }) {
       await client.setActive(profile);
       setWs((w) => (w ? { ...w, activeProfile: profile } : w));
       toast.success(`Active profile: ${profile} — new tasks run under it`);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
-  async function removeSub(name: string) {
-    if (!confirm(`Remove subscription "${name}"? This only removes the profile entry — it does not delete credentials.`)) return;
+  async function confirmRemove() {
+    if (!removing || removeInput.trim() !== removing) return;
     setBusy(true);
     try {
-      const res = await client.removeSubscription(name);
+      const res = await client.removeSubscription(removing);
       if (res.error) { toast.error(res.error); return; }
       setWs(await client.workspace());
-      toast.success(`Removed: ${name}`);
-    } catch (e) { toast.error(`Couldn't remove: ${e}`); } finally { setBusy(false); }
+      toast.success(`Removed: ${removing}`);
+    } catch (e) { toast.error(`Couldn't remove: ${e}`); }
+    finally { setBusy(false); setRemoving(null); setRemoveInput(""); }
   }
 
-  // Sessions are aimux's tracked Claude conversations (one per task run). A bare
-  // count is opaque — group by profile so the user sees which account they're under.
   const byProfile = Object.values(
     ws.sessions.reduce((acc, s) => {
       const p = (s.profile as string) || "";
@@ -100,7 +92,8 @@ export function Accounts({ client }: { client: LoomClient }) {
         </span>
       </div>
       <div className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
-        Adding a subscription creates a profile entry. To authorize it, run <code style={{ background: "var(--chip)", padding: "1px 5px", borderRadius: 4 }}>aimux login {"<name>"}</code> in a terminal.
+        Adding a profile only creates the config entry. To authorize it, run{" "}
+        <code style={{ background: "var(--chip)", padding: "1px 5px", borderRadius: 4 }}>aimux auth login {"<name>"}</code> in a terminal.
       </div>
       <table className="tbl">
         <thead><tr><th>Profile</th><th>CLI</th><th>Health</th><th></th></tr></thead>
@@ -124,7 +117,7 @@ export function Accounts({ client }: { client: LoomClient }) {
                     ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
                     : <button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
                   {!s.isSource && !active ? (
-                    <button className="btn" disabled={busy} style={{ color: "var(--bad)" }} title="Remove this subscription" onClick={() => removeSub(s.name)}>✕</button>
+                    <button className="btn" disabled={busy} style={{ color: "var(--bad)" }} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
                   ) : null}
                 </td>
               </tr>
@@ -132,6 +125,26 @@ export function Accounts({ client }: { client: LoomClient }) {
           })}
         </tbody>
       </table>
+
+      {/* Remove confirmation — type the profile name to confirm, no accidental deletes */}
+      {removing ? (
+        <div className="result-card" style={{ marginTop: 12 }}>
+          <div className="result-head" style={{ color: "var(--bad)" }}>
+            Remove "{removing}"?
+          </div>
+          <div style={{ padding: "12px 13px" }}>
+            <p style={{ margin: "0 0 10px", fontSize: 13 }}>
+              This removes the profile entry from aimux config. Credentials on disk are not deleted.
+              Type <b>{removing}</b> to confirm:
+            </p>
+            <div className="row" style={{ gap: 8 }}>
+              <input className="inp" value={removeInput} placeholder={removing} onChange={(e) => setRemoveInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmRemove(); }} style={{ flex: 1 }} />
+              <button className="btn" disabled={busy || removeInput.trim() !== removing} style={{ color: "var(--bad)" }} onClick={confirmRemove}>Remove</button>
+              <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <h2 style={{ marginTop: 24 }}>Sessions <span className="n">{ws.sessions.length}</span></h2>
       <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
