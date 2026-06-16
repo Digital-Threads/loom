@@ -7,6 +7,7 @@ export interface BoardCard {
   title: string;
   stageKey: string;
   status: string;
+  projectId: string;
 }
 export interface BoardColumn {
   stageKey: string;
@@ -27,6 +28,7 @@ export interface TaskRow {
   branch: string | null;
   description: string | null;
   profile?: string | null;
+  project_id?: string | null;
   session_id?: string | null;
   created_at: number;
   updated_at: number;
@@ -97,6 +99,7 @@ export interface NewTask {
   description?: string;
   run_mode?: string;
   profile?: string;
+  projectId?: string;
 }
 
 // ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────

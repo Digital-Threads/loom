@@ -6,10 +6,12 @@ export function NewTaskModal({
   client,
   onClose,
   onCreated,
+  defaultProjectId,
 }: {
   client: LoomClient;
   onClose: () => void;
   onCreated: () => void;
+  defaultProjectId?: string; // board filter → preselect this project's repo
 }) {
   const [title, setTitle] = useState("");
   const [repo, setRepo] = useState("");
@@ -26,8 +28,10 @@ export function NewTaskModal({
   useEffect(() => {
     client.projects().then((d) => {
       setProjects(d.projects);
-      const active = d.projects.find((p) => p.projectId === d.active) ?? d.projects[0];
-      if (active) setRepo(active.root);
+      // Default to the board-filtered project if set, else the active one.
+      const pick = (defaultProjectId && d.projects.find((p) => p.projectId === defaultProjectId))
+        ?? d.projects.find((p) => p.projectId === d.active) ?? d.projects[0];
+      if (pick) setRepo(pick.root);
     }).catch(() => {});
     // Subscriptions to choose which account the task runs under (default = active).
     client.workspace().then((w) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "./api";
+import { createClient, type ProjectEntry } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { Board } from "./components/Board";
 import { TaskView } from "./components/TaskView";
@@ -55,10 +55,12 @@ export function App() {
   const [reload, setReload] = useState(0);
   const [showNew, setShowNew] = useState(false);
   const [onboard, setOnboard] = useState<boolean | null>(null);
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [boardProject, setBoardProject] = useState<string>(""); // "" = all projects
 
   useEffect(() => {
-    client.projects().then((d) => setOnboard(d.projects.length === 0)).catch(() => setOnboard(false));
-  }, [client]);
+    client.projects().then((d) => { setOnboard(d.projects.length === 0); setProjects(d.projects); }).catch(() => setOnboard(false));
+  }, [client, reload]);
 
   const inTask = taskId !== null;
 
@@ -101,6 +103,12 @@ export function App() {
           {inTask ? <span className="crumb">  {taskId}</span> : <span className="crumb" />}
           {view === "board" && !inTask ? (
             <div className="right">
+              {projects.length > 1 ? (
+                <select className="inp" value={boardProject} onChange={(e) => setBoardProject(e.target.value)} title="Filter the board by project">
+                  <option value="">All projects</option>
+                  {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.name}</option>)}
+                </select>
+              ) : null}
               <button className="btn acc" onClick={() => setShowNew(true)}>+ New</button>
             </div>
           ) : null}
@@ -114,7 +122,7 @@ export function App() {
               onChanged={() => setReload((r) => r + 1)}
             />
           ) : view === "board" ? (
-            <Board key={reload} client={client} onOpen={setTaskId} />
+            <Board key={reload} client={client} onOpen={setTaskId} projects={projects} projectFilter={boardProject} />
           ) : view === "projects" ? (
             <Projects client={client} onSwitched={() => setReload((r) => r + 1)} />
           ) : view === "accounts" ? (
@@ -144,6 +152,7 @@ export function App() {
       {showNew ? (
         <NewTaskModal
           client={client}
+          defaultProjectId={boardProject || undefined}
           onClose={() => setShowNew(false)}
           onCreated={() => setReload((r) => r + 1)}
         />

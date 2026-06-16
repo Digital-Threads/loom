@@ -82,6 +82,7 @@ export interface BoardCard {
   title: string;
   stageKey: string;
   status: string;
+  projectId: string; // owning project ("" if not yet assigned → home project)
 }
 
 export interface BoardColumn {
@@ -97,7 +98,7 @@ export function boardColumns(db: Database.Database): BoardColumn[] {
   for (const t of listTasks(db)) {
     const cur = currentStage(getStages(db, t.id));
     const key = cur ? cur.stage_key : "done";
-    byKey.get(key)?.cards.push({ id: t.id, title: t.title, stageKey: key, status: t.status });
+    byKey.get(key)?.cards.push({ id: t.id, title: t.title, stageKey: key, status: t.status, projectId: t.project_id ?? "" });
   }
   return cols;
 }

@@ -51,6 +51,7 @@ export function TaskView({
   const [openFile, setOpenFile] = useState<{ path: string; mode: "file" | "diff" } | null>(null);
   const [profiles, setProfiles] = useState<string[]>([]);
   const [activeProfile, setActiveProfile] = useState<string>("");
+  const [projectName, setProjectName] = useState<string>("");
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
 
@@ -59,7 +60,13 @@ export function TaskView({
       setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean));
       setActiveProfile(w.activeProfile ?? "");
     }).catch(() => {});
-  }, [client]);
+    // Resolve the task's project name (shown in the rail instead of the raw path).
+    client.projects().then((d) => {
+      const t = detail?.task;
+      const proj = d.projects.find((p) => p.projectId === (t?.project_id ?? "")) ?? d.projects.find((p) => p.root === t?.repo);
+      setProjectName(proj?.name ?? "");
+    }).catch(() => {});
+  }, [client, detail?.task]);
 
   // While a run is live, watch the current subscription's rate limit. Near the
   // cap (5h ≥ 90% or status=limited) → prompt to switch before it stalls.
@@ -203,6 +210,7 @@ export function TaskView({
     <div className="task">
       <aside className="rail">
         <div className="rail-head">
+          {projectName ? <div className="rail-project">{projectName}</div> : null}
           <div className="rail-title">{task.title}</div>
           <div className="rail-sub">
             <span className="chip">{task.run_mode}</span>

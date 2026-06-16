@@ -10,7 +10,7 @@ import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
-import { resolveProjectRoot } from "../core/workspace/project-id.js";
+import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
 import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
@@ -118,6 +118,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectAdd = deps.addProject ?? ((root: string) => addProject(root));
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
+  // Backfill: tasks created before project_id → assign to the home project (this
+  // server's db is its cwd project) so the cross-project board groups/filters them.
+  try {
+    const home = deriveProjectId(resolveProjectRoot(process.cwd()));
+    db.prepare("UPDATE tasks SET project_id = ? WHERE project_id IS NULL OR project_id = ''").run(home);
+  } catch { /* fresh db or no tasks */ }
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
   const recall =
     deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
@@ -451,15 +457,25 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) return c.json({ error: "title required" }, 400);
     const id = typeof body.id === "string" && body.id ? body.id : `t-${randomUUID().slice(0, 8)}`;
+    const repo = typeof body.repo === "string" ? body.repo : "";
+    // Resolve the task's project from its repo: an explicit projectId wins, else
+    // match a registered project by root, else auto-register the repo as a project.
+    let projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : undefined;
+    if (!projectId && repo) {
+      const canonical = resolveProjectRoot(repo);
+      projectId = projectsList().find((p) => p.root === canonical)?.projectId ?? projectAdd(repo).projectId;
+    }
+    if (!projectId) projectId = projectActive()?.projectId ?? undefined;
     const task = createTask(db, {
       id,
       title,
-      repo: typeof body.repo === "string" ? body.repo : undefined,
+      repo: repo || undefined,
       branch: typeof body.branch === "string" ? body.branch : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       run_mode: typeof body.run_mode === "string" ? body.run_mode : undefined,
       route: Array.isArray(body.route) ? (body.route as string[]) : undefined,
       profile: typeof body.profile === "string" && body.profile ? body.profile : (loadActiveProfile() ?? undefined),
+      projectId,
     });
     return c.json({ task }, 201);
   });

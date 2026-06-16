@@ -47,6 +47,7 @@ const ENSURE_COLUMNS: Record<string, Array<{ name: string; ddl: string }>> = {
     { name: "session_id", ddl: "session_id TEXT" },
     { name: "session_started", ddl: "session_started INTEGER NOT NULL DEFAULT 0" },
     { name: "profile", ddl: "profile TEXT" },
+    { name: "project_id", ddl: "project_id TEXT" },
   ],
 };
 
@@ -97,6 +98,7 @@ export interface TaskRow {
   branch: string | null;
   description: string | null;
   profile: string | null;
+  project_id: string | null;
   session_id: string | null;
   session_started: number;
   created_at: number;
@@ -112,6 +114,7 @@ export interface CreateTaskInput {
   branch?: string;
   description?: string;
   profile?: string;
+  projectId?: string;
 }
 
 export const STAGE_KEYS = [
@@ -130,8 +133,8 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
   const now = Date.now();
   const route = input.route ?? STAGE_KEYS.slice();
   db.prepare(
-    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, profile, created_at, updated_at)
-     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, profile, project_id, created_at, updated_at)
+     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.id,
     input.title,
@@ -141,6 +144,7 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
     input.branch ?? null,
     input.description ?? null,
     input.profile ?? null,
+    input.projectId ?? null,
     now,
     now,
   );

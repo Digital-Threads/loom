@@ -1,10 +1,20 @@
 import { useEffect, useState, type DragEvent } from "react";
-import { type LoomClient, type BoardColumn, STAGE_LABELS } from "../api";
+import { type LoomClient, type BoardColumn, type ProjectEntry, STAGE_LABELS } from "../api";
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
 
-export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: string) => void }) {
+export function Board({
+  client,
+  onOpen,
+  projects = [],
+  projectFilter = "",
+}: {
+  client: LoomClient;
+  onOpen: (id: string) => void;
+  projects?: ProjectEntry[];
+  projectFilter?: string; // "" = all
+}) {
   const [cols, setCols] = useState<BoardColumn[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -15,6 +25,9 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
 
   if (err) return <StateView kind="error" msg={`Can’t reach the core: ${err}`} />;
   if (!cols) return <StateView kind="loading" />;
+
+  const projName = (id: string) => projects.find((p) => p.projectId === id)?.name;
+  const visible = (card: { projectId: string }) => !projectFilter || card.projectId === projectFilter;
 
   // DnD: drag a card onto a column → move the task to that stage AND start it.
   // The drag IS the approval: the agent runs the dropped stage right away in the
@@ -43,11 +56,11 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
         >
           <h2>
             {STAGE_LABELS[col.stageKey] ?? col.stageKey}
-            <span className="n">{col.cards.length}</span>
+            <span className="n">{col.cards.filter(visible).length}</span>
           </h2>
           <div className="stack">
-            {col.cards.length ? (
-              col.cards.map((card) => (
+            {col.cards.filter(visible).length ? (
+              col.cards.filter(visible).map((card) => (
                 <div
                   className={`card ${statusClass(card.status)}`}
                   key={card.id}
@@ -61,6 +74,9 @@ export function Board({ client, onOpen }: { client: LoomClient; onOpen: (id: str
                       <span className="dotc" />
                       {statusLabel(card.status)}
                     </span>
+                    {projects.length > 1 && projName(card.projectId) ? (
+                      <span className="chip proj">{projName(card.projectId)}</span>
+                    ) : null}
                   </div>
                 </div>
               ))
