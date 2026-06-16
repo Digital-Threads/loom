@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { type LoomClient, type BoardColumn, type ProjectEntry, STAGE_LABELS } from "../api";
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
@@ -18,6 +18,7 @@ export function Board({
   const [cols, setCols] = useState<BoardColumn[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     client.board().then(setCols).catch((e) => setErr(String(e)));
@@ -44,6 +45,25 @@ export function Board({
       .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
   }
 
+  // Trash button on a card → confirm, delete the task (and all its rows), then
+  // refresh the board so the card drops out. stopPropagation keeps the click
+  // from also opening the task.
+  function onDelete(id: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (deleting.has(id)) return; // a request is already in flight for this card
+    if (!window.confirm("Delete this task? This can’t be undone.")) return;
+    setDeleting((s) => new Set(s).add(id));
+    client
+      .deleteTask(id)
+      .catch((er: Error) => {
+        // 404 = already gone (e.g. a double request) → treat as success, no toast.
+        if (!/→ 404$/.test(er.message)) throw er;
+      })
+      .then(() => client.board().then(setCols))
+      .catch((er) => toast.error(`Couldn’t delete the task: ${er}`))
+      .finally(() => setDeleting((s) => { const n = new Set(s); n.delete(id); return n; }));
+  }
+
   return (
     <div className="board">
       {cols.map((col) => (
@@ -68,6 +88,15 @@ export function Board({
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
                   onClick={() => onOpen(card.id)}
                 >
+                  <button
+                    className="card-del"
+                    title="Delete task"
+                    aria-label="Delete task"
+                    disabled={deleting.has(card.id)}
+                    onClick={(e) => onDelete(card.id, e)}
+                  >
+                    🗑
+                  </button>
                   <div className="t">{card.title}</div>
                   <div className="meta">
                     <span className={`chip ${statusClass(card.status)}`}>

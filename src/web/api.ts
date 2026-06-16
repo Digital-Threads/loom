@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -620,6 +620,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       projectId,
     });
     return c.json({ task }, 201);
+  });
+
+  // Delete a task and all its related rows. 200 {ok:true} if it existed, else 404.
+  // First kill any live process and drop its stream sink so an in-flight run
+  // can't resurrect orphan rows (runs/cost) under the just-deleted task.
+  app.delete("/api/tasks/:id", (c) => {
+    const id = c.req.param("id");
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const sid = getTaskSession(db, id).sessionId;
+    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    streamSinks.delete(id);
+    deleteTask(db, id);
+    return c.json({ ok: true });
   });
 
   // Switch the subscription a task runs under. Body: { profile, resume? }.

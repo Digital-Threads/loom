@@ -170,6 +170,30 @@ export function listTasks(db: Database.Database): TaskRow[] {
   return db.prepare("SELECT * FROM tasks ORDER BY updated_at DESC").all() as TaskRow[];
 }
 
+// Delete a task and ALL its child rows in one transaction. Children are removed
+// before the parent so no foreign-key reference dangles. Returns true if the
+// task existed (a row was deleted), false otherwise.
+export function deleteTask(db: Database.Database, id: string): boolean {
+  const tx = db.transaction((taskId: string) => {
+    for (const table of [
+      "stages",
+      "steps",
+      "runs",
+      "cost_rollups",
+      "artifacts",
+      "chat_messages",
+      "attachments",
+    ]) {
+      db.prepare(`DELETE FROM ${table} WHERE task_id = ?`).run(taskId);
+    }
+    // Per-task settings live in `settings` under a string key (no task_id column);
+    // drop the task's permission allowlist so it doesn't linger as an orphan.
+    db.prepare("DELETE FROM settings WHERE key = ?").run(`perm.allow.${taskId}`);
+    return db.prepare("DELETE FROM tasks WHERE id = ?").run(taskId).changes > 0;
+  });
+  return tx(id);
+}
+
 export function updateTaskStatus(
   db: Database.Database,
   id: string,

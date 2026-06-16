@@ -437,6 +437,18 @@ describe("web api mutations", () => {
     expect((await post("/api/tasks", {})).status).toBe(400);
   });
 
+  it("DELETE /api/tasks/:id removes the task", async () => {
+    const res = await app.request("/api/tasks/t1", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const list = (await json("/api/tasks")).body;
+    expect(list.tasks.some((t: { id: string }) => t.id === "t1")).toBe(false);
+  });
+
+  it("DELETE /api/tasks/:id 404 for missing", async () => {
+    expect((await app.request("/api/tasks/zzz", { method: "DELETE" })).status).toBe(404);
+  });
+
   it("POST start → accept advances the stage", async () => {
     await post("/api/tasks", { id: "m1", title: "M" });
     expect((await post("/api/tasks/m1/start")).body.active).toBe("analysis");
