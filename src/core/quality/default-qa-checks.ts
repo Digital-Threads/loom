@@ -65,7 +65,11 @@ export function buildQaChecks(keys: string[], env: QaCheckEnv): QaCheck[] {
   });
   const script = (key: string, name: string): QaCheck => {
     if (!scripts[name]) return skipped(key, `no "${name}" script in package.json`);
-    const args = name === "test" ? ["test"] : ["run", name];
+    // Always `run <script>` so we execute the package.json script. `bun test`
+    // (and only bun) would otherwise launch Bun's OWN test runner instead of the
+    // project's "test" script — e.g. a vitest project fails spuriously. `npm/
+    // pnpm/yarn run test` are equivalent to their bare `test`, so this is safe.
+    const args = ["run", name];
     return {
       key,
       run: async () => {

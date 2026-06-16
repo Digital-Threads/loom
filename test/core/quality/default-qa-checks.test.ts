@@ -18,7 +18,7 @@ describe("default QA checks", () => {
     const res = await runQa(checks);
     expect(res.passed).toBe(true);
     expect(calls).toEqual([
-      ["pnpm", ["test"]],
+      ["pnpm", ["run", "test"]],
       ["pnpm", ["run", "build"]],
     ]);
   });
