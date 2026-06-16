@@ -51,7 +51,7 @@ export function Skills({ client }: { client: LoomClient }) {
           <div className="muted" style={{ padding: 12 }}>Ничего не найдено.</div>
         ) : shown.map((s) => (
           <button key={s.name} className={`skill-row ${sel === s.name ? "active" : ""}`} onClick={() => open(s.name)}>
-            <div className="skill-name">{s.name}{s.userInvocable ? <span className="chip sm" style={{ marginLeft: 6 }}>/invocable</span> : null}</div>
+            <div className="skill-name">{s.name}{s.userInvocable ? <span className="skill-inv">invocable</span> : null}</div>
             <div className="skill-desc">{s.description || <span className="muted">—</span>}</div>
           </button>
         ))}

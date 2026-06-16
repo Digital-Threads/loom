@@ -41,8 +41,8 @@ const SECTION_DESC: Record<string, string> = {
   memory: "task-journal reasoning — decisions, findings and rejections per task.",
   connectors: "MCP servers passed into agent sessions — add, enable, test.",
   knowledge: "Recall prior reasoning across projects — what was decided or rejected.",
-  skills: "Which skill backs each pipeline stage.",
-  layers: "Registered plugins, by category and capability.",
+  skills: "Библиотека скиллов из ~/.claude/skills — открывай, правь, создавай новые через AI.",
+  layers: "Архитектура Loom: 3 слоя — standalone-плагины, остальные inline в core/* (вынос в Фазе 2).",
   timeline: "Event stream, board totals and agent performance.",
   settings: "Loom configuration.",
 };
