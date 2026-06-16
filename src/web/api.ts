@@ -12,7 +12,7 @@ import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } f
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
-import { saveActiveProfile, loadActiveProfile } from "@digital-threads/aimux/core";
+import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
 import { addSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import {
   listProjects,
@@ -533,6 +533,24 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/accounts/health", async (c) => {
     const ws = await loadWorkspace();
     return c.json({ health: ws.health });
+  });
+
+  // Live rate-limit utilization for OAuth profiles (aimux probe). ?profile=<name>
+  // for one (used by a task to watch its own subscription), else all. Non-oauth
+  // profiles return nothing (no probe). Each probe is a ~5s-timeout network call.
+  app.get("/api/accounts/limits", async (c) => {
+    const want = c.req.query("profile");
+    const cfg = loadConfig();
+    if (!cfg) return c.json({ limits: [] });
+    const names = want ? (cfg.profiles[want] ? [want] : []) : Object.keys(cfg.profiles);
+    const limits = await Promise.all(
+      names.map(async (name) => {
+        const p = cfg.profiles[name];
+        const status = await fetchRateLimits(p, expandHome(p.path));
+        return status ? { profile: name, ...status } : null;
+      }),
+    );
+    return c.json({ limits: limits.filter(Boolean) });
   });
 
   // Swap the active aimux profile. Body: { profileId }.

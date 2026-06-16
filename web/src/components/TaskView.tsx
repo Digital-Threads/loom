@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { type LoomClient, type TaskDetail, STAGE_LABELS } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { type LoomClient, type TaskDetail, type RateLimit, STAGE_LABELS } from "../api";
 import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { Approvals } from "./Approvals";
 import { Transcript } from "./Transcript";
@@ -8,6 +8,7 @@ import { StageResult } from "./StageResult";
 import { DocPanel } from "./DocPanel";
 import { CostBar } from "./CostBar";
 import { StateView } from "./StateView";
+import { LimitModal } from "./LimitModal";
 import { toast } from "../toast";
 
 const STAGE_DESC: Record<string, string> = {
@@ -49,10 +50,31 @@ export function TaskView({
   const [reload, setReload] = useState(0);
   const [openFile, setOpenFile] = useState<{ path: string; mode: "file" | "diff" } | null>(null);
   const [profiles, setProfiles] = useState<string[]>([]);
+  const [limit, setLimit] = useState<RateLimit | null>(null);
+  const dismissedRef = useRef<string>("");
 
   useEffect(() => {
     client.workspace().then((w) => setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean))).catch(() => {});
   }, [client]);
+
+  // While a run is live, watch the current subscription's rate limit. Near the
+  // cap (5h ≥ 90% or status=limited) → prompt to switch before it stalls.
+  const curProfile = detail?.task.profile ?? "";
+  useEffect(() => {
+    if (!runId || !curProfile) return;
+    let alive = true;
+    const check = () =>
+      client.accountLimits(curProfile).then((ls) => {
+        if (!alive) return;
+        const l = ls.find((x) => x.profile === curProfile);
+        if (l && (l.fiveHourPct >= 90 || l.status === "limited") && dismissedRef.current !== curProfile) {
+          setLimit(l);
+        }
+      }).catch(() => {});
+    check();
+    const iv = setInterval(check, 30000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [runId, curProfile, client]);
 
   const refreshLocal = () => setReload((r) => r + 1);
 
@@ -275,6 +297,20 @@ export function TaskView({
         <CostBar costs={costs} />
       </section>
       {openFile ? <DocPanel client={client} taskId={taskId} path={openFile.path} mode={openFile.mode} onClose={() => setOpenFile(null)} /> : null}
+      {limit ? (
+        <LimitModal
+          profile={limit.profile}
+          pct={limit.fiveHourPct}
+          profiles={profiles.filter((p) => p !== limit.profile)}
+          onSwitch={(p) => {
+            setLimit(null);
+            dismissedRef.current = "";
+            setLive([]);
+            client.switchProfile(taskId, p).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t switch account: ${e}`));
+          }}
+          onDismiss={() => { dismissedRef.current = limit.profile; setLimit(null); }}
+        />
+      ) : null}
     </div>
   );
 }

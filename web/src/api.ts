@@ -108,6 +108,14 @@ export interface TokenUsageRow { sessionId: string; used: number; saved: number;
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
 export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
 export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
+export interface RateLimit {
+  profile: string;
+  fiveHourPct: number;
+  weeklyPct: number;
+  fiveHourResetsAt?: number;
+  weeklyResetsAt?: number;
+  status?: string;
+}
 export interface WorkspaceData {
   subscriptions: Subscription[];
   sessions: SessionRow[];
@@ -219,6 +227,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),
     switchProfile: (id: string, profile: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/switch-profile`, { profile }, f).then((d) => d.runId),
+    accountLimits: (profile?: string) =>
+      getJson<{ limits: RateLimit[] }>(`${base}/api/accounts/limits${profile ? `?profile=${encodeURIComponent(profile)}` : ""}`, f).then((d) => d.limits),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
       postJson<{ result: QaResult }>(`${base}/api/tasks/${id}/qa/run`, opts ?? {}, f).then((d) => d.result),
     qaGet: (id: string) =>
