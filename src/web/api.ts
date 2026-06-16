@@ -18,6 +18,7 @@ import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
   listProjects,
   addProject,
+  removeProject,
   activeProject,
   setActiveProject,
   type ProjectEntry,
@@ -54,7 +55,7 @@ import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
-import { join as pathJoin } from "node:path";
+import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
@@ -118,6 +119,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const projectAdd = deps.addProject ?? ((root: string) => addProject(root));
   const projectSetActive = deps.setActiveProject ?? ((id: string) => setActiveProject(id));
   const projectActive = deps.activeProject ?? (() => activeProject());
+  // A project root must be an absolute, existing directory — guards against junk
+  // like a relative "app" that silently resolves to the server's cwd.
+  const validRoot = (r: string) => isAbsolute(r) && existsSync(r);
   // Backfill: tasks created before project_id → assign to the home project (this
   // server's db is its cwd project) so the cross-project board groups/filters them.
   try {
@@ -432,7 +436,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const body = (await c.req.json().catch(() => ({}))) as { root?: unknown };
     const root = typeof body.root === "string" ? body.root.trim() : "";
     if (!root) return c.json({ error: "root required" }, 400);
+    if (!validRoot(root)) return c.json({ error: "root must be an absolute path to an existing folder" }, 400);
     return c.json({ project: projectAdd(root) }, 201);
+  });
+  app.post("/api/projects/remove", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { projectId?: unknown };
+    const id = typeof body.projectId === "string" ? body.projectId : "";
+    if (!id) return c.json({ error: "projectId required" }, 400);
+    if (projectActive()?.projectId === id) return c.json({ error: "can't remove the default project" }, 400);
+    removeProject(id);
+    return c.json({ ok: true });
   });
   app.post("/api/projects/active", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { projectId?: unknown };
@@ -478,7 +491,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     let projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : undefined;
     if (!projectId && repo) {
       const canonical = resolveProjectRoot(repo);
-      projectId = projectsList().find((p) => p.root === canonical)?.projectId ?? projectAdd(repo).projectId;
+      const existing = projectsList().find((p) => p.root === canonical)?.projectId;
+      // Only auto-register a real absolute dir; otherwise leave it to the active project.
+      projectId = existing ?? (validRoot(repo) ? projectAdd(repo).projectId : undefined);
     }
     if (!projectId) projectId = projectActive()?.projectId ?? undefined;
     const task = createTask(db, {

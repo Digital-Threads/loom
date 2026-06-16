@@ -188,6 +188,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // D3 — projects
     projects: () => getJson<{ projects: ProjectEntry[]; active: string | null }>(`${base}/api/projects`, f),
     projectStats: () => getJson<{ stats: ProjectStat[] }>(`${base}/api/projects/stats`, f).then((d) => d.stats),
+    removeProject: (projectId: string) =>
+      postJson<{ ok: boolean; error?: string }>(`${base}/api/projects/remove`, { projectId }, f),
     addProject: (root: string) =>
       postJson<{ project: ProjectEntry }>(`${base}/api/projects`, { root }, f).then((d) => d.project),
     setActiveProject: (projectId: string) =>

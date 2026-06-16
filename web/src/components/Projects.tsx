@@ -30,6 +30,15 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     try { await client.setActiveProject(id); refresh(); onSwitched?.(); toast.success("Default project set"); }
     finally { setBusy(false); }
   }
+  async function remove(id: string, name: string) {
+    if (!confirm(`Remove project "${name}" from Loom? Tasks and files on disk are not deleted.`)) return;
+    setBusy(true);
+    try {
+      const res = await client.removeProject(id);
+      if (res.error) { toast.error(res.error); return; }
+      refresh(); toast.success(`Removed: ${name}`);
+    } catch (e) { toast.error(`Couldn’t remove: ${e}`); } finally { setBusy(false); }
+  }
 
   if (err) return <StateView kind="error" msg={err} />;
   if (!stats) return <StateView kind="loading" />;
@@ -66,8 +75,13 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
                 <td className="num">{p.used.toLocaleString()}</td>
                 <td className="num">{p.saved.toLocaleString()}{p.saved > 0 ? <span className="crumb"> ({pct(p.used, p.saved)}%)</span> : null}</td>
                 <td className="acct-act-cell">
-                  {p.active ? <span className="muted" style={{ fontSize: 12 }}>default</span>
-                    : <button className="btn sm" disabled={busy} onClick={() => setDefault(p.projectId)}>Set default</button>}
+                  <div className="acct-actions">
+                    {p.active ? <span className="muted" style={{ fontSize: 12 }}>default</span>
+                      : <button className="btn sm" disabled={busy} onClick={() => setDefault(p.projectId)}>Set default</button>}
+                    {!p.active ? (
+                      <button className="btn sm icon-bad" disabled={busy} title="Remove this project from Loom" onClick={() => remove(p.projectId, p.name)}>✕</button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
