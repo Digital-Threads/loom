@@ -5,7 +5,7 @@
 // output (same graceful fallback as before).
 
 import { spawn } from "node:child_process";
-import { loadConfig, buildRunParams } from "@digital-threads/aimux/core";
+import { loadConfig, buildRunParams, loadActiveProfile } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
@@ -53,7 +53,10 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const build = deps.buildParams ?? buildRunParams;
   const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools }) => {
     const cfg = load();
-    const profile = deps.profile ?? listSubscriptions()[0]?.name;
+    // Which subscription runs this session: explicit dep → the user's active
+    // profile (Accounts → Set active) → first subscription. So "Set active"
+    // actually decides which account is billed, not just a cosmetic marker.
+    const profile = deps.profile ?? loadActiveProfile() ?? listSubscriptions()[0]?.name;
     if (!cfg || !profile) return emptyProc();
     const sessionArgs = resume ? ["--resume", sessionId] : ["--session-id", sessionId];
     // autopilot → full access (user-warned); manual/gated → safe allowlist, the

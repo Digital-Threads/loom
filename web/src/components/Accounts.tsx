@@ -59,11 +59,24 @@ export function Accounts({ client }: { client: LoomClient }) {
     setBusy(true);
     try {
       await client.setActive(profile);
-      toast.success(`Active profile: ${profile}`);
+      setWs((w) => (w ? { ...w, activeProfile: profile } : w));
+      toast.success(`Active profile: ${profile} — new tasks run under it`);
     } finally {
       setBusy(false);
     }
   }
+
+  // Sessions are aimux's tracked Claude conversations (one per task run). A bare
+  // count is opaque — group by profile so the user sees which account they're under.
+  const byProfile = Object.values(
+    ws.sessions.reduce((acc, s) => {
+      const p = (s.profile as string) || "";
+      (acc[p] ??= { profile: p, count: 0, last: 0 }).count++;
+      const t = (s.lastUsedAtMs as number) ?? 0;
+      if (t > acc[p].last) acc[p].last = t;
+      return acc;
+    }, {} as Record<string, { profile: string; count: number; last: number }>),
+  ).sort((a, b) => b.count - a.count);
 
   return (
     <div className="panel">
@@ -80,26 +93,46 @@ export function Accounts({ client }: { client: LoomClient }) {
         <tbody>
           {ws.subscriptions.map((s) => {
             const st = healthState(healthFor(s.name));
+            const active = !!ws.activeProfile && s.name === ws.activeProfile;
             return (
-              <tr key={s.name}>
+              <tr key={s.name} className={active ? "row-active" : ""}>
                 <td>
                   {s.name || <span className="muted">(unnamed)</span>}
-                  {s.isSource ? <span className="chip ok" style={{ marginLeft: 8 }}>source</span> : null}
+                  {active ? <span className="chip ok" style={{ marginLeft: 8 }}>active</span> : null}
+                  {s.isSource ? <span className="chip" style={{ marginLeft: 6 }}>source</span> : null}
                 </td>
                 <td className="crumb">{s.cli ?? "—"}</td>
                 <td>
                   <span className={`chip ${st.cls}`}><span className="dotc" />{st.label}</span>
                 </td>
-                <td style={{ textAlign: "right" }}><button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button></td>
+                <td style={{ textAlign: "right" }}>
+                  {active
+                    ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
+                    : <button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      <h2 style={{ marginTop: 24 }}>Sessions</h2>
+      <h2 style={{ marginTop: 24 }}>Sessions <span className="n">{ws.sessions.length}</span></h2>
+      <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+        Claude conversations aimux is tracking (one per task run), grouped by the profile that ran them.
+      </div>
       {ws.sessions.length ? (
-        <div className="b">{ws.sessions.length} session(s)</div>
+        <table className="tbl">
+          <thead><tr><th>Profile</th><th>Sessions</th><th>Last used</th></tr></thead>
+          <tbody>
+            {byProfile.map((r) => (
+              <tr key={r.profile}>
+                <td>{r.profile || <span className="muted">(unknown)</span>}</td>
+                <td>{r.count}</td>
+                <td className="crumb">{r.last ? new Date(r.last).toLocaleString() : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : (
         <div className="empty">No sessions recorded.</div>
       )}

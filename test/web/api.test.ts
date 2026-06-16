@@ -54,7 +54,7 @@ describe("web api", () => {
     const app2 = createApi(db, { loadWorkspace: async () => ws as never });
     const res = await app2.request("/api/workspace");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(ws);
+    expect(await res.json()).toMatchObject(ws); // endpoint also adds activeProfile
   });
 
   it("POST /api/accounts/health re-loads and returns health (F1.5)", async () => {

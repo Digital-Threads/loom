@@ -12,7 +12,7 @@ import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } f
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot } from "../core/workspace/project-id.js";
 import { taskDetail } from "../core/plugins/task-journal/adapter.js";
-import { saveActiveProfile } from "@digital-threads/aimux/core";
+import { saveActiveProfile, loadActiveProfile } from "@digital-threads/aimux/core";
 import { addSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import {
   listProjects,
@@ -365,7 +365,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/workspace", async (c) => {
     const pid = c.req.query("project");
     const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : undefined;
-    return c.json(await loadWorkspace(root));
+    const ws = await loadWorkspace(root);
+    return c.json({ ...ws, activeProfile: loadActiveProfile() });
   });
 
   // ─── projects (D3) ─────────────────────────────────────────────────────────
