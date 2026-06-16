@@ -9,6 +9,7 @@ import { DocPanel } from "./DocPanel";
 import { CostBar } from "./CostBar";
 import { StateView } from "./StateView";
 import { LimitModal } from "./LimitModal";
+import { Markdown } from "./Markdown";
 import { toast } from "../toast";
 
 const STAGE_DESC: Record<string, string> = {
@@ -53,6 +54,7 @@ export function TaskView({
   const [activeProfile, setActiveProfile] = useState<string>("");
   const [projectName, setProjectName] = useState<string>("");
   const [reviewFindings, setReviewFindings] = useState(0);
+  const [history, setHistory] = useState<string | null | undefined>(undefined); // undefined=closed, null=loading
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
 
@@ -309,6 +311,7 @@ export function TaskView({
               {task.repo ? (
                 <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
               ) : null}
+              <button className="btn sm" title="The task's full history (goal, decisions, artifacts, PR)" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History</button>
             </div>
           </div>
           <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>
@@ -355,6 +358,23 @@ export function TaskView({
           }}
           onDismiss={() => { dismissedRef.current = limit.profile; setLimit(null); }}
         />
+      ) : null}
+      {history !== undefined ? (
+        <div className="overlay" onClick={() => setHistory(undefined)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h">📖 Task history — {task.title}</div>
+            <div className="modal-b" style={{ maxHeight: "70vh", overflow: "auto" }}>
+              {history === null ? (
+                <StateView kind="loading" />
+              ) : history.trim() === "" ? (
+                <div className="muted">No history recorded yet — it fills in as the agent works on this task.</div>
+              ) : (
+                <Markdown text={history} />
+              )}
+            </div>
+            <div className="modal-f"><button className="btn" onClick={() => setHistory(undefined)}>Close</button></div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

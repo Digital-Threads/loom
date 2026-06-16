@@ -11,7 +11,7 @@ import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../c
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
-import { taskDetail, taskPack } from "../core/plugins/task-journal/adapter.js";
+import { taskDetail, taskPack, taskPackByLoomId } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
 import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
@@ -685,6 +685,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
   app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
+  // A board task's history dossier — its task-journal pack, linked via the
+  // external reference loom:<task id> (auto-bound by the MCP during runs).
+  app.get("/api/tasks/:id/dossier", (c) => {
+    const id = c.req.param("id");
+    const t = getTask(db, id);
+    const root = resolveProjectRoot(t?.repo || projectActive()?.root || process.cwd());
+    return c.json({ pack: taskPackByLoomId(root, id) });
+  });
   // task-journal's own readable dossier (its `pack` render) as Markdown.
   app.get("/api/memory/tasks/:id/pack", (c) =>
     c.json({ pack: taskPack(resolveProjectRoot(projectActive()?.root ?? process.cwd()), c.req.param("id")) }),

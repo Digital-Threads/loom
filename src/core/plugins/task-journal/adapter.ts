@@ -125,6 +125,22 @@ export function taskPack(projectRoot: string, id: string, mode: "compact" | "ful
   }
 }
 
+/** The dossier for a Loom board task: its journal is linked by the external
+ *  reference `loom:<board task id>` (set by the MCP auto-bind). Renders that
+ *  journal's pack. Empty string when no journal is linked yet. */
+export function taskPackByLoomId(projectRoot: string, boardTaskId: string, mode: "compact" | "full" = "full"): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(boardTaskId) || boardTaskId.startsWith("-")) return "";
+  try {
+    return execFileSync(
+      "task-journal",
+      ["pack", "--external", `loom:${boardTaskId}`, "--mode", mode, "--project", projectRoot],
+      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    );
+  } catch {
+    return "";
+  }
+}
+
 export interface TaskTokens {
   used: number;
   saved: number;
