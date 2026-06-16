@@ -272,10 +272,13 @@ describe("web api", () => {
   });
 
   // ── extensibility (L11) ──
-  it("GET /api/layers lists registered plugins with capabilities (L11)", async () => {
+  it("GET /api/layers lists the full architecture: standalone + inline (L11)", async () => {
     const app2 = createApi(db);
-    const body = (await (await app2.request("/api/layers")).json()) as { layers: { id: string }[] };
-    expect(body.layers.map((l) => l.id).sort()).toEqual(["aimux", "task-journal", "token-pilot"]);
+    const body = (await (await app2.request("/api/layers")).json()) as { layers: { id: string; status: string }[] };
+    // 3 layers extracted to plugins, the rest inline in core/* (Phase-2).
+    expect(body.layers.filter((l) => l.status === "standalone").map((l) => l.id).sort()).toEqual(["accounts", "efficiency", "memory"]);
+    expect(body.layers.some((l) => l.id === "quality" && l.status === "inline")).toBe(true);
+    expect(body.layers.length).toBeGreaterThan(3);
   });
   it("GET /api/skills lists the skills library (L11)", async () => {
     const app2 = createApi(db);

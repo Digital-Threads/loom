@@ -59,6 +59,7 @@ import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
+import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
@@ -1077,18 +1078,28 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
 
   // ─── extensibility: layers / skills (L11) ─────────────────────────────────────
-  app.get("/api/layers", (c) =>
-    c.json({
-      layers: loomRegistry.list().map((p) => ({
-        id: p.id,
-        title: p.title,
-        category: p.category ?? null,
-        executes: typeof p.execute === "function",
-        slots: p.slots ?? [],
-        capabilities: p.capabilities ?? null,
-      })),
-    }),
-  );
+  // The FULL layer architecture (Bible §2): 3 standalone plugins + the inline
+  // layers in core/* that become standalone in Phase 2. For standalone layers we
+  // merge the registered plugin's capabilities (execute/slots) so the view shows
+  // both the roadmap status and what each layer actually contributes.
+  app.get("/api/layers", (c) => {
+    const plugins = new Map(loomRegistry.list().map((p) => [p.id, p]));
+    return c.json({
+      layers: LAYER_CATALOG.map((l) => {
+        const p = l.plugin ? plugins.get(l.plugin) : undefined;
+        return {
+          id: l.id,
+          title: l.label,
+          node: l.node,
+          status: l.status,
+          source: l.source,
+          description: l.description,
+          executes: p ? typeof p.execute === "function" : false,
+          slots: p?.slots ?? [],
+        };
+      }),
+    });
+  });
   // Skills library — browse / read / edit / AI-generate skills from ~/.claude/skills.
   app.get("/api/skills", (c) => c.json({ skills: listSkills() }));
   app.get("/api/skills/:name", (c) => {

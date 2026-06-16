@@ -340,7 +340,10 @@ export interface McpServer { id: string; command: string; args?: string[]; enabl
 export interface LayerInfo {
   id: string;
   title: string;
-  category: string | null;
+  node: string;
+  status: "standalone" | "inline";
+  source: string;
+  description: string;
   executes: boolean;
   slots: { stage: string; skill: string }[];
 }
