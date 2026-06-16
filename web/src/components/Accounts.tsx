@@ -186,7 +186,7 @@ export function Accounts({ client }: { client: LoomClient }) {
           <tbody>
             {byProfile.map((r) => (
               <tr key={r.profile}>
-                <td>{r.profile || <span className="muted">(unknown)</span>}</td>
+                <td>{r.profile || <span className="muted" title="Sessions aimux sees but that weren't launched through an aimux profile (e.g. plain `claude`), so they can't be attributed to one.">(not via aimux)</span>}</td>
                 <td>{r.count}</td>
                 <td className="crumb">{r.last ? new Date(r.last).toLocaleString() : "—"}</td>
               </tr>
