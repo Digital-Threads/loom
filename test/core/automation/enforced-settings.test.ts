@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ENFORCED_SETTINGS, enforcedSettingsPath } from "../../../src/core/automation/enforced-settings.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 describe("enforced settings", () => {
   it("forces token-pilot hooks on the raw read/search/bash tools", () => {
@@ -20,5 +20,13 @@ describe("enforced settings", () => {
     expect(p).toMatch(/enforced-settings\.json$/);
     const written = JSON.parse(readFileSync(p, "utf8"));
     expect(written.hooks.PreToolUse.length).toBeGreaterThan(0);
+  });
+
+  it("augments the written Bash hook with the deny-raw-search script", () => {
+    const written = JSON.parse(readFileSync(enforcedSettingsPath(), "utf8"));
+    const bash = written.hooks.PreToolUse.find((h: { matcher: string }) => h.matcher === "Bash");
+    const node = bash.hooks.find((h: { command: string }) => /deny-raw-search\.mjs$/.test(h.command));
+    expect(node).toBeDefined(); // the recursive-grep/find deny hook is wired
+    expect(existsSync(node.command.replace(/^node /, ""))).toBe(true); // and the script exists on disk
   });
 });
