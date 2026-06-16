@@ -18,7 +18,7 @@ export function CostBar({ costs }: { costs: CostRowLike[] }) {
               {s.spendEstimate ? <span className="cost-approx"> ≈</span> : null}
             </span>
           ) : null}
-          {s.tokens ? (
+          {s.tokens && s.tokens.used !== "0" ? (
             <span className="cost-tokens" title="Tokens used by the agent for this task">
               <b>{s.tokens.used}</b> tokens
               {s.tokensEstimate ? <span className="cost-approx"> ≈</span> : null}

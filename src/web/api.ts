@@ -153,24 +153,29 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // reviewers (merge by pass key) and are fixed ONCE at the end (saves tokens).
   // Manual/gated: run the first reviewer, park; the user approves & runs the next
   // via /review/run. Autopilot: run all three back-to-back.
+  // Cost guard: review must NOT run the full test suite/build — on a large repo
+  // that's the biggest token sink, and tests are the QA stage's job. Reviewers
+  // read the code + diff (token-pilot smart_diff) only.
+  const REVIEW_NO_RUN =
+    " ВАЖНО (экономия токенов): НЕ запускай тесты, билд или полный тест-сьют — ревьюй ТОЛЬКО чтением кода и diff (token-pilot smart_diff/read_symbol). Прогон тестов — задача стадии QA, не ревью.";
   const REVIEWERS: { key: string; label: string; instruction: string }[] = [
     {
       key: "self",
       label: "Своё ревью",
       instruction:
-        "Сделай собственное ревью ТЕКУЩИХ изменений кода в этом worktree. Прочитай изменённые файлы и diff. Ищи реальные баги, а не стиль.",
+        "Сделай собственное ревью ТЕКУЩИХ изменений кода в этом worktree. Прочитай изменённые файлы и diff. Ищи реальные баги, а не стиль." + REVIEW_NO_RUN,
     },
     {
       key: "ralph",
       label: "Ralph-loop",
       instruction:
-        "Запусти ralph-loop ревью с МАКСИМУМ 3 итерациями над текущими изменениями кода: на каждой итерации углубляй анализ. Верни ВСЕ найденные за все итерации проблемы.",
+        "Запусти ralph-loop ревью с МАКСИМУМ 3 итерациями над текущими изменениями кода: на каждой итерации углубляй анализ. Верни ВСЕ найденные за все итерации проблемы." + REVIEW_NO_RUN,
     },
     {
       key: "adversarial",
       label: "Adversarial",
       instruction:
-        "Запусти скилл /adversarial-review над текущими изменениями кода — пусть он попытается сломать решение (краевые случаи, неверный ввод, гонки, обход проверок). Верни найденные проблемы.",
+        "Запусти скилл /adversarial-review над текущими изменениями кода — пусть он попытается сломать решение (краевые случаи, неверный ввод, гонки, обход проверок). Верни найденные проблемы." + REVIEW_NO_RUN,
     },
   ];
   const REVIEWER_KEYS = REVIEWERS.map((r) => r.key);
@@ -910,7 +915,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "pr", "pr-result", pr); // visible in the PR result card + on revisit
     const status = pr.created ? `\n\n✅ PR создан: ${pr.url ?? "(no url)"}` : pr.error ? `\n\n⚠️ PR не создан: ${pr.error}` : "";
     recordTurn(id, "pr", pr.connector ? "Create the PR" : "Generate the PR description", pr.description + status);
-    return c.json({ pr });
+    // A created PR is the finish line: complete the PR stage and finalize, so the
+    // task reaches "done" instead of lingering on PR. Description-only runs don't
+    // finalize — the user hasn't opened a PR yet.
+    const prIsActive = getStages(db, id).some((s) => s.stage_key === "pr" && s.status === "active");
+    if (pr.created && prIsActive) {
+      completeStage(db, id, "pr");
+      await runners.done(db, id, "done");
+    }
+    return c.json({ pr, done: pr.created });
   });
 
   // ─── filesystem browse (folder pickers) ───────────────────────────────────────

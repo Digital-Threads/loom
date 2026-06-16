@@ -984,4 +984,18 @@ describe("web api — fs browse + PR connector", () => {
     expect(got.pr!.connector).toBe(false);
     expect(got.pr!.description).toContain("Persisted PR");
   });
+
+  it("creating a PR finalizes the task (pr → done)", async () => {
+    createTask(database, { id: "prd", title: "PR Done", repo: "/repo", branch: "main" });
+    const sh = async () => ({ code: 0, stdout: "https://github.com/x/y/pull/9\n" });
+    const a = createApi(database, { prOptions: () => ({ sh }) });
+    await a.request("/api/tasks/prd/start", { method: "POST" });
+    await a.request("/api/tasks/prd/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "pr" }) });
+    const res = (await (await a.request("/api/tasks/prd/pr/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connector: true }) })).json()) as { pr: { created: boolean }; done: boolean };
+    expect(res.pr.created).toBe(true);
+    expect(res.done).toBe(true);
+    const t = (await (await a.request("/api/tasks/prd")).json()) as { task: { status: string }; stages: { stage_key: string; status: string }[] };
+    expect(t.task.status).toBe("done"); // finalized, not lingering on pr
+    expect(t.stages.find((s) => s.stage_key === "pr")!.status).toBe("done");
+  });
 });
