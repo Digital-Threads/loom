@@ -99,18 +99,18 @@ export function Accounts({ client }: { client: LoomClient }) {
 
   return (
     <div className="panel">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+      <div className="acct-head">
         <h2>Subscriptions</h2>
-        <span className="row" style={{ gap: 6 }}>
+        <div className="acct-add">
           <input className="inp" placeholder="new profile name" value={newSub} onChange={(e) => setNewSub(e.target.value)} />
           <button className="btn acc" disabled={busy || !newSub.trim()} onClick={addSub}>Add subscription</button>
           <button className="btn" disabled={busy} onClick={checkHealth}>Check health</button>
-        </span>
+        </div>
       </div>
-      <div className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
-        Adding a profile only creates the config entry. To authorize it, run{" "}
-        <code style={{ background: "var(--chip)", padding: "1px 5px", borderRadius: 4 }}>aimux auth login {"<name>"}</code> in a terminal.
-      </div>
+      <p className="acct-hint">
+        Adding a profile only creates the config entry. To sign in, click <b>Authorize</b> on its row — or run{" "}
+        <code>aimux auth login {"<name>"}</code> in a terminal.
+      </p>
       <table className="tbl">
         <thead><tr><th>Profile</th><th>CLI</th><th>Health</th><th>5h limit</th><th>7d limit</th><th></th></tr></thead>
         <tbody>
