@@ -705,6 +705,43 @@ describe("web api — fs browse + PR connector", () => {
     expect(r2.runId).toBeNull();
   });
 
+  it("stop halts the task's running run and kills the live session", async () => {
+    createTask(database, { id: "sp", title: "Stop" });
+    const stopped: string[] = [];
+    const launcherStopped: string[] = [];
+    const rm = {
+      list: () => [{ runId: "run_x", taskId: "sp", status: "running" }],
+      stop: (runId: string) => { stopped.push(runId); return true; },
+    } as unknown as ReturnType<typeof createRunManager>;
+    const sessionLauncher = { run: async () => ({ text: "" }), stop: (s: string) => { launcherStopped.push(s); }, denialsOf: () => [] };
+    const a = createApi(database, { runManager: rm, sessionLauncher });
+    const res = await a.request("/api/tasks/sp/stop", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect((await res.json())).toEqual({ ok: true });
+    expect(stopped).toEqual(["run_x"]); // RunManager.stop called with the running run
+    expect(launcherStopped.length).toBe(1); // live session process killed
+  });
+
+  it("stop returns 404 for an unknown task", async () => {
+    const a = createApi(database);
+    const res = await a.request("/api/tasks/nope/stop", { method: "POST" });
+    expect(res.status).toBe(404);
+  });
+
+  it("stop is idempotent when there is no active run", async () => {
+    createTask(database, { id: "si", title: "Idem" });
+    const stopped: string[] = [];
+    const rm = {
+      list: () => [],
+      stop: (runId: string) => { stopped.push(runId); return true; },
+    } as unknown as ReturnType<typeof createRunManager>;
+    const a = createApi(database, { runManager: rm });
+    const res = await a.request("/api/tasks/si/stop", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect((await res.json())).toEqual({ ok: true });
+    expect(stopped).toEqual([]); // nothing running → RunManager.stop not called
+  });
+
   it("reconcileInterruptedRuns marks stale running rows interrupted on boot", () => {
     createTask(database, { id: "rc", title: "Recon" });
     insertRun(database, { id: "run_stale", taskId: "rc" }); // left 'running' by a dead process

@@ -60,6 +60,11 @@ export interface RunManager {
   /** Inject stdin into a live run (loom-isd.13). Returns false if the run is
    *  unknown or never registered an input handler. */
   sendInput(runId: string, data: string): boolean;
+  /** Stop a running run: mark it terminal and drop its input handler. Returns
+   *  false if the run is unknown or already settled. The real work is halted by
+   *  killing the live session process (sessionLauncher.stop); this makes the run
+   *  record honest immediately (board / SSE / active-run stop seeing it run). */
+  stop(runId: string): boolean;
 }
 
 function newRunId(): string {
@@ -120,6 +125,14 @@ export function createRunManager(persist?: RunPersist): RunManager {
     list: () => [...runs.values()],
     childrenOf: (parentRunId) => [...runs.values()].filter((r) => r.parentRunId === parentRunId),
     wait: (runId) => settled.get(runId) ?? Promise.reject(new Error(`unknown run ${runId}`)),
+    stop: (runId) => {
+      const rec = runs.get(runId);
+      if (!rec || rec.status !== "running") return false;
+      rec.status = "failed";
+      rec.error = "stopped by user";
+      inputHandlers.delete(runId);
+      return true;
+    },
     sendInput: (runId, data) => {
       const handler = inputHandlers.get(runId);
       if (!handler) return false;
