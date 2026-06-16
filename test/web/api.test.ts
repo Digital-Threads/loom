@@ -277,10 +277,17 @@ describe("web api", () => {
     const body = (await (await app2.request("/api/layers")).json()) as { layers: { id: string }[] };
     expect(body.layers.map((l) => l.id).sort()).toEqual(["aimux", "task-journal", "token-pilot"]);
   });
-  it("GET /api/skills lists slot contributions (L11)", async () => {
+  it("GET /api/skills lists the skills library (L11)", async () => {
     const app2 = createApi(db);
-    const body = (await (await app2.request("/api/skills")).json()) as { slots: unknown[] };
-    expect(Array.isArray(body.slots)).toBe(true);
+    const body = (await (await app2.request("/api/skills")).json()) as { skills: unknown[] };
+    expect(Array.isArray(body.skills)).toBe(true);
+  });
+
+  it("POST /api/skills/generate requires a description; 422 on invalid agent output", async () => {
+    // agent returns text with no valid frontmatter name → nothing written, 422.
+    const app2 = createApi(db, { skillAgent: async () => "no frontmatter" });
+    expect((await app2.request("/api/skills/generate", { method: "POST", body: "{}" })).status).toBe(400);
+    expect((await app2.request("/api/skills/generate", { method: "POST", body: JSON.stringify({ description: "do x" }) })).status).toBe(422);
   });
 
   // ── quality (L6) ──

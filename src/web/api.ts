@@ -43,7 +43,8 @@ import {
   parseAnalysis,
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
-// createAimuxStageAgent removed — review now runs in the task session
+import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
+import { listSkills, readSkill, writeSkill, generateSkill } from "../core/skills/skills.js";
 import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
@@ -89,6 +90,8 @@ export interface ApiDeps {
   search?: (query: string) => RecallHit[];
   /** Agent for the dialog stages (default: aimux cheap one-shot). */
   stageAgent?: StageAgent;
+  /** One-shot agent for AI skill generation (default: aimux headless). */
+  skillAgent?: (prompt: string) => Promise<string>;
   /** Launcher for the per-task Claude session (default: aimux session launcher).
    *  When deps.stageAgent is set it wins (one-shot, for tests). */
   sessionLauncher?: SessionLauncher;
@@ -1086,13 +1089,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       })),
     }),
   );
-  app.get("/api/skills", (c) =>
-    c.json({
-      slots: loomRegistry
-        .list()
-        .flatMap((p) => (p.slots ?? []).map((s) => ({ plugin: p.id, stage: s.stage, skill: s.skill }))),
-    }),
-  );
+  // Skills library — browse / read / edit / AI-generate skills from ~/.claude/skills.
+  app.get("/api/skills", (c) => c.json({ skills: listSkills() }));
+  app.get("/api/skills/:name", (c) => {
+    const content = readSkill(c.req.param("name"));
+    return content === null ? c.json({ error: "not found" }, 404) : c.json({ name: c.req.param("name"), content });
+  });
+  app.put("/api/skills/:name", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { content?: unknown };
+    if (typeof body.content !== "string") return c.json({ error: "content required" }, 400);
+    return writeSkill(c.req.param("name"), body.content) ? c.json({ ok: true }) : c.json({ error: "invalid name" }, 400);
+  });
+  app.post("/api/skills/generate", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { description?: unknown; profile?: unknown };
+    const description = typeof body.description === "string" ? body.description : "";
+    if (!description.trim()) return c.json({ error: "description required" }, 400);
+    const profile = typeof body.profile === "string" ? body.profile : undefined;
+    const agent = deps.skillAgent ?? createAimuxStageAgent({ profile });
+    const r = await generateSkill(description, agent);
+    return r ? c.json(r) : c.json({ error: "generation produced no valid skill" }, 422);
+  });
 
   // ─── quality: review / qa (L6) ────────────────────────────────────────────────
   app.get("/api/flow-config/:stage", (c) => c.json({ passes: resolveFlow(c.req.param("stage")) }));

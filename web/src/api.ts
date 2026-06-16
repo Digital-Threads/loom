@@ -84,9 +84,9 @@ async function getJson<T>(path: string, f: Fetcher): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function postJson<T>(path: string, body: unknown, f: Fetcher): Promise<T> {
+async function postJson<T>(path: string, body: unknown, f: Fetcher, method = "POST"): Promise<T> {
   const res = await f(path, {
-    method: "POST",
+    method,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
@@ -293,7 +293,12 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ allowed: string[] }>(`${base}/api/tasks/${id}/permissions/allow`, { tool }, f),
     // L11 — extensibility
     layers: () => getJson<{ layers: LayerInfo[] }>(`${base}/api/layers`, f).then((d) => d.layers),
-    skills: () => getJson<{ slots: SkillSlot[] }>(`${base}/api/skills`, f).then((d) => d.slots),
+    // Skills library (~/.claude/skills): list / read / edit / AI-generate.
+    skills: () => getJson<{ skills: SkillMeta[] }>(`${base}/api/skills`, f).then((d) => d.skills),
+    skillGet: (name: string) => getJson<{ name: string; content: string }>(`${base}/api/skills/${encodeURIComponent(name)}`, f),
+    skillSave: (name: string, content: string) => postJson<{ ok: boolean }>(`${base}/api/skills/${encodeURIComponent(name)}`, { content }, f, "PUT"),
+    skillGenerate: (description: string, profile?: string) =>
+      postJson<{ name: string; content: string }>(`${base}/api/skills/generate`, { description, profile }, f),
     // L13 — conductor
     advance: (id: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/advance`, {}, f).then((d) => d.runId),
@@ -339,7 +344,7 @@ export interface LayerInfo {
   executes: boolean;
   slots: { stage: string; skill: string }[];
 }
-export interface SkillSlot { plugin: string; stage: string; skill: string }
+export interface SkillMeta { name: string; description: string; userInvocable: boolean; file: string; kind: "dir" | "file" }
 
 export interface ReviewFinding { pass: string; severity: string; message: string; file?: string }
 export interface ReviewResult { findings: ReviewFinding[]; counts: Record<string, number>; passed: boolean }
