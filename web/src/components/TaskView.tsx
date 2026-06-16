@@ -50,11 +50,15 @@ export function TaskView({
   const [reload, setReload] = useState(0);
   const [openFile, setOpenFile] = useState<{ path: string; mode: "file" | "diff" } | null>(null);
   const [profiles, setProfiles] = useState<string[]>([]);
+  const [activeProfile, setActiveProfile] = useState<string>("");
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
 
   useEffect(() => {
-    client.workspace().then((w) => setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean))).catch(() => {});
+    client.workspace().then((w) => {
+      setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean));
+      setActiveProfile(w.activeProfile ?? "");
+    }).catch(() => {});
   }, [client]);
 
   // While a run is live, watch the current subscription's rate limit. Near the
@@ -203,21 +207,30 @@ export function TaskView({
           <div className="rail-sub">
             <span className="chip">{task.run_mode}</span>
             {profiles.length ? (
-              <select
-                className="rail-profile"
-                title="Subscription this task runs under — switch it any time; the session resumes under the new account"
-                value={task.profile ?? ""}
-                disabled={busy}
-                onChange={(e) => {
-                  const p = e.target.value;
-                  if (!p || p === task.profile) return;
-                  setLive([]);
-                  client.switchProfile(taskId, p).then((rid) => attachStream(rid, true)).catch((err) => toast.error(`Couldn’t switch account: ${err}`));
-                }}
-              >
-                {!task.profile ? <option value="">account…</option> : null}
-                {profiles.map((p) => <option key={p} value={p}>◦ {p}</option>)}
-              </select>
+              (() => {
+                // Effective account: the task's pinned profile, else the active
+                // one it falls back to. Always show *something* so it's never
+                // ambiguous which account runs the task.
+                const effective = task.profile || activeProfile || "";
+                const pinned = !!task.profile;
+                return (
+                  <select
+                    className="rail-profile"
+                    title={pinned ? "Subscription this task runs under — switch any time; the session resumes under the new account" : `Not pinned — runs under the active account (${effective || "default"}). Pick one to pin it.`}
+                    value={effective}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const p = e.target.value;
+                      if (!p || p === effective) return;
+                      setLive([]);
+                      client.switchProfile(taskId, p).then((rid) => attachStream(rid, true)).catch((err) => toast.error(`Couldn’t switch account: ${err}`));
+                    }}
+                  >
+                    {!effective ? <option value="">account…</option> : null}
+                    {profiles.map((p) => <option key={p} value={p}>◦ {p}{!pinned && p === effective ? " (default)" : ""}</option>)}
+                  </select>
+                );
+              })()
             ) : null}
             {task.session_id ? (
               <span className="chip" title="One live Claude session for the whole task">◦ {task.session_id.slice(0, 8)}</span>
