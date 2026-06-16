@@ -44,6 +44,13 @@ export const SESSION_PREAMBLE = [
   "   Пока не ГОТОВО — переход к следующему шагу запрещён.",
 ].join("\n");
 
+/** Short mandatory-tools reminder appended to every stage prompt (not just the
+ *  first), so token-pilot + task-journal stay non-optional through the session. */
+export const TOOLS_ANCHOR =
+  "[ОБЯЗАТЕЛЬНО на этом шаге: код читай/ищи ТОЛЬКО через token-pilot " +
+  "(smart_read, read_symbol, read_for_edit, find_usages, smart_diff, smart_log, test_summary) — " +
+  "НЕ Read/Grep/cat/raw-git. Решения, отклонения и находки фиксируй в task-journal по ходу.]";
+
 /** Parse the mandatory completeness marker the agent appends as the last line.
  *  Conservative: only an explicit "НЕ ГОТОВО" parks the stage; an explicit
  *  "ГОТОВО" or a missing marker is treated as complete (we don't block on a
@@ -122,7 +129,10 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
         await deps.compact({ sessionId, cwd: opts.cwd });
       }
 
-      const body = opts.raw ? instruction : stageInstruction(opts.stage, instruction);
+      // Re-inject the mandatory-tools rule on EVERY stage prompt (the full
+      // preamble is only sent once at session creation, so on resume it would
+      // otherwise decay). Keeps token-pilot + task-journal non-optional.
+      const body = opts.raw ? instruction : `${stageInstruction(opts.stage, instruction)}\n\n${TOOLS_ANCHOR}`;
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
       const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
 

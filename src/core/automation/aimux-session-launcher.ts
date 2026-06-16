@@ -9,6 +9,7 @@ import { loadConfig, buildRunParams, loadActiveProfile } from "@digital-threads/
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
+import { enforcedSettingsPath } from "./enforced-settings.js";
 
 export interface AimuxLiveLauncherDeps {
   loadConfig?: typeof loadConfig;
@@ -27,6 +28,9 @@ export interface AimuxLiveLauncherDeps {
 // (A git worktree is NOT an isolation boundary; real isolation is a deferred
 // hardening — see .docs deferred-features plan.)
 const STREAM_FLAGS = ["-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json"];
+// Force token-pilot's hooks into every Loom session regardless of the profile's
+// config dir — the platform makes the mandatory tools non-optional.
+const ENFORCE_FLAGS = ["--settings", enforcedSettingsPath()];
 
 /** A ProcLike that yields one empty result then closes — used when there is no
  *  aimux config/profile, so the pipeline degrades gracefully instead of hanging. */
@@ -68,7 +72,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
       : allowedTools && allowedTools.length
         ? [`--allowedTools=${allowedTools.join(",")}`]
         : [];
-    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...permArgs, ...sessionArgs] });
+    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
     const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
     const wrapped = sandboxOn && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
