@@ -623,9 +623,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
 
   // Delete a task and all its related rows. 200 {ok:true} if it existed, else 404.
+  // First kill any live process and drop its stream sink so an in-flight run
+  // can't resurrect orphan rows (runs/cost) under the just-deleted task.
   app.delete("/api/tasks/:id", (c) => {
     const id = c.req.param("id");
-    if (!deleteTask(db, id)) return c.json({ error: "not found" }, 404);
+    if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
+    const sid = getTaskSession(db, id).sessionId;
+    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    streamSinks.delete(id);
+    deleteTask(db, id);
     return c.json({ ok: true });
   });
 

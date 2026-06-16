@@ -164,7 +164,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     tasks: () => getJson<{ tasks: TaskRow[] }>(`${base}/api/tasks`, f).then((d) => d.tasks),
     task: (id: string) => getJson<TaskDetail>(`${base}/api/tasks/${id}`, f),
     create: (input: NewTask) => postJson<{ task: TaskRow }>(`${base}/api/tasks`, input, f).then((d) => d.task),
-    deleteTask: (id: string) => deleteJson<{ ok: boolean }>(`${base}/api/tasks/${id}`, f),
+    deleteTask: (id: string) => deleteJson<{ ok: boolean }>(`${base}/api/tasks/${encodeURIComponent(id)}`, f),
     start: (id: string) => postJson<{ active: string | null }>(`${base}/api/tasks/${id}/start`, {}, f),
     accept: (id: string, key: string) =>
       postJson<{ next: string | null }>(`${base}/api/tasks/${id}/stages/${key}/accept`, {}, f),

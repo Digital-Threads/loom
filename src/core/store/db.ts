@@ -186,6 +186,9 @@ export function deleteTask(db: Database.Database, id: string): boolean {
     ]) {
       db.prepare(`DELETE FROM ${table} WHERE task_id = ?`).run(taskId);
     }
+    // Per-task settings live in `settings` under a string key (no task_id column);
+    // drop the task's permission allowlist so it doesn't linger as an orphan.
+    db.prepare("DELETE FROM settings WHERE key = ?").run(`perm.allow.${taskId}`);
     return db.prepare("DELETE FROM tasks WHERE id = ?").run(taskId).changes > 0;
   });
   return tx(id);

@@ -137,4 +137,27 @@ describe("core-store", () => {
   it("deleteTask returns false for a missing task", () => {
     expect(deleteTask(db, "ghost")).toBe(false);
   });
+
+  it("deleteTask also clears the task's permission allowlist from settings", () => {
+    createTask(db, { id: "d2", title: "Perms" });
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+      "perm.allow.d2",
+      JSON.stringify(["Bash"]),
+      Date.now(),
+    );
+    deleteTask(db, "d2");
+    expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("perm.allow.d2")).toBeUndefined();
+  });
+
+  // Invariant: deleteTask must wipe every table that has a task_id column. If a
+  // new child table is added to the schema, this fails until both the expected
+  // set here AND deleteTask()'s table list in db.ts are updated.
+  it("deleteTask covers every table that references a task", () => {
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[])
+      .map((t) => t.name)
+      .filter((name) => (db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).some((col) => col.name === "task_id"));
+    expect(tables.sort()).toEqual(
+      ["artifacts", "attachments", "chat_messages", "cost_rollups", "runs", "stages", "steps"].sort(),
+    );
+  });
 });
