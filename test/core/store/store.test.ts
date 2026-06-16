@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   openStore,
   createTask,
+  deleteTask,
   getTask,
   listTasks,
   updateTaskStatus,
@@ -122,5 +123,18 @@ describe("core-store", () => {
 
   it("getTask returns undefined for missing id", () => {
     expect(getTask(db, "nope")).toBeUndefined();
+  });
+
+  it("deleteTask removes the task and its related rows", () => {
+    createTask(db, { id: "d1", title: "Doomed" });
+    expect(getStages(db, "d1").length).toBeGreaterThan(0); // seeded children
+
+    expect(deleteTask(db, "d1")).toBe(true);
+    expect(getTask(db, "d1")).toBeUndefined();
+    expect(getStages(db, "d1")).toHaveLength(0); // children gone too
+  });
+
+  it("deleteTask returns false for a missing task", () => {
+    expect(deleteTask(db, "ghost")).toBe(false);
   });
 });

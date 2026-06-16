@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { type LoomClient, type BoardColumn, type ProjectEntry, STAGE_LABELS } from "../api";
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
@@ -44,6 +44,18 @@ export function Board({
       .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
   }
 
+  // Trash button on a card → confirm, delete the task (and all its rows), then
+  // refresh the board so the card drops out. stopPropagation keeps the click
+  // from also opening the task.
+  function onDelete(id: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("Delete this task? This can’t be undone.")) return;
+    client
+      .deleteTask(id)
+      .then(() => client.board().then(setCols))
+      .catch((er) => toast.error(`Couldn’t delete the task: ${er}`));
+  }
+
   return (
     <div className="board">
       {cols.map((col) => (
@@ -68,6 +80,14 @@ export function Board({
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
                   onClick={() => onOpen(card.id)}
                 >
+                  <button
+                    className="card-del"
+                    title="Delete task"
+                    aria-label="Delete task"
+                    onClick={(e) => onDelete(card.id, e)}
+                  >
+                    🗑
+                  </button>
                   <div className="t">{card.title}</div>
                   <div className="meta">
                     <span className={`chip ${statusClass(card.status)}`}>

@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -620,6 +620,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       projectId,
     });
     return c.json({ task }, 201);
+  });
+
+  // Delete a task and all its related rows. 200 {ok:true} if it existed, else 404.
+  app.delete("/api/tasks/:id", (c) => {
+    const id = c.req.param("id");
+    if (!deleteTask(db, id)) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true });
   });
 
   // Switch the subscription a task runs under. Body: { profile, resume? }.
