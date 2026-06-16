@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, ReviewResult, QaResult } from "../api";
+import type { LoomClient, ReviewResult, QaResult, PrResult } from "../api";
 
 const REVIEWER_ORDER = ["self", "ralph", "adversarial"] as const;
 const REVIEWER_LABELS: Record<string, string> = { self: "Своё ревью", ralph: "Ralph-loop", adversarial: "Adversarial" };
@@ -22,12 +22,15 @@ export function StageResult({
 }) {
   const [review, setReview] = useState<{ result: ReviewResult | null; action?: string; reviewersDone?: string[] } | null>(null);
   const [qa, setQa] = useState<QaResult | null>(null);
+  const [pr, setPr] = useState<PrResult | null>(null);
 
   useEffect(() => {
     setReview(null);
     setQa(null);
+    setPr(null);
     if (stage === "review") client.reviewGet(taskId).then(setReview).catch(() => {});
     else if (stage === "qa") client.qaGet(taskId).then(setQa).catch(() => {});
+    else if (stage === "pr") client.prGet(taskId).then(setPr).catch(() => {});
   }, [client, taskId, stage, reloadKey]);
 
   if (stage === "review" && review?.result) {
@@ -82,6 +85,26 @@ export function StageResult({
             </li>
           ))}
         </ul>
+      </div>
+    );
+  }
+
+  if (stage === "pr" && pr) {
+    const badge = pr.created ? "badge-ok" : pr.error ? "badge-warn" : "badge-dim";
+    const label = pr.created ? "PR created" : pr.error ? "not created" : "description only";
+    return (
+      <div className="result-card">
+        <div className="result-head">
+          <span className={`badge ${badge}`}>{label}</span>
+          {pr.created && pr.url ? (
+            <a className="chip" href={pr.url} target="_blank" rel="noreferrer">{pr.url}</a>
+          ) : null}
+          {!pr.connector && !pr.created ? <span className="muted">no connector — push + PR was off</span> : null}
+        </div>
+        {pr.error ? (
+          <pre className="finding sev-bug" style={{ whiteSpace: "pre-wrap", padding: "6px 8px", margin: "6px 0" }}>{pr.error}</pre>
+        ) : null}
+        <pre className="pr-desc" style={{ whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto", margin: 0 }}>{pr.description}</pre>
       </div>
     );
   }

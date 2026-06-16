@@ -47,7 +47,7 @@ import {
 import { createTaskSession, parseCompleteness, declaresRemainingWork, type SessionLauncher } from "../core/automation/task-session.js";
 import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
-import { runPr, runDone, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
+import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
@@ -278,8 +278,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const stdout = execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
       return { code: 0, stdout };
     } catch (e) {
-      const err = e as { status?: number; stdout?: string };
-      return { code: err.status ?? 1, stdout: err.stdout ?? "" };
+      // Combine stderr (where gh/git write failures) so the PR connector surfaces
+      // a real reason instead of an empty string. ENOENT → command not installed.
+      const err = e as { status?: number; stdout?: string; stderr?: string; code?: string };
+      const out = `${err.stdout ?? ""}${err.stderr ?? ""}` || (err.code === "ENOENT" ? `${cmd}: command not found` : "");
+      return { code: err.status ?? 1, stdout: out };
     }
   };
   /** QA checks for a task: explicit override, else real tests/build in its repo. */
@@ -389,6 +392,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
     pr: async (_d, id) => {
       const pr = runPr(db, id, deps.prOptions?.(id) ?? {});
+      saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
       return { ok: true };
     },
@@ -855,7 +859,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       };
     }
     const pr = runPr(db, id, opts);
-    recordTurn(id, "pr", "Generate the PR description", pr.description);
+    saveResult(id, "pr", "pr-result", pr); // visible in the PR result card + on revisit
+    const status = pr.created ? `\n\n✅ PR создан: ${pr.url ?? "(no url)"}` : pr.error ? `\n\n⚠️ PR не создан: ${pr.error}` : "";
+    recordTurn(id, "pr", pr.connector ? "Create the PR" : "Generate the PR description", pr.description + status);
     return c.json({ pr });
   });
 
@@ -1062,6 +1068,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const result = await runQa(checks);
     saveResult(id, "qa", "qa-result", { result });
     return c.json({ result });
+  });
+  // Latest PR result (description + created/url/error) for the PR result card.
+  app.get("/api/tasks/:id/pr", (c) => {
+    const stored = loadResult<{ description: string; created: boolean; url?: string; connector: boolean; error?: string }>(c.req.param("id"), "pr-result");
+    return c.json({ pr: stored });
+  });
+  // Is the GitHub PR connector usable for this task (gh on PATH + origin remote)?
+  // Drives the "push + PR" affordance so the user knows before clicking.
+  app.get("/api/tasks/:id/pr/connector", (c) => {
+    const t = getTask(db, c.req.param("id"));
+    if (!t?.repo) return c.json({ gh: false, remote: false, repo: false });
+    return c.json({ ...prConnectorStatus(realSh, t.repo), repo: true });
   });
   // Stored stage results (history re-display when revisiting a completed stage).
   app.get("/api/tasks/:id/analysis", (c) => {

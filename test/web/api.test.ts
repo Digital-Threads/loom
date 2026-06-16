@@ -941,10 +941,11 @@ describe("web api — fs browse + PR connector", () => {
     const body = (await res.json()) as { pr: { created: boolean; url?: string } };
     expect(body.pr.created).toBe(true);
     expect(body.pr.url).toBe("https://github.com/x/y/pull/1");
-    expect(calls[0]).toEqual(["git", ["push", "-u", "origin", "loom/p1"]]);
-    expect(calls[1][0]).toBe("gh");
-    expect(calls[1][1]).toContain("--head");
-    expect(calls[1][1]).toContain("loom/p1");
+    expect(calls.some((c) => c[0] === "git" && c[1][0] === "push" && c[1].includes("loom/p1"))).toBe(true);
+    const ghCreate = calls.find((c) => c[0] === "gh" && c[1][0] === "pr" && c[1][1] === "create");
+    expect(ghCreate).toBeDefined();
+    expect(ghCreate![1]).toContain("--head");
+    expect(ghCreate![1]).toContain("loom/p1");
   });
 
   it("PR connector without a repo → 400", async () => {
@@ -964,5 +965,16 @@ describe("web api — fs browse + PR connector", () => {
     const res = await a.request("/api/tasks/p3/pr/run", { method: "POST", body: "{}" });
     const body = (await res.json()) as { pr: { created: boolean } };
     expect(body.pr.created).toBe(false);
+  });
+
+  it("PR result is persisted and re-readable via GET /pr", async () => {
+    createTask(database, { id: "p4", title: "Persisted PR", repo: "/repo", description: "do the thing" });
+    const a = createApi(database);
+    await a.request("/api/tasks/p4/pr/run", { method: "POST", body: "{}" });
+    const got = (await (await a.request("/api/tasks/p4/pr")).json()) as { pr: { description: string; created: boolean; connector: boolean } | null };
+    expect(got.pr).not.toBeNull();
+    expect(got.pr!.created).toBe(false);
+    expect(got.pr!.connector).toBe(false);
+    expect(got.pr!.description).toContain("Persisted PR");
   });
 });

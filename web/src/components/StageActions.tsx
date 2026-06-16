@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LoomClient } from "../api";
 import { toast } from "../toast";
 
@@ -22,6 +22,20 @@ export function StageActions({
 }) {
   const [busy, setBusy] = useState(false);
   const [connector, setConnector] = useState(false);
+  // PR connector availability (gh on PATH + origin remote) — so "push + PR" is
+  // only offered when it can actually work, with a clear reason when it can't.
+  const [conn, setConn] = useState<{ gh: boolean; remote: boolean; repo: boolean } | null>(null);
+  useEffect(() => {
+    if (stage !== "pr") return;
+    client.prConnector(taskId).then(setConn).catch(() => setConn(null));
+  }, [client, taskId, stage]);
+  const connReady = !!conn && conn.repo && conn.gh && conn.remote;
+  const connReason = !conn
+    ? ""
+    : !conn.repo ? "task has no repo"
+    : !conn.gh ? "gh (GitHub CLI) not installed"
+    : !conn.remote ? "no origin remote"
+    : "";
   const [returning, setReturning] = useState(false);
   const [comment, setComment] = useState("");
   async function run(fn: () => Promise<unknown>) {
@@ -62,15 +76,18 @@ export function StageActions({
   if (stage === "brainstorm")
     return <button className="btn sm" disabled={busy} onClick={() => run(() => client.brainstormDone(taskId))}>{busy ? <><Spin /> …</> : "Done → Spec"}</button>;
 
-  if (stage === "pr")
+  if (stage === "pr") {
+    const useConnector = connector && connReady;
     return (
       <>
-        <label className="fld-check sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-          <input type="checkbox" checked={connector} onChange={(e) => setConnector(e.target.checked)} /> push + PR
+        <label className="fld-check sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }} title={connReady ? "Push the branch and open a PR via gh" : `push + PR unavailable: ${connReason}`}>
+          <input type="checkbox" checked={useConnector} disabled={!connReady} onChange={(e) => setConnector(e.target.checked)} /> push + PR
         </label>
-        <button className="btn acc sm" disabled={busy} onClick={() => run(() => client.prRun(taskId, { connector }))}>{busy ? <><Spin /> …</> : connector ? "▶ Create PR" : "▶ Generate PR"}</button>
+        {conn && !connReady ? <span className="muted sm" title={connReason}>⚠ no connector — {connReason}</span> : null}
+        <button className="btn acc sm" disabled={busy} onClick={() => run(() => client.prRun(taskId, { connector: useConnector }))}>{busy ? <><Spin /> …</> : useConnector ? "▶ Create PR" : "▶ Generate PR"}</button>
       </>
     );
+  }
 
   if (stage === "done")
     return <button className="btn acc sm" disabled={busy || status === "done"} onClick={() => run(() => client.doneRun(taskId))}>{status === "done" ? "✓ Done" : "Finish task"}</button>;

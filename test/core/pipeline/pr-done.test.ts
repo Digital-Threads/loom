@@ -31,13 +31,29 @@ describe("runPr (L14.1)", () => {
     const calls: string[][] = [];
     const sh = (cmd: string, args: string[]) => {
       calls.push([cmd, ...args]);
-      return { code: 0, stdout: cmd === "gh" ? "https://github.com/x/y/pull/1\n" : "" };
+      // gh pr create returns the PR url; preflight (gh --version, git remote) ok.
+      return { code: 0, stdout: cmd === "gh" && args[0] === "pr" ? "https://github.com/x/y/pull/1\n" : "" };
     };
     const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo", base: "main", describe: () => "BODY" });
     expect(r.created).toBe(true);
     expect(r.url).toBe("https://github.com/x/y/pull/1");
-    expect(calls[0][0]).toBe("git");
-    expect(calls[1]).toContain("gh");
+    expect(calls.some((c) => c[0] === "git" && c[1] === "push")).toBe(true);
+    expect(calls.some((c) => c[0] === "gh" && c[1] === "pr" && c[2] === "create")).toBe(true);
+  });
+
+  it("reports a clear error (not created) when gh is missing", () => {
+    const sh = (cmd: string) => ({ code: cmd === "gh" ? 1 : 0, stdout: cmd === "gh" ? "gh: command not found" : "" });
+    const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
+    expect(r.created).toBe(false);
+    expect(r.connector).toBe(true);
+    expect(r.error).toMatch(/gh/i);
+  });
+
+  it("reports a clear error when the repo has no origin remote", () => {
+    const sh = (cmd: string, args: string[]) => ({ code: cmd === "git" && args[0] === "remote" ? 1 : 0, stdout: "" });
+    const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
+    expect(r.created).toBe(false);
+    expect(r.error).toMatch(/origin/i);
   });
 });
 

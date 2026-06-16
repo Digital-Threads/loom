@@ -25,28 +25,57 @@ export interface PrOptions {
 
 export interface PrResult {
   description: string;
+  /** Whether a PR was actually opened (connector path succeeded). */
   created: boolean;
   url?: string;
+  /** True when the user asked to push + open a PR (connector path attempted). */
+  connector: boolean;
+  /** Human-readable reason the PR wasn't created (missing gh / remote, push or
+   *  `gh pr create` failure). Empty on success or description-only runs. */
+  error?: string;
 }
 
-/** L14.1 — produce the PR description artifact; optionally create the PR. */
+/** Is the GitHub PR connector usable in this repo: `gh` on PATH + an `origin`
+ *  remote. Returned to the UI so the user knows whether "push + PR" will work. */
+export function prConnectorStatus(sh: Sh, repoRoot: string): { gh: boolean; remote: boolean } {
+  const gh = sh("gh", ["--version"], repoRoot).code === 0;
+  const remote = sh("git", ["remote", "get-url", "origin"], repoRoot).code === 0;
+  return { gh, remote };
+}
+
+/** L14.1 — produce the PR description artifact; optionally create the PR. The
+ *  connector path is best-effort but NEVER silent: every failure (missing gh,
+ *  no remote, push/`gh pr create` non-zero) comes back as `error` for the UI. */
 export function runPr(db: Database.Database, taskId: string, opts: PrOptions = {}): PrResult {
   const description = opts.describe ? opts.describe() : defaultDescription(db, taskId);
   createArtifact(db, { id: id(), taskId, stage: "pr", kind: "pr-description", content: description, status: "accepted" });
 
-  if (opts.connector && opts.sh && opts.repoRoot && opts.branch) {
-    const base = opts.base ?? "main";
-    opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
-    const title = getTask(db, taskId)?.title ?? taskId;
-    const res = opts.sh(
-      "gh",
-      ["pr", "create", "--base", base, "--head", opts.branch, "--title", title, "--body", description],
-      opts.repoRoot,
-    );
-    const url = res.stdout.trim().split("\n").pop();
-    return { description, created: res.code === 0, url: res.code === 0 ? url : undefined };
+  if (!opts.connector) return { description, created: false, connector: false };
+
+  // Connector requested but not wired up — report precisely instead of failing mute.
+  if (!opts.sh || !opts.repoRoot || !opts.branch) {
+    return { description, created: false, connector: true, error: "PR connector is not configured for this task (no repo/branch)." };
   }
-  return { description, created: false };
+  const { gh, remote } = prConnectorStatus(opts.sh, opts.repoRoot);
+  if (!gh) return { description, created: false, connector: true, error: "GitHub CLI (gh) is not installed or not on PATH — install gh and run `gh auth login`." };
+  if (!remote) return { description, created: false, connector: true, error: "This repo has no `origin` remote — add a GitHub remote before opening a PR." };
+
+  const base = opts.base ?? "main";
+  const push = opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
+  if (push.code !== 0) {
+    return { description, created: false, connector: true, error: `git push failed:\n${push.stdout.trim() || "(no output)"}` };
+  }
+  const title = getTask(db, taskId)?.title ?? taskId;
+  const res = opts.sh(
+    "gh",
+    ["pr", "create", "--base", base, "--head", opts.branch, "--title", title, "--body", description],
+    opts.repoRoot,
+  );
+  if (res.code !== 0) {
+    return { description, created: false, connector: true, error: `gh pr create failed:\n${res.stdout.trim() || "(no output)"}` };
+  }
+  const url = res.stdout.trim().split("\n").pop();
+  return { description, created: true, connector: true, url };
 }
 
 function defaultDescription(db: Database.Database, taskId: string): string {

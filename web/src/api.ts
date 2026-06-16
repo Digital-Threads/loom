@@ -290,7 +290,11 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/run-stage`, {}, f),
     // L14 — PR / Done
     prRun: (id: string, opts?: { connector?: boolean; base?: string }) =>
-      postJson<{ pr: { description: string; created: boolean; url?: string } }>(`${base}/api/tasks/${id}/pr/run`, opts ?? {}, f).then((d) => d.pr),
+      postJson<{ pr: PrResult }>(`${base}/api/tasks/${id}/pr/run`, opts ?? {}, f).then((d) => d.pr),
+    prGet: (id: string) =>
+      getJson<{ pr: PrResult | null }>(`${base}/api/tasks/${id}/pr`, f).then((d) => d.pr),
+    prConnector: (id: string) =>
+      getJson<{ gh: boolean; remote: boolean; repo: boolean }>(`${base}/api/tasks/${id}/pr/connector`, f),
     doneRun: (id: string) => postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/done/run`, {}, f),
     // D5 — connectors (MCP)
     mcpList: () => getJson<{ servers: McpServer[] }>(`${base}/api/connectors/mcp`, f).then((d) => d.servers),
@@ -328,6 +332,7 @@ export interface SkillSlot { plugin: string; stage: string; skill: string }
 
 export interface ReviewFinding { pass: string; severity: string; message: string; file?: string }
 export interface ReviewResult { findings: ReviewFinding[]; counts: Record<string, number>; passed: boolean }
+export interface PrResult { description: string; created: boolean; url?: string; connector: boolean; error?: string }
 export interface QaResult { passed: boolean; results: { key: string; ok: boolean; output?: string }[] }
 
 export interface ChatMessage { id: string; role: string; content: string }
