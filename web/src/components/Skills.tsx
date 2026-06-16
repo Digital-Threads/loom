@@ -4,6 +4,15 @@ import { StateView } from "./StateView";
 import { Markdown } from "./Markdown";
 import { toast } from "../toast";
 
+// Split a SKILL.md into its frontmatter fields + body, so the viewer shows a
+// clean header (description + invocable badge) instead of raw `---` yaml.
+function splitFrontmatter(md: string): { description: string; invocable: boolean; body: string } {
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!m) return { description: "", invocable: false, body: md };
+  const get = (k: string) => m[1].match(new RegExp(`^${k}:[ \\t]*(.+?)[ \\t]*$`, "m"))?.[1]?.replace(/^["']|["']$/g, "") ?? "";
+  return { description: get("description"), invocable: get("user_invocable") === "true", body: m[2].trim() };
+}
+
 // L11.3 — Skills: a library of Claude Code skills from ~/.claude/skills.
 // List + search on the left, view/edit the SKILL.md on the right, and an
 // AI-generate dialog to scaffold a new one.
@@ -75,9 +84,17 @@ export function Skills({ client }: { client: LoomClient }) {
             </div>
             {editing ? (
               <textarea className="skills-editor" value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} />
-            ) : (
-              <div className="skills-md"><Markdown text={content} /></div>
-            )}
+            ) : (() => {
+              const fm = splitFrontmatter(content);
+              return (
+                <>
+                  {fm.description ? (
+                    <div className="skills-sub">{fm.description}{fm.invocable ? <span className="skill-inv">invocable</span> : null}</div>
+                  ) : null}
+                  <div className="skills-md"><Markdown text={fm.body} /></div>
+                </>
+              );
+            })()}
           </>
         )}
       </div>
