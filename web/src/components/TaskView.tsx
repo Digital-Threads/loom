@@ -64,6 +64,9 @@ export function TaskView({
   const [history, setHistory] = useState<string | null | undefined>(undefined); // undefined=closed, null=loading
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
+  // true → the open task follows the live active stage; set false when the user
+  // clicks a stage tab (so we don't yank their view), re-armed on explicit runs.
+  const followLiveRef = useRef(true);
 
   useEffect(() => {
     client.workspace().then((w) => {
@@ -113,9 +116,32 @@ export function TaskView({
       .catch((e) => setErr(String(e)));
   }, [client, taskId, reload]);
 
+  // While the task is running, poll its detail so the stage rail + status badges
+  // follow the pipeline LIVE. The autopilot run streams the whole pipeline as one
+  // SSE run, whose terminal "status" event only fires when everything finishes —
+  // so without this poll the open task view stays stale (stages frozen) until the
+  // very end, even though the board (which polls) already moved the card. Auto-
+  // follow the active stage unless the user pinned one by clicking its tab.
+  useEffect(() => {
+    if (detail?.task.status !== "running") return;
+    let alive = true;
+    const tick = () =>
+      client.task(taskId).then((d) => {
+        if (!alive) return;
+        setDetail(d);
+        if (followLiveRef.current) {
+          const cur = d.stages.find((s) => s.status === "active");
+          if (cur) setActive(cur.stage_key);
+        }
+      }).catch(() => {});
+    const iv = setInterval(tick, 3000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [client, taskId, detail?.task.status]);
+
   // After an action that advances the task (accept, brainstorm done, advance),
   // reload and jump the selection to the new current stage so progress is visible.
   function refreshAndFollow() {
+    followLiveRef.current = true; // explicit forward action → resume live-follow
     refreshLocal();
     client.task(taskId).then((d) => {
       setDetail(d);
@@ -163,6 +189,7 @@ export function TaskView({
 
   // Stream a live run of the current stage into the transcript.
   function runStageLive() {
+    followLiveRef.current = true; // running a stage → follow the pipeline live
     setLive([]);
     setRunId(null);
     client.startRun(taskId, active).then((id) => attachStream(id, true)).catch((e) => toast.error(`Couldn’t start the stage: ${e}`));
@@ -294,7 +321,7 @@ export function TaskView({
             <button
               key={s.stage_key}
               className={`step ${stageStateClass(s.status)} ${s.stage_key === active ? "active" : ""}`}
-              onClick={() => setActive(s.stage_key)}
+              onClick={() => { followLiveRef.current = false; setActive(s.stage_key); }}
             >
               <span className="step-rail">
                 <span className="st">{stageIcon(s.status)}</span>
@@ -331,7 +358,7 @@ export function TaskView({
                   {activeStatus === "active" ? (
                     <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ Advance</button>
                 </>
               ) : null}
               {task.repo ? (
