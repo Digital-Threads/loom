@@ -84,6 +84,11 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .tbl tr:hover td{background:var(--panel2)}
 .tbl tr.row-active td{background:rgba(63,185,80,.07)}
 .tbl tr.row-active td:first-child{box-shadow:inset 2px 0 0 var(--ok)}
+/* accounts action column: keep buttons on one line, right-aligned, consistent */
+.acct-act-cell{text-align:right;white-space:nowrap;width:1%}
+.acct-actions{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end}
+.btn.icon-bad{color:var(--bad);padding:5px 9px}
+.btn.icon-bad:hover{border-color:var(--bad)}
 /* small count badge (board columns, lists) */
 .n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip);color:var(--mut);font-size:11px;font-weight:600;margin-left:6px}
 /* chip status colors */

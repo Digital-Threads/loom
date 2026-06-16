@@ -137,16 +137,18 @@ export function Accounts({ client }: { client: LoomClient }) {
                   {lim ? <span className={`chip ${pctCls(lim.weeklyPct)}`}>{lim.weeklyPct}%</span>
                     : <span className="crumb">{limitsLoading ? "…" : "—"}</span>}
                 </td>
-                <td style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  {s.authKind === "none" ? (
-                    <button className="btn acc" disabled={busy} title="Sign in to this subscription" onClick={() => setAuthProfile(s.name)}>Authorize</button>
-                  ) : null}
-                  {active
-                    ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
-                    : <button className="btn" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
-                  {!s.isSource && !active ? (
-                    <button className="btn" disabled={busy} style={{ color: "var(--bad)" }} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
-                  ) : null}
+                <td className="acct-act-cell">
+                  <div className="acct-actions">
+                    {s.authKind === "none" ? (
+                      <button className="btn acc sm" disabled={busy} title="Sign in to this subscription" onClick={() => setAuthProfile(s.name)}>Authorize</button>
+                    ) : null}
+                    {active
+                      ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
+                      : <button className="btn sm" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
+                    {!s.isSource && !active ? (
+                      <button className="btn sm icon-bad" disabled={busy} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             );
