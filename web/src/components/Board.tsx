@@ -19,6 +19,7 @@ export function Board({
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null);
   const [stopping, setStopping] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -46,13 +47,19 @@ export function Board({
       .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
   }
 
-  // Trash button on a card → confirm, delete the task (and all its rows), then
-  // refresh the board so the card drops out. stopPropagation keeps the click
-  // from also opening the task.
-  function onDelete(id: string, e: MouseEvent) {
+  // Trash button on a card → open an in-app confirm modal (styled like the other
+  // overlays) carrying the task's id + title. stopPropagation keeps the click
+  // from also opening the task; the real delete runs from the modal.
+  function askDelete(id: string, title: string, e: MouseEvent) {
     e.stopPropagation();
     if (deleting.has(id)) return; // a request is already in flight for this card
-    if (!window.confirm("Delete this task? This can’t be undone.")) return;
+    setConfirm({ id, title });
+  }
+
+  // Delete the task (and all its rows), then refresh the board so the card drops
+  // out. Called once the user confirms in the modal.
+  function doDelete(id: string) {
+    setConfirm(null);
     setDeleting((s) => new Set(s).add(id));
     client
       .deleteTask(id)
@@ -107,7 +114,7 @@ export function Board({
                     title="Delete task"
                     aria-label="Delete task"
                     disabled={deleting.has(card.id)}
-                    onClick={(e) => onDelete(card.id, e)}
+                    onClick={(e) => askDelete(card.id, card.title, e)}
                   >
                     🗑
                   </button>
@@ -140,6 +147,18 @@ export function Board({
           </div>
         </div>
       ))}
+      {confirm ? (
+        <div className="overlay" onClick={() => setConfirm(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h">Удалить задачу</div>
+            <div className="modal-b">Удалить задачу «{confirm.title}»? Это необратимо.</div>
+            <div className="modal-f">
+              <button className="btn" onClick={() => setConfirm(null)}>Отмена</button>
+              <button className="btn acc" onClick={() => doDelete(confirm.id)}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
