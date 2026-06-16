@@ -64,9 +64,9 @@ import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from ".
 import { beadsConnector } from "../core/connectors/beads.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
-import { runReview, reviewAction, reviewHolds } from "../core/quality/review-runner.js";
+import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
-import { reviewPrompt, parseFindings, type ReviewPass } from "../core/quality/review.js";
+import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -144,6 +144,61 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (deps.stageAgent) return { key, run: async () => parseFindings(key, await deps.stageAgent!(reviewPrompt(key, targetHint))) };
     const agent = stageAgentFor(id, "review");
     return { key, run: async () => parseFindings(key, await agent(reviewPrompt(key, targetHint))) };
+  };
+
+  // ─── Multi-reviewer review pipeline ──────────────────────────────────────────
+  // The review stage runs THREE reviewers in order, accumulating findings. Each
+  // reviewer is just a prompt to the task's own session — the agent runs the
+  // skill/loop under the hood and returns findings. Findings accumulate across
+  // reviewers (merge by pass key) and are fixed ONCE at the end (saves tokens).
+  // Manual/gated: run the first reviewer, park; the user approves & runs the next
+  // via /review/run. Autopilot: run all three back-to-back.
+  const REVIEWERS: { key: string; label: string; instruction: string }[] = [
+    {
+      key: "self",
+      label: "Своё ревью",
+      instruction:
+        "Сделай собственное ревью ТЕКУЩИХ изменений кода в этом worktree. Прочитай изменённые файлы и diff. Ищи реальные баги, а не стиль.",
+    },
+    {
+      key: "ralph",
+      label: "Ralph-loop",
+      instruction:
+        "Запусти ralph-loop ревью с МАКСИМУМ 3 итерациями над текущими изменениями кода: на каждой итерации углубляй анализ. Верни ВСЕ найденные за все итерации проблемы.",
+    },
+    {
+      key: "adversarial",
+      label: "Adversarial",
+      instruction:
+        "Запусти скилл /adversarial-review над текущими изменениями кода — пусть он попытается сломать решение (краевые случаи, неверный ввод, гонки, обход проверок). Верни найденные проблемы.",
+    },
+  ];
+  const REVIEWER_KEYS = REVIEWERS.map((r) => r.key);
+
+  interface ReviewPayload {
+    result: ReviewResult;
+    action: ReviewAction;
+    /** Which reviewers have already run, in pipeline order. */
+    reviewersDone: string[];
+  }
+
+  /** Run ONE reviewer in the task's session → its findings (tagged by its key). */
+  const runReviewer = (id: string, reviewer: (typeof REVIEWERS)[number]): Promise<Finding[]> =>
+    makeReviewPass(id, reviewer.instruction)(reviewer.key).run();
+
+  /** Merge a reviewer's findings into the accumulated review-result (replacing
+   *  that reviewer's prior contribution so re-runs are idempotent), re-aggregate,
+   *  and persist. `reset` starts a fresh pipeline (drops all prior findings). */
+  const recordReviewer = (id: string, reviewerKey: string, findings: Finding[], opts: { reset?: boolean } = {}): ReviewPayload => {
+    const prev = opts.reset ? null : loadResult<ReviewPayload>(id, "review-result");
+    const kept = (prev?.result.findings ?? []).filter((f) => f.pass !== reviewerKey);
+    const result = aggregateFindings([...kept, ...findings]);
+    const doneSet = new Set(opts.reset ? [] : prev?.reviewersDone ?? []);
+    doneSet.add(reviewerKey);
+    const reviewersDone = REVIEWER_KEYS.filter((k) => doneSet.has(k));
+    const payload: ReviewPayload = { result, action: reviewAction(result, "triage"), reviewersDone };
+    saveResult(id, "review", "review-result", payload);
+    return payload;
   };
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
@@ -305,17 +360,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
     review: async (_d, id) => {
       // Review runs IN THE TASK'S SESSION (same context, same worktree) so the
-      // agent sees the actual code and remembers what it implemented. The old
-      // one-shot stageAgent was a fresh process with no context and a static
-      // description as "target" — it produced the same findings every time.
-      const reviewTarget = `Review the CURRENT code changes in this worktree using the lens. You have full access to the code — read the relevant files and the diff. Focus on real bugs, not style.`;
-      const res = await runReview(resolveFlow("review"), makeReviewPass(id, reviewTarget));
-      saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
-      recordTurn(id, "review", "Review the implementation", fmtReview(res));
-      // Hold on findings (not just blockers) so the user can Fix before QA — the
-      // review stage stays current and surfaces the "Fix findings" button.
-      // Autopilot runs through non-blockers (reviewHolds handles the mode).
-      return { ok: res.passed, needsAttention: reviewHolds(res, getTask(db, id)?.run_mode) };
+      // agent sees the actual code and remembers what it implemented, and as a
+      // PIPELINE of reviewers (self → ralph → adversarial) whose findings
+      // accumulate. Manual/gated: run the first reviewer and park so the user can
+      // approve & run the next via /review/run. Autopilot: run all three.
+      const autopilot = getTask(db, id)?.run_mode === "autopilot";
+      if (autopilot) {
+        let payload: ReviewPayload | undefined;
+        for (let i = 0; i < REVIEWERS.length; i++) {
+          const findings = await runReviewer(id, REVIEWERS[i]);
+          payload = recordReviewer(id, REVIEWERS[i].key, findings, { reset: i === 0 });
+        }
+        recordTurn(id, "review", "Review (self → ralph → adversarial)", fmtReview(payload!.result));
+        return { ok: payload!.result.passed, needsAttention: reviewHolds(payload!.result, "autopilot") };
+      }
+      const findings = await runReviewer(id, REVIEWERS[0]);
+      const payload = recordReviewer(id, REVIEWERS[0].key, findings, { reset: true });
+      recordTurn(id, "review", `Review — ${REVIEWERS[0].label}`, fmtReview(payload.result));
+      // Always park: the user approves and runs the next reviewer (ralph, then
+      // adversarial) before the accumulated findings are fixed once at the end.
+      return { ok: payload.result.passed, needsAttention: true };
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
@@ -921,18 +985,28 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // ─── quality: review / qa (L6) ────────────────────────────────────────────────
   app.get("/api/flow-config/:stage", (c) => c.json({ passes: resolveFlow(c.req.param("stage")) }));
+  // Run the NEXT reviewer in the pipeline (or a specific one via {reviewer}).
+  // This is the "approve & run next" action: running ralph/adversarial implies
+  // the previous reviewer was approved. Findings accumulate; the response's
+  // `next` is the reviewer still to run (null when all three are done → Fix all).
   app.post("/api/tasks/:id/review/run", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { mode?: unknown; passes?: unknown };
-    const override = Array.isArray(body.passes) ? { passes: body.passes as string[] } : undefined;
-    const keys = resolveFlow("review", undefined, override);
-    const reviewTarget = `Review the CURRENT code changes in this worktree. Read the relevant files and the diff. Focus on real bugs, not style.`;
-    const result = await runReview(keys, makeReviewPass(id, reviewTarget));
-    const mode = body.mode === "autofix" ? "autofix" : "triage";
-    const payload = { result, action: reviewAction(result, mode) };
-    saveResult(id, "review", "review-result", payload);
-    return c.json(payload);
+    const body = (await c.req.json().catch(() => ({}))) as { reviewer?: unknown };
+    const prev = loadResult<ReviewPayload>(id, "review-result");
+    const done = new Set(prev?.reviewersDone ?? []);
+    const explicit = typeof body.reviewer === "string" && REVIEWER_KEYS.includes(body.reviewer) ? body.reviewer : undefined;
+    const key = explicit ?? REVIEWER_KEYS.find((k) => !done.has(k));
+    if (!key) return c.json({ error: "all reviewers done" }, 400);
+    const reviewer = REVIEWERS.find((r) => r.key === key)!;
+    const findings = await runReviewer(id, reviewer);
+    // First reviewer with no prior progress starts a fresh pipeline.
+    const reset = key === REVIEWERS[0].key && done.size === 0;
+    const payload = recordReviewer(id, key, findings, { reset });
+    recordTurn(id, "review", `Review — ${reviewer.label}`, fmtReview(payload.result));
+    const doneSet = new Set(payload.reviewersDone);
+    const next = REVIEWER_KEYS.find((k) => !doneSet.has(k)) ?? null;
+    return c.json({ ...payload, ran: key, next });
   });
   // Fix the findings from the last review. The fix IS implementation work, so the
   // task moves back to the implementation stage while the agent fixes (board shows
@@ -963,11 +1037,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           `Return ONLY a JSON array of findings that STILL REMAIN (not fixed). ` +
           `Do NOT re-report fixed issues. Empty array if all fixed.\n\n` +
           `PRIOR FINDINGS:\n${priorList}\n\nReturn JSON array only, no prose.`;
-        const res = await runReview(resolveFlow("review"), makeReviewPass(id, reReviewTarget)); // re-review
-        saveResult(id, "review", "review-result", { result: res, action: reviewAction(res, "triage") });
-        recordTurn(id, "review", "Re-review after fixes", fmtReview(res));
+        // Re-review as a fresh "self" pass (reset the pipeline): verify the prior
+        // findings against the now-fixed code. The user can re-run ralph /
+        // adversarial afterwards for another full sweep.
+        const verifyFindings = await makeReviewPass(id, reReviewTarget)("self").run();
+        const payload = recordReviewer(id, "self", verifyFindings, { reset: true });
+        recordTurn(id, "review", "Re-review after fixes", fmtReview(payload.result));
         moveToStage(db, id, "review"); // back to review for the user to see the result + approve
-        return { outcome: { ok: res.passed } };
+        return { outcome: { ok: payload.result.passed } };
       } finally {
         streamSinks.delete(id);
       }

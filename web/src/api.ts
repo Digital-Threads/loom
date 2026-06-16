@@ -241,10 +241,13 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/return`, { comment }, f).then((d) => d.spec),
     specAccept: (id: string) => postJson<{ spec: Artifact }>(`${base}/api/tasks/${id}/spec/accept`, {}, f).then((d) => d.spec),
     // L6 — quality
-    reviewRun: (id: string, opts?: { mode?: string; passes?: string[] }) =>
-      postJson<{ result: ReviewResult; action: string }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
+    // Run the next reviewer in the pipeline (self → ralph → adversarial), or a
+    // specific one. `ran` is the reviewer that ran; `next` is the one still to
+    // run (null when all three are done → fix all findings).
+    reviewRun: (id: string, opts?: { reviewer?: string }) =>
+      postJson<{ result: ReviewResult; action: string; reviewersDone: string[]; ran: string; next: string | null }>(`${base}/api/tasks/${id}/review/run`, opts ?? {}, f),
     reviewGet: (id: string) =>
-      getJson<{ result: ReviewResult | null; action?: string }>(`${base}/api/tasks/${id}/review`, f),
+      getJson<{ result: ReviewResult | null; action?: string; reviewersDone?: string[] }>(`${base}/api/tasks/${id}/review`, f),
     // agent fixes the review findings in-session, then auto re-reviews (streamed)
     reviewFix: (id: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),

@@ -24,6 +24,11 @@ const STAGE_DESC: Record<string, string> = {
   done: "Finalize and close the task.",
 };
 
+// The review stage runs three reviewers in order, accumulating findings; the
+// user approves & runs the next between them, then fixes all findings once.
+const REVIEWER_ORDER = ["self", "ralph", "adversarial"] as const;
+const REVIEWER_LABELS: Record<string, string> = { self: "Своё ревью", ralph: "Ralph-loop", adversarial: "Adversarial" };
+
 function badgeClass(status: string): string {
   if (status === "active") return "badge-acc";
   if (status === "done") return "badge-ok";
@@ -54,6 +59,8 @@ export function TaskView({
   const [activeProfile, setActiveProfile] = useState<string>("");
   const [projectName, setProjectName] = useState<string>("");
   const [reviewFindings, setReviewFindings] = useState(0);
+  const [reviewersDone, setReviewersDone] = useState<string[]>([]);
+  const [reviewerBusy, setReviewerBusy] = useState(false);
   const [history, setHistory] = useState<string | null | undefined>(undefined); // undefined=closed, null=loading
   const [limit, setLimit] = useState<RateLimit | null>(null);
   const dismissedRef = useRef<string>("");
@@ -167,13 +174,27 @@ export function TaskView({
     client.reviewFix(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the fix: ${e}`));
   }
 
-  // How many review findings the current review produced — drives the header
-  // "Fix findings" action (shown only on the review stage when there's something
-  // to fix, since the result card itself scrolls out of view).
+  // Approve the current reviewer and run the next one in the pipeline (its
+  // findings accumulate). Plain request (not streamed) — the agent runs the
+  // skill/loop under the hood; we refresh the result card when it returns.
+  function runNextReviewer() {
+    setReviewerBusy(true);
+    client.reviewRun(taskId)
+      .then(() => { setReload((n) => n + 1); refreshLocal(); })
+      .catch((e) => toast.error(`Couldn’t run the reviewer: ${e}`))
+      .finally(() => setReviewerBusy(false));
+  }
+
+  // Review pipeline progress drives the header actions: how many findings so far,
+  // which reviewers have run, and the next reviewer still to run.
   useEffect(() => {
-    if (active !== "review") { setReviewFindings(0); return; }
-    client.reviewGet(taskId).then((r) => setReviewFindings(r.result?.findings?.length ?? 0)).catch(() => setReviewFindings(0));
+    if (active !== "review") { setReviewFindings(0); setReviewersDone([]); return; }
+    client.reviewGet(taskId)
+      .then((r) => { setReviewFindings(r.result?.findings?.length ?? 0); setReviewersDone(r.reviewersDone ?? []); })
+      .catch(() => { setReviewFindings(0); setReviewersDone([]); });
   }, [client, taskId, active, reload]);
+  // Next reviewer to run (undefined → all three done → fix all findings).
+  const reviewNext = REVIEWER_ORDER.find((k) => !reviewersDone.includes(k));
 
   // Reconnect to a run that's still going when we (re)open the task — the stream
   // replays its buffered output, so a run started before a reload/navigation is
@@ -299,8 +320,13 @@ export function TaskView({
               ) : task.status !== "done" ? (
                 <>
                   <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
-                  {active === "review" && reviewFindings > 0 ? (
-                    <button className="btn acc sm" title="Send the findings back to the agent to fix, then re-review" onClick={fixFindings}>🔧 Fix findings ({reviewFindings})</button>
+                  {active === "review" && reviewersDone.length > 0 && reviewNext ? (
+                    <button className="btn acc sm" disabled={reviewerBusy} title="Approve the current reviewer and run the next one (findings accumulate)" onClick={runNextReviewer}>
+                      {reviewerBusy ? "⏳ Running…" : `▶ Approve & run: ${REVIEWER_LABELS[reviewNext]}`}
+                    </button>
+                  ) : null}
+                  {active === "review" && !reviewNext && reviewFindings > 0 ? (
+                    <button className="btn acc sm" title="All reviewers ran — fix every accumulated finding in one pass, then re-review" onClick={fixFindings}>🔧 Fix all findings ({reviewFindings})</button>
                   ) : null}
                   {activeStatus === "active" ? (
                     <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>

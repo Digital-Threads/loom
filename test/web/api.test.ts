@@ -289,16 +289,22 @@ describe("web api", () => {
     expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["normal", "simplify"] });
   });
 
-  it("POST /review/run aggregates findings + decides action (L6)", async () => {
+  it("POST /review/run steps through reviewers, accumulating findings (L6)", async () => {
     const app2 = createApi(db, {
       reviewPass: (key) => ({ key, run: async () => (key === "adversarial" ? [{ pass: key, severity: "bug" as const, message: "leak" }] : []) }),
     });
-    const clean = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: "{}" })).json()) as { result: { passed: boolean }; action: string };
-    expect(clean.result.passed).toBe(true);
-    expect(clean.action).toBe("accept");
-    const bug = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: JSON.stringify({ passes: ["adversarial"], mode: "triage" }) })).json()) as { result: { passed: boolean }; action: string };
-    expect(bug.result.passed).toBe(false);
-    expect(bug.action).toBe("return");
+    // First run (no reviewer specified) = the first reviewer "self" — clean.
+    const self = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: "{}" })).json()) as { result: { passed: boolean }; action: string; ran: string; next: string };
+    expect(self.ran).toBe("self");
+    expect(self.result.passed).toBe(true);
+    expect(self.action).toBe("accept");
+    expect(self.next).toBe("ralph");
+    // Explicit adversarial reviewer finds a bug → accumulated → review fails.
+    const adv = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: JSON.stringify({ reviewer: "adversarial" }) })).json()) as { result: { passed: boolean; findings: unknown[] }; action: string; reviewersDone: string[] };
+    expect(adv.result.passed).toBe(false);
+    expect(adv.action).toBe("return");
+    expect(adv.result.findings.length).toBe(1);
+    expect(adv.reviewersDone).toEqual(["self", "adversarial"]);
   });
 
   it("POST /qa/run runs the injected checks (L6)", async () => {
@@ -589,6 +595,24 @@ describe("web api — fs browse + PR connector", () => {
     expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active"); // back on review
     const rev = (await (await a.request("/api/tasks/rf/review")).json()) as { result: { passed: boolean } };
     expect(rev.result.passed).toBe(true); // re-review came back clean
+  });
+
+  it("autopilot review runs all three reviewers and accumulates findings", async () => {
+    createTask(database, { id: "rap", title: "RAP", run_mode: "autopilot" });
+    const rm = createRunManager();
+    const ran: string[] = [];
+    const a = createApi(database, {
+      runManager: rm,
+      reviewPass: (key) => ({ key, run: async () => { ran.push(key); return key === "ralph" ? [{ pass: key, severity: "warn" as const, message: "loop found Y" }] : []; } }),
+    });
+    await a.request("/api/tasks/rap/start", { method: "POST" });
+    await a.request("/api/tasks/rap/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const { runId } = (await (await a.request("/api/tasks/rap/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect(ran).toEqual(["self", "ralph", "adversarial"]); // all three, in order
+    const rev = (await (await a.request("/api/tasks/rap/review")).json()) as { result: { findings: unknown[] }; reviewersDone: string[] };
+    expect(rev.reviewersDone).toEqual(["self", "ralph", "adversarial"]);
+    expect(rev.result.findings.length).toBe(1); // ralph's finding accumulated
   });
 
   it("review fix with no findings → 400", async () => {
