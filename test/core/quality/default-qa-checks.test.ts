@@ -5,7 +5,7 @@ import { runQa } from "@digital-threads/loom-quality";
 describe("default QA checks", () => {
   it("runs the repo's test/build scripts via the detected package manager", async () => {
     const calls: Array<[string, string[]]> = [];
-    const sh = (cmd: string, args: string[]) => {
+    const sh = async (cmd: string, args: string[]) => {
       calls.push([cmd, args]);
       return { code: 0, output: "ok" };
     };
@@ -24,7 +24,7 @@ describe("default QA checks", () => {
   });
 
   it("a failing command fails QA and keeps the output", async () => {
-    const sh = () => ({ code: 1, output: "1 test failed" });
+    const sh = async () => ({ code: 1, output: "1 test failed" });
     const checks = buildQaChecks(["tests"], { repoRoot: "/repo", sh, scripts: { test: "vitest" } });
     const res = await runQa(checks);
     expect(res.passed).toBe(false);
@@ -34,7 +34,7 @@ describe("default QA checks", () => {
   it("skips (does not fail) a key with no backing script", async () => {
     const checks = buildQaChecks(["tests", "build", "browser", "custom:simplify"], {
       repoRoot: "/repo",
-      sh: () => ({ code: 99, output: "should not run" }),
+      sh: async () => ({ code: 99, output: "should not run" }),
       scripts: {},
     });
     const res = await runQa(checks);

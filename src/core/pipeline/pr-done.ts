@@ -10,7 +10,7 @@ import { appendLoomEvent } from "../spine/event-bus.js";
 
 const id = () => `art_${randomBytes(6).toString("hex")}`;
 
-export type Sh = (cmd: string, args: string[], cwd?: string) => { code: number; stdout: string };
+export type Sh = (cmd: string, args: string[], cwd?: string) => Promise<{ code: number; stdout: string }>;
 
 export interface PrOptions {
   /** Custom description builder (e.g. wraps `task-journal export-pr`). */
@@ -37,16 +37,17 @@ export interface PrResult {
 
 /** Is the GitHub PR connector usable in this repo: `gh` on PATH + an `origin`
  *  remote. Returned to the UI so the user knows whether "push + PR" will work. */
-export function prConnectorStatus(sh: Sh, repoRoot: string): { gh: boolean; remote: boolean } {
-  const gh = sh("gh", ["--version"], repoRoot).code === 0;
-  const remote = sh("git", ["remote", "get-url", "origin"], repoRoot).code === 0;
+export async function prConnectorStatus(sh: Sh, repoRoot: string): Promise<{ gh: boolean; remote: boolean }> {
+  const gh = (await sh("gh", ["--version"], repoRoot)).code === 0;
+  const remote = (await sh("git", ["remote", "get-url", "origin"], repoRoot)).code === 0;
   return { gh, remote };
 }
 
 /** L14.1 — produce the PR description artifact; optionally create the PR. The
  *  connector path is best-effort but NEVER silent: every failure (missing gh,
- *  no remote, push/`gh pr create` non-zero) comes back as `error` for the UI. */
-export function runPr(db: Database.Database, taskId: string, opts: PrOptions = {}): PrResult {
+ *  no remote, push/`gh pr create` non-zero) comes back as `error` for the UI.
+ *  Async (the sh spawns git/gh): a sync spawn would block the server event loop. */
+export async function runPr(db: Database.Database, taskId: string, opts: PrOptions = {}): Promise<PrResult> {
   const description = opts.describe ? opts.describe() : defaultDescription(db, taskId);
   createArtifact(db, { id: id(), taskId, stage: "pr", kind: "pr-description", content: description, status: "accepted" });
 
@@ -56,17 +57,17 @@ export function runPr(db: Database.Database, taskId: string, opts: PrOptions = {
   if (!opts.sh || !opts.repoRoot || !opts.branch) {
     return { description, created: false, connector: true, error: "PR connector is not configured for this task (no repo/branch)." };
   }
-  const { gh, remote } = prConnectorStatus(opts.sh, opts.repoRoot);
+  const { gh, remote } = await prConnectorStatus(opts.sh, opts.repoRoot);
   if (!gh) return { description, created: false, connector: true, error: "GitHub CLI (gh) is not installed or not on PATH — install gh and run `gh auth login`." };
   if (!remote) return { description, created: false, connector: true, error: "This repo has no `origin` remote — add a GitHub remote before opening a PR." };
 
   const base = opts.base ?? "main";
-  const push = opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
+  const push = await opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
   if (push.code !== 0) {
     return { description, created: false, connector: true, error: `git push failed:\n${push.stdout.trim() || "(no output)"}` };
   }
   const title = getTask(db, taskId)?.title ?? taskId;
-  const res = opts.sh(
+  const res = await opts.sh(
     "gh",
     ["pr", "create", "--base", base, "--head", opts.branch, "--title", title, "--body", description],
     opts.repoRoot,

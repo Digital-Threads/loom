@@ -52,7 +52,7 @@ import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { join as pathJoin, isAbsolute } from "node:path";
@@ -296,18 +296,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
   };
   const isGitRepo = (p: string) => existsSync(pathJoin(p, ".git"));
-  const realSh: Sh = (cmd, args, cwd) => {
-    try {
-      const stdout = execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-      return { code: 0, stdout };
-    } catch (e) {
-      // Combine stderr (where gh/git write failures) so the PR connector surfaces
-      // a real reason instead of an empty string. ENOENT → command not installed.
-      const err = e as { status?: number; stdout?: string; stderr?: string; code?: string };
-      const out = `${err.stdout ?? ""}${err.stderr ?? ""}` || (err.code === "ENOENT" ? `${cmd}: command not found` : "");
-      return { code: err.status ?? 1, stdout: out };
-    }
-  };
+  const realSh: Sh = (cmd, args, cwd) =>
+    new Promise((resolve) => {
+      // async (execFile, not execFileSync): git push / gh create are network calls
+      // that would block the server's event loop and freeze the UI if run sync.
+      execFile(cmd, args, { cwd, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }, (e, out, errOut) => {
+        if (!e) return resolve({ code: 0, stdout: out });
+        const err = e as { code?: number | string };
+        const combined = `${out ?? ""}${errOut ?? ""}` || (err.code === "ENOENT" ? `${cmd}: command not found` : "");
+        resolve({ code: typeof err.code === "number" ? err.code : 1, stdout: combined });
+      });
+    });
   /** QA checks for a task: explicit override, else real tests/build in its repo. */
   const qaChecksFor = (taskId: string): QaCheck[] => {
     const keys = resolveFlow("qa");
@@ -421,7 +420,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { ok: res.passed, needsAttention: !res.passed };
     },
     pr: async (_d, id) => {
-      const pr = runPr(db, id, deps.prOptions?.(id) ?? {});
+      const pr = await runPr(db, id, deps.prOptions?.(id) ?? {});
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
       return { ok: true };
@@ -729,18 +728,37 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Live rate-limit utilization for OAuth profiles (aimux probe). ?profile=<name>
   // for one (used by a task to watch its own subscription), else all. Non-oauth
   // profiles return nothing (no probe). Each probe is a ~5s-timeout network call.
+  // Rate-limit lookups spawn a per-profile CLI call — expensive. Cache per
+  // profile with a short TTL so the UI's polling never stacks slow spawns (which
+  // would exhaust the browser's per-host connection pool and freeze the page).
+  // A single in-flight promise per profile coalesces concurrent requests.
+  const limitsCache = new Map<string, { at: number; value: unknown; inflight?: Promise<unknown> }>();
+  const LIMITS_TTL = 60_000;
+  const limitsFor = async (name: string, cfg: ReturnType<typeof loadConfig>): Promise<unknown> => {
+    const now = Date.now();
+    const hit = limitsCache.get(name);
+    if (hit && now - hit.at < LIMITS_TTL) return hit.value;
+    if (hit?.inflight) return hit.inflight; // coalesce concurrent callers
+    const p = cfg!.profiles[name];
+    const inflight = fetchRateLimits(p, expandHome(p.path))
+      .then((status) => {
+        const value = status ? { profile: name, ...status } : null;
+        limitsCache.set(name, { at: Date.now(), value });
+        return value;
+      })
+      .catch(() => {
+        limitsCache.set(name, { at: Date.now(), value: hit?.value ?? null }); // keep last good
+        return hit?.value ?? null;
+      });
+    limitsCache.set(name, { at: hit?.at ?? 0, value: hit?.value ?? null, inflight });
+    return inflight;
+  };
   app.get("/api/accounts/limits", async (c) => {
     const want = c.req.query("profile");
     const cfg = loadConfig();
     if (!cfg) return c.json({ limits: [] });
     const names = want ? (cfg.profiles[want] ? [want] : []) : Object.keys(cfg.profiles);
-    const limits = await Promise.all(
-      names.map(async (name) => {
-        const p = cfg.profiles[name];
-        const status = await fetchRateLimits(p, expandHome(p.path));
-        return status ? { profile: name, ...status } : null;
-      }),
-    );
+    const limits = await Promise.all(names.map((name) => limitsFor(name, cfg)));
     return c.json({ limits: limits.filter(Boolean) });
   });
 
@@ -888,7 +906,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         sh: opts.sh ?? realSh,
       };
     }
-    const pr = runPr(db, id, opts);
+    const pr = await runPr(db, id, opts);
     saveResult(id, "pr", "pr-result", pr); // visible in the PR result card + on revisit
     const status = pr.created ? `\n\n✅ PR создан: ${pr.url ?? "(no url)"}` : pr.error ? `\n\n⚠️ PR не создан: ${pr.error}` : "";
     recordTurn(id, "pr", pr.connector ? "Create the PR" : "Generate the PR description", pr.description + status);
@@ -1091,10 +1109,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   // Is the GitHub PR connector usable for this task (gh on PATH + origin remote)?
   // Drives the "push + PR" affordance so the user knows before clicking.
-  app.get("/api/tasks/:id/pr/connector", (c) => {
+  app.get("/api/tasks/:id/pr/connector", async (c) => {
     const t = getTask(db, c.req.param("id"));
     if (!t?.repo) return c.json({ gh: false, remote: false, repo: false });
-    return c.json({ ...prConnectorStatus(realSh, t.repo), repo: true });
+    return c.json({ ...(await prConnectorStatus(realSh, t.repo)), repo: true });
   });
   // Stored stage results (history re-display when revisiting a completed stage).
   app.get("/api/tasks/:id/analysis", (c) => {
@@ -1139,18 +1157,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   // Unified git diff of the task's work (whole worktree, or one file with ?path=)
   // vs its base branch — for the in-app colored diff viewer.
-  app.get("/api/tasks/:id/diff", (c) => {
+  app.get("/api/tasks/:id/diff", async (c) => {
     const id = c.req.param("id");
     const t = getTask(db, id);
     if (!t) return c.json({ error: "not found" }, 404);
     const wt = taskCwd(id);
     if (!wt || !isGitRepo(wt)) return c.json({ diff: "", base: null });
-    const exists = (ref: string) => realSh("git", ["rev-parse", "--verify", "--quiet", ref], wt).code === 0;
-    const base = [t.branch, "master", "main"].find((r): r is string => !!r && exists(r)) ?? null;
+    const exists = async (ref: string) => (await realSh("git", ["rev-parse", "--verify", "--quiet", ref], wt)).code === 0;
+    let base: string | null = null;
+    for (const r of [t.branch, "master", "main"]) { if (r && (await exists(r))) { base = r; break; } }
     const rel = c.req.query("path");
     const safeRel = typeof rel === "string" && rel && safeResolveAny([wt, t.repo].filter((r): r is string => !!r), rel) ? rel : undefined;
     const args = ["diff", ...(base ? [base] : []), ...(safeRel ? ["--", safeRel] : [])];
-    const out = realSh("git", args, wt).stdout;
+    const out = (await realSh("git", args, wt)).stdout;
     const diff = out.length > 400_000 ? `${out.slice(0, 400_000)}\n… (diff truncated)` : out;
     return c.json({ diff, base });
   });

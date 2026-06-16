@@ -935,7 +935,7 @@ describe("web api — fs browse + PR connector", () => {
   it("POST /api/tasks/:id/pr/run with connector pushes the branch and opens a PR", async () => {
     createTask(database, { id: "p1", title: "Ship it", repo: "/repo", branch: "main" });
     const calls: Array<[string, string[]]> = [];
-    const sh = (cmd: string, args: string[]) => {
+    const sh = async (cmd: string, args: string[]) => {
       calls.push([cmd, args]);
       return { code: 0, stdout: "https://github.com/x/y/pull/1\n" };
     };

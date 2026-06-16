@@ -19,39 +19,39 @@ beforeEach(() => {
 afterEach(() => { db.close(); delete process.env.XDG_DATA_HOME; rmSync(dir, { recursive: true, force: true }); });
 
 describe("runPr (L14.1)", () => {
-  it("builds a description artifact from task + spec (no connector → not created)", () => {
+  it("builds a description artifact from task + spec (no connector → not created)", async () => {
     createArtifact(db, { id: "sp", taskId: "t1", stage: "spec", kind: "spec-md", content: "# SDD body", status: "accepted" });
-    const r = runPr(db, "t1");
+    const r = await runPr(db, "t1");
     expect(r.created).toBe(false);
     expect(r.description).toContain("# Refund");
     expect(r.description).toContain("# SDD body");
   });
 
-  it("pushes + creates a PR via gh when connector is on", () => {
+  it("pushes + creates a PR via gh when connector is on", async () => {
     const calls: string[][] = [];
-    const sh = (cmd: string, args: string[]) => {
+    const sh = async (cmd: string, args: string[]) => {
       calls.push([cmd, ...args]);
       // gh pr create returns the PR url; preflight (gh --version, git remote) ok.
       return { code: 0, stdout: cmd === "gh" && args[0] === "pr" ? "https://github.com/x/y/pull/1\n" : "" };
     };
-    const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo", base: "main", describe: () => "BODY" });
+    const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo", base: "main", describe: () => "BODY" });
     expect(r.created).toBe(true);
     expect(r.url).toBe("https://github.com/x/y/pull/1");
     expect(calls.some((c) => c[0] === "git" && c[1] === "push")).toBe(true);
     expect(calls.some((c) => c[0] === "gh" && c[1] === "pr" && c[2] === "create")).toBe(true);
   });
 
-  it("reports a clear error (not created) when gh is missing", () => {
-    const sh = (cmd: string) => ({ code: cmd === "gh" ? 1 : 0, stdout: cmd === "gh" ? "gh: command not found" : "" });
-    const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
+  it("reports a clear error (not created) when gh is missing", async () => {
+    const sh = async (cmd: string) => ({ code: cmd === "gh" ? 1 : 0, stdout: cmd === "gh" ? "gh: command not found" : "" });
+    const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
     expect(r.created).toBe(false);
     expect(r.connector).toBe(true);
     expect(r.error).toMatch(/gh/i);
   });
 
-  it("reports a clear error when the repo has no origin remote", () => {
-    const sh = (cmd: string, args: string[]) => ({ code: cmd === "git" && args[0] === "remote" ? 1 : 0, stdout: "" });
-    const r = runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
+  it("reports a clear error when the repo has no origin remote", async () => {
+    const sh = async (cmd: string, args: string[]) => ({ code: cmd === "git" && args[0] === "remote" ? 1 : 0, stdout: "" });
+    const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });
     expect(r.created).toBe(false);
     expect(r.error).toMatch(/origin/i);
   });

@@ -87,14 +87,18 @@ export function TaskView({
   useEffect(() => {
     if (!runId || !curProfile) return;
     let alive = true;
-    const check = () =>
+    let inflight = false; // don't stack (a slow limits call would block the pool)
+    const check = () => {
+      if (inflight) return;
+      inflight = true;
       client.accountLimits(curProfile).then((ls) => {
         if (!alive) return;
         const l = ls.find((x) => x.profile === curProfile);
         if (l && (l.fiveHourPct >= 90 || l.status === "limited") && dismissedRef.current !== curProfile) {
           setLimit(l);
         }
-      }).catch(() => {});
+      }).catch(() => {}).finally(() => { inflight = false; });
+    };
     check();
     const iv = setInterval(check, 30000);
     return () => { alive = false; clearInterval(iv); };
@@ -125,7 +129,10 @@ export function TaskView({
   useEffect(() => {
     if (detail?.task.status !== "running") return;
     let alive = true;
-    const tick = () =>
+    let inflight = false; // never stack requests — a slow server would exhaust the
+    const tick = () => {   // browser's per-host connection pool and freeze the UI.
+      if (inflight) return;
+      inflight = true;
       client.task(taskId).then((d) => {
         if (!alive) return;
         setDetail(d);
@@ -133,8 +140,9 @@ export function TaskView({
           const cur = d.stages.find((s) => s.status === "active");
           if (cur) setActive(cur.stage_key);
         }
-      }).catch(() => {});
-    const iv = setInterval(tick, 3000);
+      }).catch(() => {}).finally(() => { inflight = false; });
+    };
+    const iv = setInterval(tick, 4000);
     return () => { alive = false; clearInterval(iv); };
   }, [client, taskId, detail?.task.status]);
 

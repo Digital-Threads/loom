@@ -3,23 +3,25 @@
 // it's testable without a shell. Keys with no backing script are reported as
 // skipped (ok) rather than failing — QA fails only on a real failing command.
 
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { QaCheck } from "@digital-threads/loom-quality";
 
-/** Run a command in a directory; never throws — captures exit + combined output. */
-export type ShRun = (cmd: string, args: string[], cwd: string) => { code: number; output: string };
+/** Run a command in a directory; never throws — captures exit + combined output.
+ *  ASYNC (execFile, not execFileSync): the QA stage runs the repo's full test
+ *  suite + build, which can take minutes — a sync call would block the server's
+ *  event loop and freeze every other request until it finished. */
+export type ShRun = (cmd: string, args: string[], cwd: string) => Promise<{ code: number; output: string }>;
 
-const defaultSh: ShRun = (cmd, args, cwd) => {
-  try {
-    const output = execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    return { code: 0, output };
-  } catch (e) {
-    const err = e as { status?: number; stdout?: string; stderr?: string };
-    return { code: err.status ?? 1, output: `${err.stdout ?? ""}${err.stderr ?? ""}` };
-  }
-};
+const defaultSh: ShRun = (cmd, args, cwd) =>
+  new Promise((resolve) => {
+    execFile(cmd, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (!err) return resolve({ code: 0, output: stdout });
+      const e = err as { code?: number };
+      resolve({ code: typeof e.code === "number" ? e.code : 1, output: `${stdout ?? ""}${stderr ?? ""}` });
+    });
+  });
 
 function readScripts(repoRoot: string): Record<string, string> {
   const p = join(repoRoot, "package.json");
@@ -67,7 +69,7 @@ export function buildQaChecks(keys: string[], env: QaCheckEnv): QaCheck[] {
     return {
       key,
       run: async () => {
-        const r = sh(pm, args, env.repoRoot);
+        const r = await sh(pm, args, env.repoRoot);
         return { ok: r.code === 0, output: clip(r.output) };
       },
     };
