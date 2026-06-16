@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, WorkspaceData, HealthRow } from "../api";
+import type { LoomClient, WorkspaceData, HealthRow, RateLimit } from "../api";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
+
+// Color a utilization % like aimux's status bar: green under 70, amber to 90, red above.
+function pctCls(p: number): string {
+  return p >= 90 ? "bad" : p >= 70 ? "warn" : "ok";
+}
 
 export function Accounts({ client }: { client: LoomClient }) {
   const [ws, setWs] = useState<WorkspaceData | null>(null);
@@ -11,9 +16,18 @@ export function Accounts({ client }: { client: LoomClient }) {
   // Remove-confirmation: the profile name being confirmed (null = not removing).
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeInput, setRemoveInput] = useState("");
+  const [limits, setLimits] = useState<Record<string, RateLimit>>({});
+  const [limitsLoading, setLimitsLoading] = useState(true);
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
+    // Live rate-limit utilization per profile (OAuth only). Background — each is a
+    // ~5s probe; the table renders immediately and the % fills in when ready.
+    setLimitsLoading(true);
+    client.accountLimits()
+      .then((ls) => setLimits(Object.fromEntries(ls.map((l) => [l.profile, l]))))
+      .catch(() => {})
+      .finally(() => setLimitsLoading(false));
   }, [client]);
 
   async function addSub() {
@@ -96,11 +110,12 @@ export function Accounts({ client }: { client: LoomClient }) {
         <code style={{ background: "var(--chip)", padding: "1px 5px", borderRadius: 4 }}>aimux auth login {"<name>"}</code> in a terminal.
       </div>
       <table className="tbl">
-        <thead><tr><th>Profile</th><th>CLI</th><th>Health</th><th></th></tr></thead>
+        <thead><tr><th>Profile</th><th>CLI</th><th>Health</th><th>5h limit</th><th>7d limit</th><th></th></tr></thead>
         <tbody>
           {ws.subscriptions.map((s) => {
             const st = healthState(healthFor(s.name));
             const active = !!ws.activeProfile && s.name === ws.activeProfile;
+            const lim = limits[s.name];
             return (
               <tr key={s.name} className={active ? "row-active" : ""}>
                 <td>
@@ -111,6 +126,14 @@ export function Accounts({ client }: { client: LoomClient }) {
                 <td className="crumb">{s.cli ?? "—"}</td>
                 <td>
                   <span className={`chip ${st.cls}`}><span className="dotc" />{st.label}</span>
+                </td>
+                <td>
+                  {lim ? <span className={`chip ${pctCls(lim.fiveHourPct)}`}>{lim.fiveHourPct}%</span>
+                    : <span className="crumb" title="No subscription rate-limit window (API-key or unauthorized profile)">{limitsLoading ? "…" : "—"}</span>}
+                </td>
+                <td>
+                  {lim ? <span className={`chip ${pctCls(lim.weeklyPct)}`}>{lim.weeklyPct}%</span>
+                    : <span className="crumb">{limitsLoading ? "…" : "—"}</span>}
                 </td>
                 <td style={{ textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   {active
