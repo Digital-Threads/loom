@@ -413,6 +413,21 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/projects", (c) =>
     c.json({ projects: projectsList(), active: projectActive()?.projectId ?? null }),
   );
+  // Per-project dashboard: task count (by project_id) + token-pilot used/saved
+  // (summed over the project root). Local file reads only — no network.
+  app.get("/api/projects/stats", (c) => {
+    const tasks = listTasks(db);
+    const activeId = projectActive()?.projectId ?? null;
+    const stats = projectsList().map((p) => {
+      const taskCount = tasks.filter((t) => t.project_id === p.projectId).length;
+      let used = 0, saved = 0;
+      try {
+        for (const r of tokenUsageBySession(resolveProjectRoot(p.root))) { used += r.used; saved += r.saved; }
+      } catch { /* no token-pilot logs */ }
+      return { projectId: p.projectId, name: p.name, root: p.root, tasks: taskCount, used, saved, active: p.projectId === activeId };
+    });
+    return c.json({ stats });
+  });
   app.post("/api/projects", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { root?: unknown };
     const root = typeof body.root === "string" ? body.root.trim() : "";

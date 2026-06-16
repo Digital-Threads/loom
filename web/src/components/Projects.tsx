@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, ProjectEntry } from "../api";
+import type { LoomClient, ProjectStat } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
 
-// D3.5 — project registry: list projects, add by path, switch the active one.
+// D3.5 — project dashboard: add projects, see per-project task count + token
+// usage. "Default" = the project new tasks default to (and Accounts/Tokens scope).
 export function Projects({ client, onSwitched }: { client: LoomClient; onSwitched?: () => void }) {
-  const [projects, setProjects] = useState<ProjectEntry[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  const [stats, setStats] = useState<ProjectStat[] | null>(null);
   const [root, setRoot] = useState("");
   const [picking, setPicking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function refresh() {
-    client.projects().then((d) => { setProjects(d.projects); setActive(d.active); }).catch((e) => setErr(String(e)));
+    client.projectStats().then(setStats).catch((e) => setErr(String(e)));
   }
   useEffect(refresh, [client]);
 
@@ -25,35 +25,50 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     catch (e) { setErr(String(e)); toast.error("Couldn’t add project"); }
     finally { setBusy(false); }
   }
-  async function switchTo(id: string) {
+  async function setDefault(id: string) {
     setBusy(true);
-    try { await client.setActiveProject(id); setActive(id); onSwitched?.(); toast.success("Switched project"); }
+    try { await client.setActiveProject(id); refresh(); onSwitched?.(); toast.success("Default project set"); }
     finally { setBusy(false); }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
+  if (!stats) return <StateView kind="loading" />;
+
+  const pct = (u: number, s: number) => (u + s > 0 ? Math.round((s / (u + s)) * 100) : 0);
 
   return (
     <div className="panel">
-      <div className="row" style={{ gap: 8 }}>
+      <div className="acct-add" style={{ marginBottom: 12 }}>
         <input className="inp" placeholder="/path/to/repo" value={root} onChange={(e) => setRoot(e.target.value)} />
         <button className="btn" onClick={() => setPicking(true)}>Browse…</button>
         <button className="btn acc" disabled={busy} onClick={add}>Add project</button>
       </div>
+      <p className="acct-hint">
+        Projects are added here or auto-registered when you create a task in a new repo. The <b>default</b> is what new
+        tasks pick and what Accounts/Tokens scope to.
+      </p>
       {picking ? (
         <DirectoryPicker client={client} onCancel={() => setPicking(false)} onPick={(p) => { setRoot(p); setPicking(false); }} />
       ) : null}
-      {projects.length === 0 ? (
+      {stats.length === 0 ? (
         <StateView kind="empty" msg="No projects yet — add a repo path above." />
       ) : (
-        <table className="tbl" style={{ marginTop: 16 }}>
-          <thead><tr><th>Project</th><th>Root</th><th></th></tr></thead>
+        <table className="tbl">
+          <thead><tr><th>Project</th><th className="num">Tasks</th><th className="num">Tokens used</th><th className="num">Saved ≈</th><th></th></tr></thead>
           <tbody>
-            {projects.map((p) => (
-              <tr key={p.projectId}>
-                <td>{p.name}{p.projectId === active ? <span className="chip ok" style={{ marginLeft: 8 }}>active</span> : null}</td>
-                <td className="crumb">{p.root}</td>
-                <td>{p.projectId === active ? null : <button className="btn" disabled={busy} onClick={() => switchTo(p.projectId)}>Switch</button>}</td>
+            {stats.map((p) => (
+              <tr key={p.projectId} className={p.active ? "row-active" : ""}>
+                <td>
+                  {p.name}{p.active ? <span className="chip ok" style={{ marginLeft: 8 }}>default</span> : null}
+                  <div className="crumb">{p.root}</div>
+                </td>
+                <td className="num">{p.tasks}</td>
+                <td className="num">{p.used.toLocaleString()}</td>
+                <td className="num">{p.saved.toLocaleString()}{p.saved > 0 ? <span className="crumb"> ({pct(p.used, p.saved)}%)</span> : null}</td>
+                <td className="acct-act-cell">
+                  {p.active ? <span className="muted" style={{ fontSize: 12 }}>default</span>
+                    : <button className="btn sm" disabled={busy} onClick={() => setDefault(p.projectId)}>Set default</button>}
+                </td>
               </tr>
             ))}
           </tbody>

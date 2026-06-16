@@ -111,6 +111,7 @@ export interface TokenUsageRow { sessionId: string; used: number; saved: number;
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
 export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
 export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
+export interface ProjectStat { projectId: string; name: string; root: string; tasks: number; used: number; saved: number; active: boolean }
 export interface TokenSession { sessionId: string; used: number; saved: number; taskTitle?: string; profile: string }
 export interface TokenProfile { profile: string; used: number; saved: number }
 export interface TokensReport { totals: { used: number; saved: number }; byProfile: TokenProfile[]; bySession: TokenSession[] }
@@ -186,6 +187,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
     // D3 — projects
     projects: () => getJson<{ projects: ProjectEntry[]; active: string | null }>(`${base}/api/projects`, f),
+    projectStats: () => getJson<{ stats: ProjectStat[] }>(`${base}/api/projects/stats`, f).then((d) => d.stats),
     addProject: (root: string) =>
       postJson<{ project: ProjectEntry }>(`${base}/api/projects`, { root }, f).then((d) => d.project),
     setActiveProject: (projectId: string) =>

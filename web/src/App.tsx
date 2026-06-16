@@ -35,7 +35,7 @@ const SECTION_TITLES: Record<string, string> = {
 // as intentional instead of a bare table.
 const SECTION_DESC: Record<string, string> = {
   board: "Tasks as pipeline stages — drag a card onto a column to run that stage.",
-  projects: "Repositories Loom works in — switch the active project.",
+  projects: "Repositories Loom works in — tasks and token usage per project.",
   accounts: "aimux subscriptions, sessions and health.",
   tokens: "token-pilot usage — tokens spent and saved per session.",
   memory: "task-journal reasoning — decisions, findings and rejections per task.",
