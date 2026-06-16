@@ -41,7 +41,7 @@ export function TaskView({
 }) {
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [active, setActive] = useState<string>("analysis");
+  const [active, setActive] = useState<string>(""); // set to the task's current stage on first load (see task() effect)
   const [runId, setRunId] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
