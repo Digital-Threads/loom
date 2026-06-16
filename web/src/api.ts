@@ -185,6 +185,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ ok: boolean }>(`${base}/api/accounts/auth/${authId}/code`, { code }, f),
     memoryTask: (id: string) =>
       getJson<{ detail: MemoryDetail }>(`${base}/api/memory/tasks/${id}`, f).then((d) => d.detail),
+    memoryPack: (id: string) =>
+      getJson<{ pack: string }>(`${base}/api/memory/tasks/${id}/pack`, f).then((d) => d.pack),
     // D3 — projects
     projects: () => getJson<{ projects: ProjectEntry[]; active: string | null }>(`${base}/api/projects`, f),
     projectStats: () => getJson<{ stats: ProjectStat[] }>(`${base}/api/projects/stats`, f).then((d) => d.stats),

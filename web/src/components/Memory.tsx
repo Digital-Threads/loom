@@ -1,38 +1,16 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, WorkspaceData, MemoryDetail, MemoryEntry } from "../api";
+import type { LoomClient, WorkspaceData } from "../api";
 import { StateView } from "./StateView";
+import { Markdown } from "./Markdown";
 
-// One group of reasoning entries (decisions / findings / rejections) — the
-// actual text, not just a count.
-function MemGroup({ title, items, tone }: { title: string; items: MemoryEntry[]; tone?: string }) {
-  return (
-    <div className="mem-group">
-      <h2>{title} <span className="n">{items.length}</span></h2>
-      {items.length === 0 ? (
-        <div className="muted mem-none">none</div>
-      ) : (
-        items.map((e, i) => (
-          <div className={`mem-entry ${tone ?? ""}`} key={e.event_id ?? i}>
-            <div className="mem-text">{e.text}</div>
-            {e.timestamp ? (
-              <div className="mem-meta">
-                {new Date(e.timestamp).toLocaleString()}{e.source ? ` · ${e.source}` : ""}
-              </div>
-            ) : null}
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-// F1.4 — task-journal memory: list tj tasks, click to drill into a task's
-// decisions/findings/rejections.
+// F1.4 — task-journal memory: list tj tasks, click to render the task's own
+// readable dossier (task-journal's `pack`): goal, decisions+alternatives,
+// rejected, evidence, artifacts (commits/PRs/files), lifecycle.
 export function Memory({ client }: { client: LoomClient }) {
   const [ws, setWs] = useState<WorkspaceData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
-  const [detail, setDetail] = useState<MemoryDetail | null>(null);
+  const [pack, setPack] = useState<string | null>(null);
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
@@ -40,8 +18,8 @@ export function Memory({ client }: { client: LoomClient }) {
 
   useEffect(() => {
     if (!sel) return;
-    setDetail(null);
-    client.memoryTask(sel).then(setDetail).catch(() => setDetail(null));
+    setPack(null);
+    client.memoryPack(sel).then(setPack).catch(() => setPack(""));
   }, [client, sel]);
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -49,14 +27,11 @@ export function Memory({ client }: { client: LoomClient }) {
   if (ws.tasks.length === 0)
     return <StateView kind="empty" msg="No reasoning recorded yet — the AI logs its thinking here as it works on tasks." />;
 
-  const selected = ws.tasks.find((t) => t.id === sel);
-  const total = detail ? detail.decisions.length + detail.findings.length + detail.rejections.length : 0;
-
   return (
     <div>
       <p className="acct-hint" style={{ margin: "0 0 14px" }}>
-        The AI's working memory. As it does a task it records <b>decisions</b> (why it chose an approach),
-        <b> findings</b> (what it verified) and <b>rejections</b> (what it ruled out). Pick a task to see its reasoning.
+        The full story of each task — goal, the <b>decisions</b> made (and the alternatives weighed),
+        what was <b>ruled out</b>, what was <b>verified</b>, and the artifacts (commits, PRs, files). Pick a task.
       </p>
       <div className="split">
         <div className="list">
@@ -72,25 +47,13 @@ export function Memory({ client }: { client: LoomClient }) {
         </div>
         <div className="detail">
           {!sel ? (
-            <StateView kind="empty" msg="Pick a task to see its reasoning." />
-          ) : !detail ? (
+            <StateView kind="empty" msg="Pick a task to see its full history." />
+          ) : pack === null ? (
             <StateView kind="loading" />
+          ) : pack.trim() === "" ? (
+            <div className="muted mem-none">No history recorded for this task yet.</div>
           ) : (
-            <>
-              <div className="mem-head">
-                <div className="mem-title">{selected?.title ?? sel}</div>
-                <div className="mem-summary">{detail.decisions.length} decisions · {detail.findings.length} findings · {detail.rejections.length} rejections</div>
-              </div>
-              {total === 0 ? (
-                <div className="muted mem-none">No reasoning recorded for this task yet.</div>
-              ) : (
-                <>
-                  <MemGroup title="Decisions" items={detail.decisions} />
-                  <MemGroup title="Findings" items={detail.findings} />
-                  <MemGroup title="Rejections" items={detail.rejections} tone="warn" />
-                </>
-              )}
-            </>
+            <div className="mem-pack"><Markdown text={pack} /></div>
           )}
         </div>
       </div>

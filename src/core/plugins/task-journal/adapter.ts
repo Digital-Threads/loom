@@ -105,6 +105,22 @@ export function taskDetail(projectRoot: string, id: string): TaskDetail {
   }
 }
 
+/** The task-journal's own readable dossier (Goal / Outcome / Artifacts /
+ *  Decisions+alternatives / Rejected / Evidence / Lifecycle) as Markdown. This
+ *  is task-journal's `pack` render — the canonical, clean view of a task's
+ *  history. Empty string on any failure (tj missing / unknown task). */
+export function taskPack(projectRoot: string, id: string, mode: "compact" | "full" = "full"): string {
+  try {
+    return execFileSync(
+      "task-journal",
+      ["pack", id, "--mode", mode, "--project", projectRoot],
+      { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    );
+  } catch {
+    return "";
+  }
+}
+
 export interface TaskTokens {
   used: number;
   saved: number;
