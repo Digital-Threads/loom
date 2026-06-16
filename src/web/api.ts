@@ -26,7 +26,8 @@ import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
-import { tokenEventsByTime } from "../core/plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, tokenUsageBySession } from "../core/plugins/token-pilot/adapter.js";
+import { listSessions } from "../core/plugins/aimux/adapter.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
@@ -370,6 +371,36 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : undefined;
     const ws = await loadWorkspace(root);
     return c.json({ ...ws, activeProfile: loadActiveProfile() });
+  });
+
+  // token-pilot usage joined to who ran it: each session attributed to its Loom
+  // task (by session_id) and subscription (task.profile → aimux lastProfile),
+  // plus a per-subscription rollup. So the UI can show task names, not raw ids,
+  // and "how much each account spent / saved".
+  app.get("/api/tokens", (c) => {
+    const pid = c.req.query("project");
+    const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : projectActive()?.root;
+    const projectRoot = resolveProjectRoot(root ?? process.cwd());
+    const rows = tokenUsageBySession(projectRoot);
+    const taskBySession = new Map(
+      listTasks(db).filter((t) => t.session_id).map((t) => [t.session_id as string, t]),
+    );
+    const profBySession = new Map(listSessions().map((s) => [s.sessionId, s.profile]));
+    const bySession = rows.map((r) => {
+      const task = taskBySession.get(r.sessionId);
+      const profile = (task?.profile || profBySession.get(r.sessionId) || "") as string;
+      return { sessionId: r.sessionId, used: r.used, saved: r.saved, taskTitle: task?.title, profile };
+    });
+    const byProfileMap = new Map<string, { profile: string; used: number; saved: number }>();
+    for (const s of bySession) {
+      const e = byProfileMap.get(s.profile) ?? { profile: s.profile, used: 0, saved: 0 };
+      e.used += s.used;
+      e.saved += s.saved;
+      byProfileMap.set(s.profile, e);
+    }
+    const byProfile = [...byProfileMap.values()].sort((a, b) => b.used - a.used);
+    const totals = bySession.reduce((a, s) => ({ used: a.used + s.used, saved: a.saved + s.saved }), { used: 0, saved: 0 });
+    return c.json({ totals, byProfile, bySession });
   });
 
   // ─── projects (D3) ─────────────────────────────────────────────────────────

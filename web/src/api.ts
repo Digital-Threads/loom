@@ -108,6 +108,9 @@ export interface TokenUsageRow { sessionId: string; used: number; saved: number;
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
 export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
 export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
+export interface TokenSession { sessionId: string; used: number; saved: number; taskTitle?: string; profile: string }
+export interface TokenProfile { profile: string; used: number; saved: number }
+export interface TokensReport { totals: { used: number; saved: number }; byProfile: TokenProfile[]; bySession: TokenSession[] }
 export interface AuthView { status: "starting" | "awaiting_code" | "done" | "error"; url?: string; authorized: boolean; error?: string }
 export interface RateLimit {
   profile: string;
@@ -236,6 +239,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/review/fix`, {}, f).then((d) => d.runId),
     switchProfile: (id: string, profile: string) =>
       postJson<{ runId: string }>(`${base}/api/tasks/${id}/switch-profile`, { profile }, f).then((d) => d.runId),
+    tokensReport: (project?: string) =>
+      getJson<TokensReport>(`${base}/api/tokens${project ? `?project=${encodeURIComponent(project)}` : ""}`, f),
     accountLimits: (profile?: string) =>
       getJson<{ limits: RateLimit[] }>(`${base}/api/accounts/limits${profile ? `?profile=${encodeURIComponent(profile)}` : ""}`, f).then((d) => d.limits),
     qaRun: (id: string, opts?: { checks?: string[] }) =>
