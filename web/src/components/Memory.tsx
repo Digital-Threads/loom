@@ -47,30 +47,52 @@ export function Memory({ client }: { client: LoomClient }) {
   if (err) return <StateView kind="error" msg={err} />;
   if (!ws) return <StateView kind="loading" />;
   if (ws.tasks.length === 0)
-    return <StateView kind="empty" msg="No task-journal tasks yet." />;
+    return <StateView kind="empty" msg="No reasoning recorded yet — the AI logs its thinking here as it works on tasks." />;
+
+  const selected = ws.tasks.find((t) => t.id === sel);
+  const total = detail ? detail.decisions.length + detail.findings.length + detail.rejections.length : 0;
 
   return (
-    <div className="split">
-      <div className="list">
-        {ws.tasks.map((t) => (
-          <button key={t.id} className={sel === t.id ? "active" : ""} onClick={() => setSel(t.id)}>
-            <span className="t">{t.title}</span>
-            <span className="crumb">{t.id}</span>
-          </button>
-        ))}
-      </div>
-      <div className="detail">
-        {!sel ? (
-          <StateView kind="empty" msg="Pick a task to see its reasoning." />
-        ) : !detail ? (
-          <StateView kind="loading" />
-        ) : (
-          <>
-            <MemGroup title="Decisions" items={detail.decisions} />
-            <MemGroup title="Findings" items={detail.findings} />
-            <MemGroup title="Rejections" items={detail.rejections} tone="warn" />
-          </>
-        )}
+    <div>
+      <p className="acct-hint" style={{ margin: "0 0 14px" }}>
+        The AI's working memory. As it does a task it records <b>decisions</b> (why it chose an approach),
+        <b> findings</b> (what it verified) and <b>rejections</b> (what it ruled out). Pick a task to see its reasoning.
+      </p>
+      <div className="split">
+        <div className="list">
+          {ws.tasks.map((t) => (
+            <button key={t.id} className={sel === t.id ? "active" : ""} onClick={() => setSel(t.id)}>
+              <span className="t">{t.title}</span>
+              <span className="mem-row-meta">
+                <span className="crumb">{t.id}</span>
+                <span className={`chip ${t.status === "closed" ? "ok" : ""}`}>{(t.status as string) ?? "open"}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="detail">
+          {!sel ? (
+            <StateView kind="empty" msg="Pick a task to see its reasoning." />
+          ) : !detail ? (
+            <StateView kind="loading" />
+          ) : (
+            <>
+              <div className="mem-head">
+                <div className="mem-title">{selected?.title ?? sel}</div>
+                <div className="mem-summary">{detail.decisions.length} decisions · {detail.findings.length} findings · {detail.rejections.length} rejections</div>
+              </div>
+              {total === 0 ? (
+                <div className="muted mem-none">No reasoning recorded for this task yet.</div>
+              ) : (
+                <>
+                  <MemGroup title="Decisions" items={detail.decisions} />
+                  <MemGroup title="Findings" items={detail.findings} />
+                  <MemGroup title="Rejections" items={detail.rejections} tone="warn" />
+                </>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

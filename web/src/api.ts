@@ -109,7 +109,7 @@ export interface SessionRow { sessionId?: string; profile?: string; lastUsedAtMs
 export interface HealthRow { profile: string; valid?: string[]; broken?: string[]; missing?: string[]; conflicts?: string[]; [k: string]: unknown }
 export interface TokenUsageRow { sessionId: string; used: number; saved: number; [k: string]: unknown }
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
-export interface TjTaskSummary { id: string; title: string; [k: string]: unknown }
+export interface TjTaskSummary { id: string; title: string; status?: string; [k: string]: unknown }
 export interface TjEventRow { event_id: string; task_id: string; type: string; text: string; [k: string]: unknown }
 export interface ProjectStat { projectId: string; name: string; root: string; tasks: number; used: number; saved: number; active: boolean }
 export interface TokenSession { sessionId: string; used: number; saved: number; taskTitle?: string; profile: string }
