@@ -37,15 +37,21 @@ export function Board({
   // The drag IS the approval: the agent runs the dropped stage right away in the
   // task's one session (prior steps' context carries over). Open the task to
   // watch the live output. Then refresh the board so the card lands in its column.
+  // Move a card to a stage and run it (shared by drag-drop and the keyboard
+  // "Move to stage" select, so both paths behave identically).
+  function moveCard(taskId: string, stageKey: string) {
+    client
+      .moveTask(taskId, stageKey, true)
+      .then(() => client.board().then(setCols))
+      .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
+  }
+
   function onDrop(stageKey: string, e: DragEvent) {
     e.preventDefault();
     setOver(null);
     const taskId = e.dataTransfer.getData("text/plain");
     if (!taskId) return;
-    client
-      .moveTask(taskId, stageKey, true)
-      .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
+    moveCard(taskId, stageKey);
   }
 
   // Trash button on a card → open an in-app confirm modal (styled like the other
@@ -107,8 +113,12 @@ export function Board({
                   className={`card ${statusClass(card.status)}`}
                   key={card.id}
                   draggable
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open task: ${card.title}`}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
                   onClick={() => onOpen(card.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter") onOpen(card.id); }}
                 >
                   <button
                     className="card-del"
@@ -140,6 +150,19 @@ export function Board({
                       <span className="chip proj">{projName(card.projectId)}</span>
                     ) : null}
                   </div>
+                  <select
+                    className="card-move"
+                    aria-label="Move to stage"
+                    value=""
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onChange={(e) => { e.stopPropagation(); moveCard(card.id, e.target.value); }}
+                  >
+                    <option value="" disabled>Move…</option>
+                    {cols.map((c) => (
+                      <option key={c.stageKey} value={c.stageKey}>{STAGE_LABELS[c.stageKey] ?? c.stageKey}</option>
+                    ))}
+                  </select>
                 </div>
               ))
             ) : (
