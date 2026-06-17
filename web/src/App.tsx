@@ -91,6 +91,7 @@ export function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#content">Skip to content</a>
       <Sidebar client={client} view={inTask ? "" : view} onNav={nav} open={drawer} />
       <div className="main">
         <header className="top">
@@ -122,7 +123,7 @@ export function App() {
             </div>
           ) : null}
         </header>
-        <div className="content">
+        <div className="content" id="content">
           {inTask ? (
             <TaskView
               key={`${taskId}:${reload}`}

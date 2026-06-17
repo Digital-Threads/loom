@@ -53,21 +53,25 @@ export function Sidebar({
         {NAV.map((n) => (
           <div key={n.key}>
             {"group" in n && n.group ? <div className="grp">{n.group}</div> : null}
-            <button className={view === n.key ? "active" : ""} onClick={() => onNav(n.key)}>
-              <span style={{ width: 16, textAlign: "center" }}>{n.icon}</span> {n.label}
+            <button
+              className={view === n.key ? "active" : ""}
+              aria-current={view === n.key ? "page" : undefined}
+              onClick={() => onNav(n.key)}
+            >
+              <span style={{ width: 16, textAlign: "center" }} aria-hidden="true">{n.icon}</span> {n.label}
             </button>
           </div>
         ))}
       </nav>
       <div className="spacer" />
-      <div className="attn" onClick={() => onNav("board")}>
+      <button type="button" className="attn" onClick={() => onNav("board")}>
         <div className="h">
-          🔔 Needs attention {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
+          <span aria-hidden="true">🔔</span> Needs attention {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
         </div>
         <div className="b">
           {attn.length ? attn.map((a) => `${a.taskId}: ${a.stageKey}`).join(" · ") : "empty"}
         </div>
-      </div>
+      </button>
     </aside>
   );
 }

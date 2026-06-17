@@ -19,6 +19,9 @@ html,body,#root{margin:0;height:100%}
    keyboard nav so mouse clicks stay clean. */
 button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
 input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+/* Skip link: off-screen until a keyboard user tabs to it, then slides into view. */
+.skip-link{position:absolute;left:8px;top:-48px;z-index:100;background:var(--acc);color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;transition:top .15s}
+.skip-link:focus{top:8px}
 body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 
@@ -31,7 +34,7 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .nav button:hover{background:var(--panel2);color:var(--txt)}
 .nav button.active{background:var(--chip);color:var(--txt);font-weight:600}
 .side .spacer{flex:1;min-height:8px}
-.attn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}
+.attn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;width:100%;text-align:left;font:inherit;color:inherit;display:block}
 .attn .h{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
 .attn .b{color:var(--mut);font-size:12px;margin-top:6px}
 .badge{background:var(--bad);color:#fff;border-radius:20px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:auto}
