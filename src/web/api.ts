@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -998,6 +998,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
       streamSinks.set(id, ctx.appendOutput);
+      updateTaskStatus(db, id, "running"); // live while the pipeline advances
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
         if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
@@ -1013,6 +1014,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           const reset = res.reason.resetsAt ? ` (resets ${res.reason.resetsAt})` : "";
           recordTurn(id, res.stoppedAt ?? "advance", "Rate limit", `Run stopped: ${res.reason.profile ?? "the subscription"} hit its rate limit${reset}. Switch account or wait, then continue.`);
         }
+        // Parked (not done) → reflect "waiting / needs you", not a misleading "running".
+        if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
         return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {
         streamSinks.delete(id);
@@ -1023,7 +1026,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/run-stage", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    return c.json(await runAndAdvance(db, id, runners, advanceOpts()));
+    updateTaskStatus(db, id, "running");
+    const res = await runAndAdvance(db, id, runners, advanceOpts());
+    // Parked (not done) → "waiting / needs you" instead of a misleading "running".
+    if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+    return c.json(res);
   });
 
   // ─── PR / Done (L14) ──────────────────────────────────────────────────────────

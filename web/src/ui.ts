@@ -5,6 +5,7 @@ export function statusLabel(status: string): string {
     {
       created: "new",
       running: "running",
+      waiting: "needs you",
       wait: "pending",
       done: "done",
       active: "current",
@@ -17,6 +18,7 @@ export function statusLabel(status: string): string {
 
 export function statusClass(status: string): string {
   if (status === "running" || status === "active") return "run";
+  if (status === "waiting") return "wait";
   if (status === "wait" || status === "pending" || status === "needs_input") return "wait";
   if (status === "done") return "done";
   return "";
