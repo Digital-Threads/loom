@@ -43,7 +43,7 @@ export function Approvals({ client, taskId, onChanged }: { client: LoomClient; t
           <div className="approvals-row" key={tool}>
             <code className="approvals-tool">{tool}</code>
             <div className="approvals-actions">
-              <button className="btn" disabled={busy === tool} onClick={() => dismiss(tool)}>Deny</button>
+              <button className="btn" disabled={busy === tool} title="Hide this request; the tool stays disallowed until you approve it" onClick={() => dismiss(tool)}>Dismiss</button>
               <button className="btn acc" disabled={busy === tool} onClick={() => approve(tool)}>
                 {busy === tool ? "Approving…" : "Approve"}
               </button>
