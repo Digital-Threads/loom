@@ -462,6 +462,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       getCosts(db, taskId)
         .filter((r) => r.source === "aimux" && r.metric === "spent")
         .reduce((sum, r) => sum + r.value, 0),
+    // Halt the loop when the just-run stage hit the provider rate limit, instead
+    // of firing the next stage into the exhausted profile. Reads the stop-reason
+    // the session wrapper persisted (api ~L304).
+    rateLimited: (taskId: string) => {
+      const r = loadResult<{ kind: string; resetsAt?: string | null; profile?: string | null }>(taskId, "stop-reason");
+      return r?.kind === "rate_limit" ? { resetsAt: r.resetsAt ?? null, profile: r.profile ?? null } : null;
+    },
   });
   const resolveProjectId = (c: { req: { query: (k: string) => string | undefined } }) =>
     c.req.query("project") ?? projectActive()?.projectId ?? "default";
@@ -944,6 +951,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         if (res.reason?.kind === "cost_cap") {
           saveResult(id, res.stoppedAt ?? "advance", "stop-reason", res.reason); // surfaced as a banner
           recordTurn(id, res.stoppedAt ?? "advance", "Cost cap", `Run stopped: cost limit $${res.reason.cap} reached (spent $${res.reason.spent?.toFixed(2)}).`);
+        } else if (res.reason?.kind === "rate_limit") {
+          // The stage wrapper already persisted the rate_limit stop-reason (banner);
+          // record a turn so the transcript explains why autopilot paused.
+          const reset = res.reason.resetsAt ? ` (resets ${res.reason.resetsAt})` : "";
+          recordTurn(id, res.stoppedAt ?? "advance", "Rate limit", `Run stopped: ${res.reason.profile ?? "the subscription"} hit its rate limit${reset}. Switch account or wait, then continue.`);
         }
         return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {

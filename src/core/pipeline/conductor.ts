@@ -39,7 +39,7 @@ export interface AdvanceResult {
   /** Where the task parked (null = reached done). */
   stoppedAt: string | null;
   /** Why it stopped, when notable (e.g. the cost cap tripped). */
-  reason?: { kind: string; cap?: number; spent?: number };
+  reason?: { kind: string; cap?: number; spent?: number; resetsAt?: string | null; profile?: string | null };
 }
 
 export interface AdvanceOptions {
@@ -48,6 +48,10 @@ export interface AdvanceOptions {
   costCapUsd?: number;
   /** Current total USD spent on the task (injected; reads the cost rows). */
   spentUsd?: (taskId: string) => number;
+  /** Did the stage that just ran hit the provider rate limit? Injected (reads
+   *  the stage's stop-reason). When it returns info, the loop stops instead of
+   *  firing the next stage into an exhausted profile. */
+  rateLimited?: (taskId: string, stageKey: string) => { resetsAt?: string | null; profile?: string | null } | null;
 }
 
 /**
@@ -85,6 +89,10 @@ export async function advanceTask(
     const { outcome, next } = await runStage(db, taskId, cur.stage_key, runners);
     ran.push(cur.stage_key);
     if (!outcome.ok || outcome.needsAttention) return { ran, stoppedAt: cur.stage_key };
+    // Rate limit: the stage's session hit the provider limit. Stop before firing
+    // the next stage into the exhausted profile (it would only produce garbage).
+    const rl = opts.rateLimited?.(taskId, cur.stage_key);
+    if (rl) return { ran, stoppedAt: cur.stage_key, reason: { kind: "rate_limit", ...rl } };
     if (next === null) return { ran, stoppedAt: null };
   }
 }

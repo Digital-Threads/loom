@@ -83,4 +83,22 @@ describe("conductor (L13)", () => {
     expect(r.reason?.kind).toBe("cost_cap");
     expect(r.reason?.cap).toBe(5);
   });
+
+  it("rate limit: stops the pipeline after a stage hits the provider limit", async () => {
+    createTask(db, { id: "trl", title: "RL", route: ["analysis", "impl", "done"], run_mode: "autopilot" });
+    startTask(db, "trl");
+    const calls: string[] = [];
+    const runners: RunnerRegistry = {
+      analysis: async () => { calls.push("analysis"); return { ok: true }; },
+      impl: async () => { calls.push("impl"); return { ok: true }; },
+    };
+    const r = await advanceTask(db, "trl", runners, {
+      // analysis hits the limit; impl must NOT fire into the exhausted profile.
+      rateLimited: (_id, stage) => (stage === "analysis" ? { resetsAt: "2026-06-17T12:00:00Z", profile: "work" } : null),
+    });
+    expect(calls).toEqual(["analysis"]); // impl never ran
+    expect(r.stoppedAt).toBe("analysis");
+    expect(r.reason?.kind).toBe("rate_limit");
+    expect(r.reason?.resetsAt).toBe("2026-06-17T12:00:00Z");
+  });
 });
