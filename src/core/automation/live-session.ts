@@ -55,6 +55,10 @@ function userMessage(text: string): string {
 
 export interface LiveLauncherDeps {
   spawn: SpawnSession;
+  /** Max wait for one agent reply before the session is killed and the send
+   *  resolves with a timeout marker — so a stuck agent can't hang the pipeline
+   *  forever (loom-uxjk). Default 10 min; overridable for tests. */
+  replyTimeoutMs?: number;
 }
 
 /** A SessionLauncher backed by long-lived processes (one per sessionId). */
@@ -95,8 +99,10 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
         }
       }
     });
-    l.proc.on("close", () => live.delete(sessionId)); // dead → next send respawns via --resume
-    l.proc.on("error", () => live.delete(sessionId));
+    // A dead/errored process must settle any awaiting send, else run() hangs
+    // forever (loom-uxjk). Next send respawns via --resume.
+    l.proc.on("close", () => { const p = l.pending; l.pending = null; live.delete(sessionId); p?.("⚠ The agent process ended before replying. Re-run the stage."); });
+    l.proc.on("error", () => { const p = l.pending; l.pending = null; live.delete(sessionId); p?.("⚠ The agent process errored. Re-run the stage."); });
   }
 
   function ensure(sessionId: string, resume: boolean, cwd: string | undefined, env: Record<string, string> | undefined, bypassPermissions: boolean | undefined, allowedTools: string[] | undefined, profile: string | undefined): Live {
@@ -115,7 +121,17 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
       const l = ensure(opts.sessionId, opts.resume, opts.cwd, opts.env, opts.bypassPermissions, opts.allowedTools, opts.profile);
       l.onChunk = opts.onChunk;
       const text = await new Promise<string>((resolve) => {
-        l.pending = resolve;
+        let timer: ReturnType<typeof setTimeout>;
+        // Wrap the resolver so a real reply clears the watchdog. A stuck agent
+        // call must not hang the pipeline forever — time out, kill the session,
+        // and surface it so the stage parks instead of running on (loom-uxjk).
+        l.pending = (t: string) => { clearTimeout(timer); resolve(t); };
+        timer = setTimeout(() => {
+          l.pending = null;
+          try { l.proc.kill(); } catch { /* best-effort */ }
+          live.delete(opts.sessionId);
+          resolve("⏱ The agent did not respond within the time limit — the session was stopped. Re-run the stage or switch the subscription.");
+        }, deps.replyTimeoutMs ?? 10 * 60_000);
         l.proc.stdin.write(userMessage(prompt));
       });
       return { text };

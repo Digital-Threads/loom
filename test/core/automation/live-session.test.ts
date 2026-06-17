@@ -123,4 +123,33 @@ describe("live session launcher", () => {
     await l.run("impl", { sessionId: "s", resume: false, onChunk: (c) => chunks.push(c) });
     expect(chunks.join("\n")).toContain("→ Edit: src/x.ts");
   });
+
+  it("times out and kills the session when the agent never replies (loom-uxjk)", async () => {
+    let killed = false;
+    const spawn: SpawnSession = () => ({
+      stdin: { write: () => {}, end: () => {} },
+      stdout: { on: () => {} },
+      on: () => {},
+      kill: () => { killed = true; },
+    } as unknown as ProcLike);
+    const l = createLiveSessionLauncher({ spawn, replyTimeoutMs: 30 });
+    const r = await l.run("hi", { sessionId: "s", resume: false });
+    expect(r.text).toMatch(/did not respond/);
+    expect(killed).toBe(true);
+  });
+
+  it("settles the awaiting send when the process dies before replying", async () => {
+    let onClose: (() => void) | undefined;
+    const spawn: SpawnSession = () => ({
+      stdin: { write: () => {}, end: () => {} },
+      stdout: { on: () => {} },
+      on: (e: "close" | "error", cb: () => void) => { if (e === "close") onClose = cb; },
+      kill: () => {},
+    } as unknown as ProcLike);
+    const l = createLiveSessionLauncher({ spawn, replyTimeoutMs: 5000 });
+    const p = l.run("hi", { sessionId: "s", resume: false });
+    setTimeout(() => onClose?.(), 10);
+    const r = await p;
+    expect(r.text).toMatch(/ended before replying/);
+  });
 });
