@@ -1,0 +1,105 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   LOOM · COLOR & ELEVATION
+   A precision instrument in the dark. Deep cool-charcoal surfaces, layered
+   for real depth. ONE signature accent — "Filament" amber — is the warm thread
+   of live energy: it marks the brand, the running pulse, primary action, focus.
+
+   STATUS TEMPERATURE SYSTEM (the legible language across the product):
+     warm amber  = LIVE / running        (energy, now — the signature)
+     cool blue   = QUEUED / waiting       (calm, pending input)
+     green       = DONE / passed
+     red         = FAILED / blocker
+     dim neutral = IDLE / created / skipped
+   ──────────────────────────────────────────────────────────────────────── */
+:root{
+  /* ── base ink (cool near-black, never pure gray) ── */
+  --ink-950:#0A0C10;  /* app background — deepest */
+  --ink-900:#0F1217;  /* recessed wells, code surfaces */
+  --ink-850:#14181F;  /* panel / surface-1 */
+  --ink-800:#1A1F27;  /* card / surface-2 */
+  --ink-750:#222833;  /* raised / surface-3, chips */
+  --ink-700:#2B323E;  /* hover surface */
+  --ink-600:#3A4250;  /* strong fill */
+
+  /* ── lines / borders ── */
+  --line:#262D38;          /* default hairline */
+  --line-soft:#1E242E;     /* subtle inner division */
+  --line-strong:#39424F;   /* emphasized / hover border */
+
+  /* ── text ── */
+  --fg:#EAEFF6;        /* primary text */
+  --fg-muted:#97A2B2;  /* secondary text */
+  --fg-dim:#646E7D;    /* tertiary / captions */
+  --fg-faint:#454D5A;  /* disabled / placeholder */
+  --fg-on-accent:#1A1206; /* text on the amber filament */
+
+  /* ── signature accent · Filament amber ── */
+  --filament-50:#FBEAD0;
+  --filament-300:#F5C778;
+  --filament-400:#EFB14E;   /* primary accent */
+  --filament-500:#E89B2C;   /* hover / pressed deep */
+  --filament-600:#C97F1A;
+  --filament-glow:rgba(239,177,78,.16);
+  --filament-glow-strong:rgba(239,177,78,.30);
+
+  /* ── secondary · cool signal blue (queued / info / links-in-flow) ── */
+  --signal-400:#5BA2F0;
+  --signal-500:#3D86DC;
+  --signal-glow:rgba(91,162,240,.16);
+
+  /* ── status / semantic ── */
+  --run:#EFB14E;       --run-glow:rgba(239,177,78,.30);   /* running = filament */
+  --wait:#5BA2F0;      --wait-glow:rgba(91,162,240,.18);  /* waiting = cool blue */
+  --done:#43C46E;      --done-glow:rgba(67,196,110,.18);
+  --fail:#F0564A;      --fail-glow:rgba(240,86,74,.18);
+  --idle:#646E7D;      --idle-glow:rgba(100,110,125,.12);
+
+  /* severity (review findings) */
+  --sev-bug:#F0564A;
+  --sev-warn:#E89B2C;
+  --sev-info:#43C46E;
+
+  /* ── semantic surface aliases ── */
+  --bg:var(--ink-950);
+  --surface-sunken:var(--ink-900);
+  --surface-panel:var(--ink-850);
+  --surface-card:var(--ink-800);
+  --surface-raised:var(--ink-750);
+  --surface-hover:var(--ink-700);
+  --chip:var(--ink-750);
+  --code-bg:#0B0E13;
+  --code-fg:#C6D2E2;
+  --scroll:#333B49;
+
+  /* semantic text aliases */
+  --text-primary:var(--fg);
+  --text-secondary:var(--fg-muted);
+  --text-tertiary:var(--fg-dim);
+
+  /* accent aliases */
+  --accent:var(--filament-400);
+  --accent-hover:var(--filament-500);
+  --accent-contrast:var(--fg-on-accent);
+  --focus-ring:var(--filament-400);
+
+  /* legacy bridge — maps the original Loom token names onto the new system so
+     the existing app CSS keeps working when this stylesheet is dropped in. */
+  --panel:var(--surface-panel);
+  --panel2:var(--surface-card);
+  --txt:var(--fg);
+  --mut:var(--fg-muted);
+  --dim:var(--fg-dim);
+  --acc:var(--filament-400);
+  --acc2:var(--filament-500);
+  --ok:var(--done);
+  --warn:var(--filament-500);
+  --bad:var(--fail);
+}
+
+/* legacy bridge — radii + fonts the original app still references by old names */
+:root{
+  --radius:var(--r-lg);
+  --r2:var(--r-md);
+  --sans:var(--font-sans);
+  --mono:var(--font-mono);
+}

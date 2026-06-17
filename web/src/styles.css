@@ -1,13 +1,10 @@
-:root{
-  --bg:#0e1116; --panel:#151a22; --panel2:#1b212b; --line:#262e3a;
-  --txt:#e6edf3; --mut:#8b97a7; --dim:#5c6675;
-  --acc:#5b9bff; --acc2:#7c5cff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
-  --chip:#202938; --radius:12px; --r2:9px;
-  --code-bg:#0b0e13; --code-fg:#c8d3e0; /* fixed dark code/terminal surface (theme-independent) */
-  --scroll:#333d4d; /* scrollbar thumb */
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
-}
+/* Loom Design System — tokens + legacy bridge (maps the original token names
+   onto the new "precision instrument in the dark" system; see .docs/Loom Design
+   System/). @import must stay at the very top of the stylesheet. */
+@import "./tokens/typography.css";
+@import "./tokens/colors.css";
+@import "./tokens/spacing.css";
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* thin dark scrollbars everywhere (replace the grey OS default) */
 *{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
