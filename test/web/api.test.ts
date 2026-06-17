@@ -251,6 +251,17 @@ describe("web api", () => {
     await app2.request("/api/connectors/mcp/fs/remove", { method: "POST" });
   });
 
+  it("MCP test uses a real probe by default (no deps) — reachable command passes, missing fails (loom-ivvi)", async () => {
+    const a = createApi(db); // NO deps → must still wire a working probe, not "no probe configured"
+    await a.request("/api/connectors/mcp", { method: "POST", body: JSON.stringify({ id: "probe-ok", command: "true" }) });
+    expect(await (await a.request("/api/connectors/mcp/probe-ok/test", { method: "POST" })).json()).toMatchObject({ ok: true });
+    await a.request("/api/connectors/mcp/probe-ok/remove", { method: "POST" });
+
+    await a.request("/api/connectors/mcp", { method: "POST", body: JSON.stringify({ id: "probe-bad", command: "definitely-not-a-real-binary-xyz" }) });
+    expect(await (await a.request("/api/connectors/mcp/probe-bad/test", { method: "POST" })).json()).toMatchObject({ ok: false });
+    await a.request("/api/connectors/mcp/probe-bad/remove", { method: "POST" });
+  });
+
   it("POST /api/connectors/import creates tasks from drafts (D5.4)", async () => {
     const app2 = createApi(db, { importDrafts: () => [{ title: "Imported A" }, { title: "Imported B", description: "d" }] });
     const r = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number };

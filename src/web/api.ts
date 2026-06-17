@@ -53,7 +53,7 @@ import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { join as pathJoin, isAbsolute } from "node:path";
@@ -324,6 +324,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         resolve({ code: typeof err.code === "number" ? err.code : 1, stdout: combined });
       });
     });
+  // Default MCP reachability probe: spawn `command … --help` and read its exit
+  // code. Without this wired, the Connectors "Test" button always reported
+  // "no probe configured" (loom-ivvi). Sync to match the McpProbe contract.
+  const realMcpProbe: McpProbe = (command, args) => {
+    try {
+      const r = spawnSync(command, args, { timeout: 5000, stdio: "ignore" });
+      return { code: r.status ?? 1 }; // null status (spawn error/timeout) → fail
+    } catch {
+      return { code: 1 };
+    }
+  };
   /** A persisted per-stage flow config (the Quality view's editable QA checks),
    *  used as the column default for resolveFlow. undefined → built-in defaults. */
   const storedFlow = (stage: string): { passes: string[] } | undefined => {
@@ -1079,7 +1090,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return ok ? c.json({ ok: true }) : c.json({ error: "unknown server" }, 404);
   });
   app.post("/api/connectors/mcp/:id/remove", (c) => { removeMcp(c.req.param("id")); return c.json({ ok: true }); });
-  app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe })));
+  app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe ?? realMcpProbe })));
   // D5.4/5.5 — import open tracker items as tasks on the board.
   app.post("/api/connectors/import", (c) => {
     const drafts = (deps.importDrafts ?? (() => beadsConnector().import()))();
