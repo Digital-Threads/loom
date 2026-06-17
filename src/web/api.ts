@@ -406,8 +406,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // sometimes stamps ГОТОВО while listing remaining work — that's a lie we
       // must not trust). If the cap is hit, park for the user instead.
       const settled = (text: string) => parseCompleteness(text).complete && !declaresRemainingWork(text);
+      // The cost cap also applies WITHIN this stage: a long impl loops many
+      // costly continues, and sessionSend updates the task's spend after each
+      // one (api ~L301). Re-check between sends and park if over budget, so a
+      // runaway implementation can't blow past the cap (loom-0xod).
+      const capUsd = getSetting<number>(db, "cost.capUsd", 0);
+      const overBudget = () =>
+        capUsd > 0 &&
+        getCosts(db, id).filter((r) => r.source === "aimux" && r.metric === "spent").reduce((s, r) => s + r.value, 0) >= capUsd;
       let text = await sessionSend(id, "impl", IMPL_PROMPT);
       for (let i = 0; i < IMPL_MAX_CONTINUES && !settled(text); i++) {
+        if (overBudget()) {
+          saveResult(id, "impl", "impl-report", { report: text });
+          return { ok: true, needsAttention: true, note: `cost cap $${capUsd} reached mid-implementation` };
+        }
         text = await sessionSend(id, "impl", IMPL_CONTINUE_PROMPT);
       }
       const t = getTask(db, id);
