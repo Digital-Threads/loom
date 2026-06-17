@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, ProjectEntry } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
+import { Modal } from "./Modal";
 
 export function NewTaskModal({
   client,
@@ -76,9 +77,7 @@ export function NewTaskModal({
       : null;
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-h">New task</div>
+    <Modal title="New task" onClose={onClose}>
         <div className="modal-b">
           <label className="fld">
             <span>Title</span>
@@ -142,10 +141,9 @@ export function NewTaskModal({
             {busy ? "Creating…" : "Create"}
           </button>
         </div>
-      </div>
       {picking ? (
         <DirectoryPicker client={client} onCancel={() => setPicking(false)} onPick={(p) => { setRepo(p); setPicking(false); }} />
       ) : null}
-    </div>
+    </Modal>
   );
 }

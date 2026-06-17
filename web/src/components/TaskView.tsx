@@ -8,6 +8,7 @@ import { StageResult } from "./StageResult";
 import { DocPanel } from "./DocPanel";
 import { CostBar } from "./CostBar";
 import { StateView } from "./StateView";
+import { Modal } from "./Modal";
 import { LimitModal } from "./LimitModal";
 import { Markdown } from "./Markdown";
 import { toast } from "../toast";
@@ -435,9 +436,7 @@ export function TaskView({
         />
       ) : null}
       {history !== undefined ? (
-        <div className="overlay" onClick={() => setHistory(undefined)}>
-          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-h">📖 Task history — {task.title}</div>
+        <Modal title={`📖 Task history — ${task.title}`} className="modal-wide" onClose={() => setHistory(undefined)}>
             <div className="modal-b" style={{ maxHeight: "70vh", overflow: "auto" }}>
               {history === null ? (
                 <StateView kind="loading" />
@@ -448,8 +447,7 @@ export function TaskView({
               )}
             </div>
             <div className="modal-f"><button className="btn" onClick={() => setHistory(undefined)}>Close</button></div>
-          </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

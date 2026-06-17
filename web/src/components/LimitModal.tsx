@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Modal } from "./Modal";
 
 // Shown when the task's current subscription is near its rate limit. Lets the
 // user switch to another account (the conversation resumes under it); if they
@@ -32,9 +33,7 @@ export function LimitModal({
   }, [left, fallback]);
 
   return (
-    <div className="overlay">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-h" style={{ color: "var(--warn)" }}>⚠ Subscription nearly out</div>
+    <Modal title="⚠ Subscription nearly out" headStyle={{ color: "var(--warn)" }}>
         <div className="modal-b">
           <p style={{ margin: "0 0 12px" }}>
             <b>{profile}</b> is at <b>{pct}%</b> of its 5-hour limit. Switch this task to another
@@ -62,7 +61,6 @@ export function LimitModal({
           <button className="btn" onClick={onDismiss}>Stay on {profile}</button>
           <button className="btn acc" disabled={!pick} onClick={() => onSwitch(pick)}>Switch now</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

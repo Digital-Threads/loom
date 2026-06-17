@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LoomClient, AuthView } from "../api";
+import { Modal } from "./Modal";
 import { toast } from "../toast";
 
 // In-UI authorization for a profile: start `aimux auth login <name>` on the
@@ -53,9 +54,7 @@ export function AuthModal({
   }
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-h">Authorize "{profile}"</div>
+    <Modal title={`Authorize "${profile}"`} onClose={onClose}>
         <div className="modal-b">
           {view.status === "starting" ? (
             <div className="state-loading"><span className="spin" />Starting authorization…</div>
@@ -87,7 +86,6 @@ export function AuthModal({
         <div className="modal-f">
           <button className="btn" onClick={onClose}>{view.status === "done" ? "Close" : "Cancel"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

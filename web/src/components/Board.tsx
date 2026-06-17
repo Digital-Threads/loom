@@ -2,6 +2,7 @@ import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { type LoomClient, type BoardColumn, type ProjectEntry, STAGE_LABELS } from "../api";
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
+import { Modal } from "./Modal";
 import { toast } from "../toast";
 
 export function Board({
@@ -148,16 +149,13 @@ export function Board({
         </div>
       ))}
       {confirm ? (
-        <div className="overlay" onClick={() => setConfirm(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-h">Delete task</div>
-            <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
-            <div className="modal-f">
-              <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
-              <button className="btn acc" onClick={() => doDelete(confirm.id)}>Delete</button>
-            </div>
+        <Modal title="Delete task" onClose={() => setConfirm(null)}>
+          <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
+          <div className="modal-f">
+            <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
+            <button className="btn acc" onClick={() => doDelete(confirm.id)}>Delete</button>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );
