@@ -38,7 +38,7 @@ export function Settings({ client }: { client: LoomClient }) {
       <div className="kv">
         <b>Cost cap (per task, $)</b>
         <span>
-          <input type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80 }}
+          <input className="inp" type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80, minWidth: 0 }}
             onBlur={(e) => save("cost.capUsd", Number(e.target.value) || 0)} />
           <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = no limit (default)</span>
         </span>

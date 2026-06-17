@@ -131,7 +131,7 @@ export function NewTaskModal({
             </label>
           ) : null}
           {runMode === "autopilot" ? (
-            <div className="modal-warn" style={{ fontSize: 12, color: "var(--warn)" }}>
+            <div className="modal-warn">
               ⚠ Autopilot grants the agent <b>full host access</b> — it runs end-to-end without per-action approval and is <b>not</b> confined unless the OS sandbox is on. Enable the sandbox (Settings) to isolate it, or use only on a repo you trust.
             </div>
           ) : null}

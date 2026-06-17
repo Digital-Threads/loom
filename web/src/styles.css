@@ -28,7 +28,8 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .brand{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:-.01em;padding:6px 8px 14px}
 .brand-mark{width:22px;height:22px;display:block}
 .nav{display:flex;flex-direction:column;gap:2px;overflow:auto}
-.nav .grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:12px 10px 4px}
+.grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.nav .grp{padding:12px 10px 4px}
 .nav button{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;color:var(--mut);cursor:pointer;font-size:13px;background:none;border:0;text-align:left;width:100%}
 .nav button:hover{background:var(--panel2);color:var(--txt)}
 .nav button.active{background:rgba(239,177,78,.10);color:var(--txt);font-weight:600;box-shadow:inset 2px 0 0 var(--filament-400)}
@@ -269,7 +270,7 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .skills{display:flex;gap:16px;height:calc(100vh - 96px)}
 .skills-list{width:320px;flex:none;overflow:auto;border-right:1px solid var(--line);padding-right:10px}
 .skills-head{display:flex;gap:8px;align-items:center;margin-bottom:10px;position:sticky;top:0;background:var(--bg);padding-bottom:6px;z-index:1}
-.skills-search{flex:1;padding:7px 10px;background:var(--chip);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:13px}
+.skills-search{flex:1;padding:7px 10px;background:var(--chip);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);font-size:13px}
 .skill-row{display:block;width:100%;text-align:left;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;margin-bottom:7px;color:var(--txt)}
 .skill-row:hover{border-color:var(--mut)}
 .skill-row.active{border-color:var(--filament-400);background:rgba(239,177,78,.08)}
@@ -278,7 +279,7 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .skill-inv{font-size:10px;font-weight:600;color:var(--acc);background:rgba(91,162,240,.12);border:1px solid rgba(91,162,240,.25);border-radius:10px;padding:1px 6px;margin-left:auto;flex:none}
 .skills-detail{flex:1;overflow:auto;min-width:0}
 .skills-detail-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
-.skills-editor{width:100%;height:60vh;font-family:var(--mono);font-size:13px;background:var(--chip);border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:10px;resize:vertical}
+.skills-editor{width:100%;height:60vh;font-family:var(--mono);font-size:13px;background:var(--chip);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);padding:10px;resize:vertical}
 .skills-sub{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .skills-md{font-size:14px;line-height:1.5}
 .chip.sm{font-size:11px;padding:1px 5px}
@@ -409,8 +410,8 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .pane .pb .turn-out,.pane .pb .doc{max-height:none;overflow:visible}
 .transcript{margin-top:0;border-top:0;padding-top:0}
 .ws-input{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--panel)}
-.ws-input input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 13px;font:inherit;outline:none}
-.ws-input input:focus{border-color:var(--acc)}
+.ws-input input{flex:1;background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);padding:10px 13px;font:inherit;outline:none;transition:border-color var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
+.ws-input input:focus{border-color:var(--filament-400);box-shadow:0 0 0 3px var(--filament-glow)}
 .ws-input input:disabled{opacity:.6}
 .cost-bar{margin-top:0;padding:10px 16px}
 .fld-check.sm{font-size:12px;color:var(--mut)}
@@ -430,6 +431,10 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .finding-msg{color:var(--txt)}
 .finding-file{font:11px/1.4 var(--mono);background:var(--chip);padding:1px 5px;border-radius:5px;margin-right:7px;color:var(--mut)}
 .fld-warn{display:block;margin-top:6px;font-size:12px;color:var(--warn)}
+/* amber callout inside a modal (e.g. the autopilot full-access warning) */
+.modal-warn{font-size:var(--fs-xs);line-height:1.5;color:var(--warn);background:rgba(239,177,78,.08);border:1px solid rgba(239,177,78,.28);border-radius:var(--r-sm);padding:9px 11px}
+/* fixed-width nav glyph so labels align across items */
+.nav-ico{width:16px;text-align:center;display:inline-block}
 .fld-hint{display:block;margin-top:5px;font-size:11px;color:var(--dim)}
 /* file chips under a turn + the right-side doc viewer */
 .turn-files{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 11px}

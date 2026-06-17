@@ -39,13 +39,16 @@ export function Modal({
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Escape") {
+      e.stopPropagation(); // a nested dialog handles its own Escape — don't also close the parent
       if (onClose) onClose();
       return;
     }
     if (e.key !== "Tab") return;
-    // Trap: keep Tab / Shift+Tab cycling within the dialog's focusables.
+    // Trap: keep Tab / Shift+Tab cycling within the dialog's focusables. Stop
+    // propagation so a parent modal's trap doesn't also move focus (nested dialogs).
     const f = focusables(boxRef.current);
     e.preventDefault();
+    e.stopPropagation();
     if (!f.length) return;
     const i = f.indexOf(document.activeElement as HTMLElement);
     const next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : i === -1 || i === f.length - 1 ? 0 : i + 1;

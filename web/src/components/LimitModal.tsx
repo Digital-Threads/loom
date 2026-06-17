@@ -52,7 +52,7 @@ export function LimitModal({
             <div className="muted">No other subscription available — add one in Accounts.</div>
           )}
           {fallback ? (
-            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+            <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 10 }}>
               Auto-switching to <b>{pick || fallback}</b> in {left}s…
             </div>
           ) : null}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, DirListing } from "../api";
+import { Modal } from "./Modal";
 
 // A server-backed folder picker: the host lists directories (the browser can't
 // read the filesystem). Navigate into folders, go up, and pick a directory.
@@ -23,9 +24,7 @@ export function DirectoryPicker({
   useEffect(() => load(undefined), [client]);
 
   return (
-    <div className="overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-h">Select a folder</div>
+    <Modal title="Select a folder" onClose={onCancel}>
         <div className="modal-b">
           <div className="picker-path" title={listing?.path}>{listing?.path ?? "…"}</div>
           {err ? <div className="modal-err">{err}</div> : null}
@@ -48,7 +47,6 @@ export function DirectoryPicker({
             Use this folder
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

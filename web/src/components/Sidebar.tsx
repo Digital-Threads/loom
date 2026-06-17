@@ -63,7 +63,7 @@ export function Sidebar({
               aria-current={view === n.key ? "page" : undefined}
               onClick={() => onNav(n.key)}
             >
-              <span style={{ width: 16, textAlign: "center" }} aria-hidden="true">{n.icon}</span> {n.label}
+              <span className="nav-ico" aria-hidden="true">{n.icon}</span> {n.label}
             </button>
           </div>
         ))}

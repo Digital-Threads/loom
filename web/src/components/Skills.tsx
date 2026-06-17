@@ -125,7 +125,7 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
           {profiles.length > 0 ? (
             <div style={{ marginTop: 8 }}>
               <span className="muted" style={{ marginRight: 6 }}>Account:</span>
-              <select value={profile} onChange={(e) => setProfile(e.target.value)}>
+              <select className="inp" value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>

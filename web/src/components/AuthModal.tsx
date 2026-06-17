@@ -64,7 +64,7 @@ export function AuthModal({
             <div className="ready-note"><div><span className="ok-dot">✓</span> Authorized — credentials saved.</div></div>
           ) : (
             <>
-              <ol style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+              <ol style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
                 <li>Open the sign-in link and log into the account for <b>{profile}</b>.</li>
                 <li>Copy the code shown after login and paste it below.</li>
               </ol>
