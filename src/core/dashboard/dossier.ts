@@ -7,15 +7,19 @@
 import type { StageRow } from "../store/db.js";
 import type { CostRow } from "../store/execute.js";
 import type { AttachmentRow } from "../store/attachments.js";
+import type { Sh } from "../pipeline/pr-done.js";
 
 export interface DossierInput {
   pack: string;
   stages: StageRow[];
   costs: CostRow[];
   attachments: AttachmentRow[];
+  /** Pre-computed `git diff --stat` summary for the task's branch (from
+   *  diffSummary); a Changes section is appended when non-empty. */
+  diff?: string;
 }
 
-export function renderDossier({ pack, stages, costs, attachments }: DossierInput): string {
+export function renderDossier({ pack, stages, costs, attachments, diff }: DossierInput): string {
   const sections: string[] = [];
 
   if (stages.length) {
@@ -45,9 +49,23 @@ export function renderDossier({ pack, stages, costs, attachments }: DossierInput
     sections.push(`## Artifacts\n\n${rows.join("\n")}`);
   }
 
+  if (diff && diff.trim()) {
+    // Fence the --stat so the modal renders it monospace, columns aligned.
+    sections.push(`## Changes\n\n\`\`\`\n${diff.trim()}\n\`\`\``);
+  }
+
   return sections.length ? `${pack}\n\n${sections.join("\n\n")}` : pack;
 }
 
 function iso(epochMs: number): string {
   return new Date(epochMs).toISOString();
+}
+
+/** Best-effort `git diff --stat base...branch` for the task's worktree branch.
+ *  Returns the trimmed summary, or "" when the branch is missing / nothing
+ *  changed / git is unavailable — the endpoint then just omits the section. The
+ *  injected sh never rejects, so this is safe to await on the request path. */
+export async function diffSummary(sh: Sh, repoRoot: string, base: string, branch: string): Promise<string> {
+  const r = await sh("git", ["diff", "--stat", `${base}...${branch}`], repoRoot);
+  return r.code === 0 ? r.stdout.trim() : "";
 }

@@ -60,7 +60,7 @@ import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
-import { renderDossier } from "../core/dashboard/dossier.js";
+import { renderDossier, diffSummary } from "../core/dashboard/dossier.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
@@ -868,17 +868,21 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
   // A board task's history dossier — its task-journal pack, linked via the
   // external reference loom:<task id> (auto-bound by the MCP during runs).
-  app.get("/api/tasks/:id/dossier", (c) => {
+  app.get("/api/tasks/:id/dossier", async (c) => {
     const id = c.req.param("id");
     const t = getTask(db, id);
     const root = resolveProjectRoot(t?.repo || projectActive()?.root || process.cwd());
     const pack = taskPackByLoomId(root, id);
+    // Best-effort git diff --stat of the task's branch; "" (no Changes section)
+    // when the task has no repo, the branch doesn't exist yet, or git is absent.
+    const diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id)) : "";
     return c.json({
       pack: renderDossier({
         pack,
         stages: getStages(db, id),
         costs: getCosts(db, id),
         attachments: getAttachments(db, id),
+        diff,
       }),
     });
   });
