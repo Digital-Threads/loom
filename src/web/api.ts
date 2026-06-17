@@ -438,9 +438,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         text = await sessionSend(id, "impl", IMPL_CONTINUE_PROMPT);
       }
       const t = getTask(db, id);
-      if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: ${t.title}`);
+      const done = settled(text);
+      // Mark the commit WIP when the plan isn't fully implemented, so a parked
+      // impl (and any PR built from it) reads as incomplete (loom-3s07).
+      if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom${done ? "" : " WIP"}: ${t.title}`);
       saveResult(id, "impl", "impl-report", { report: text });
-      if (settled(text)) return { ok: true };
+      if (done) return { ok: true };
       const note = parseCompleteness(text).note ?? "implementation still has remaining plan items";
       return { ok: true, needsAttention: true, note };
     },
@@ -590,6 +593,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
     const byProfileMap = new Map<string, { profile: string; used: number; saved: number }>();
     for (const s of bySession) {
+      if (!s.profile) continue; // unattributed (non-Loom) usage doesn't belong in the per-account table (loom-hcpk)
       const e = byProfileMap.get(s.profile) ?? { profile: s.profile, used: 0, saved: 0 };
       e.used += s.used;
       e.saved += s.saved;
@@ -770,7 +774,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/stages/:key/accept", (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    const next = completeStage(db, id, c.req.param("key"));
+    const key = c.req.param("key");
+    // Validate the stage belongs to this task — else completeStage is a silent
+    // no-op that still returns ok (loom-1c75).
+    if (!getStages(db, id).some((s) => s.stage_key === key)) return c.json({ error: "unknown stage" }, 400);
+    const next = completeStage(db, id, key);
     return c.json({ next });
   });
 
@@ -779,7 +787,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { gate?: unknown };
-    setStageGate(db, id, c.req.param("key"), body.gate !== false);
+    const key = c.req.param("key");
+    if (!getStages(db, id).some((s) => s.stage_key === key)) return c.json({ error: "unknown stage" }, 400);
+    setStageGate(db, id, key, body.gate !== false);
     return c.json({ ok: true });
   });
 

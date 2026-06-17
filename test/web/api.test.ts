@@ -561,6 +561,12 @@ describe("web api mutations", () => {
     expect(detail.stages.find((s: { stage_key: string }) => s.stage_key === "spec").gate).toBe(0);
   });
 
+  it("gate/accept on an unknown stage → 400, not a silent no-op (loom-1c75)", async () => {
+    await post("/api/tasks", { id: "uk", title: "UK" });
+    expect((await post("/api/tasks/uk/stages/nope/gate", { gate: true })).status).toBe(400);
+    expect((await post("/api/tasks/uk/stages/nope/accept")).status).toBe(400);
+  });
+
   it("mutation on missing task → 404", async () => {
     expect((await post("/api/tasks/ghost/start")).status).toBe(404);
   });
