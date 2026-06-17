@@ -53,11 +53,11 @@ export function Skills({ client }: { client: LoomClient }) {
     <div className="skills">
       <div className="skills-list">
         <div className="skills-head">
-          <input className="skills-search" placeholder="🔍 поиск скиллов…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="btn acc sm" onClick={() => setCreating(true)}>+ Создать</button>
+          <input className="skills-search" placeholder="🔍 search skills…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <button className="btn acc sm" onClick={() => setCreating(true)}>+ Create</button>
         </div>
         {shown.length === 0 ? (
-          <div className="muted" style={{ padding: 12 }}>Ничего не найдено.</div>
+          <div className="muted" style={{ padding: 12 }}>Nothing found.</div>
         ) : shown.map((s) => (
           <button key={s.name} className={`skill-row ${sel === s.name ? "active" : ""}`} onClick={() => open(s.name)}>
             <div className="skill-name">{s.name}{s.userInvocable ? <span className="skill-inv">invocable</span> : null}</div>
@@ -68,18 +68,18 @@ export function Skills({ client }: { client: LoomClient }) {
 
       <div className="skills-detail">
         {!sel ? (
-          <div className="muted" style={{ padding: 20 }}>Выбери скилл слева, или создай новый.</div>
+          <div className="muted" style={{ padding: 20 }}>Select a skill on the left, or create a new one.</div>
         ) : (
           <>
             <div className="skills-detail-head">
               <b>{sel}</b>
               {editing ? (
                 <span>
-                  <button className="btn sm" onClick={() => setEditing(false)}>Отмена</button>
-                  <button className="btn acc sm" disabled={busy} onClick={save}>{busy ? "…" : "💾 Сохранить"}</button>
+                  <button className="btn sm" onClick={() => setEditing(false)}>Cancel</button>
+                  <button className="btn acc sm" disabled={busy} onClick={save}>{busy ? "…" : "💾 Save"}</button>
                 </span>
               ) : (
-                <button className="btn sm" onClick={() => { setDraft(content); setEditing(true); }}>✏ Редактировать</button>
+                <button className="btn sm" onClick={() => { setDraft(content); setEditing(true); }}>✏ Edit</button>
               )}
             </div>
             {editing ? (
@@ -113,18 +113,18 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
     setBusy(true);
     client.skillGenerate(desc, profile || undefined)
       .then((r) => onCreated(r.name))
-      .catch((e) => toast.error(`Не удалось создать скилл: ${e}`))
+      .catch((e) => toast.error(`Couldn't create the skill: ${e}`))
       .finally(() => setBusy(false));
   }
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
-        <div className="modal-h">Создать скилл (AI)</div>
+        <div className="modal-h">Create skill (AI)</div>
         <div className="modal-b">
-          <textarea className="skills-editor" style={{ height: 120 }} placeholder="Опиши что должен делать скилл — агент напишет SKILL.md по стандарту…" value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <textarea className="skills-editor" style={{ height: 120 }} placeholder="Describe what the skill should do — the agent writes a standards-compliant SKILL.md…" value={desc} onChange={(e) => setDesc(e.target.value)} />
           {profiles.length > 0 ? (
             <div style={{ marginTop: 8 }}>
-              <span className="muted" style={{ marginRight: 6 }}>Аккаунт:</span>
+              <span className="muted" style={{ marginRight: 6 }}>Account:</span>
               <select value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -132,8 +132,8 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
           ) : null}
         </div>
         <div className="modal-f">
-          <button className="btn" onClick={onClose}>Отмена</button>
-          <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? "Генерирую…" : "Создать"}</button>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? "Generating…" : "Create"}</button>
         </div>
       </div>
     </div>

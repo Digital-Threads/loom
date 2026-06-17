@@ -7,9 +7,9 @@ import { StateView } from "./StateView";
 // lifecycle) that the policy/secret-scan layer emits to the event bus.
 type Cat = "all" | "command" | "secret" | "worktree";
 const CATS: { key: Cat; label: string }[] = [
-  { key: "all", label: "Все" },
-  { key: "command", label: "Команды" },
-  { key: "secret", label: "Секреты" },
+  { key: "all", label: "All" },
+  { key: "command", label: "Commands" },
+  { key: "secret", label: "Secrets" },
   { key: "worktree", label: "Worktree" },
 ];
 const catOf = (type: string): Cat =>
@@ -37,8 +37,8 @@ export function Security({ client }: { client: LoomClient }) {
   return (
     <div className="panel">
       <p className="muted" style={{ marginTop: 0 }}>
-        Песочница для агента: worktree-изоляция, политика команд, скан секретов, аудит.
-        Standalone-пакет <code>@digital-threads/loom-security</code>.
+        Agent sandbox: worktree isolation, command policy, secret scanning, audit.
+        Standalone package <code>@digital-threads/loom-security</code>.
       </p>
 
       <div className="kv">
@@ -48,14 +48,14 @@ export function Security({ client }: { client: LoomClient }) {
             onClick={() => { const v = !sandbox; setSandbox(v); client.saveSetting("sandbox.enabled", v).catch(() => setSandbox(!v)); }}>
             {sandbox === null ? "…" : sandbox ? "on" : "off"}
           </button>
-          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Ограничивает запись агента worktree-деревом (bubblewrap / sandbox-exec).</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Confines agent writes to the worktree (bubblewrap / sandbox-exec).</span>
         </span>
       </div>
 
       <div className="stat-row" style={{ marginTop: 14 }}>
-        <div className="stat"><div className="big">{count("command")}</div><div className="stat-sub">команд заблокировано/предупреждено</div></div>
-        <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">секретов найдено</div></div>
-        <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">worktree-событий</div></div>
+        <div className="stat"><div className="big">{count("command")}</div><div className="stat-sub">commands blocked / warned</div></div>
+        <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">secrets found</div></div>
+        <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">worktree events</div></div>
       </div>
 
       <div className="row" style={{ gap: 6, margin: "16px 0 8px" }}>
@@ -67,7 +67,7 @@ export function Security({ client }: { client: LoomClient }) {
       </div>
 
       {shown.length === 0 ? (
-        <StateView kind="empty" msg="Нет аудит-событий в этой категории." />
+        <StateView kind="empty" msg="No audit events in this category." />
       ) : (
         <ul className="finding-list">
           {shown.slice(0, 150).map((e, i) => (

@@ -18,8 +18,8 @@ export function Layers({ client }: { client: LoomClient }) {
 
   return (
     <div className="panel">
-      <Group title="Standalone-плагины" hint="вынесены в отдельные пакеты (Фаза 1)" layers={standalone} />
-      <Group title="Inline-слои" hint="живут в core/* — станут standalone-плагинами в Фазе 2" layers={inline} />
+      <Group title="Standalone plugins" hint="extracted into their own packages" layers={standalone} />
+      <Group title="Inline modules" hint="live in core/* — may become standalone plugins later" layers={inline} />
     </div>
   );
 }

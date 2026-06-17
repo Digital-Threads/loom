@@ -150,11 +150,11 @@ export function Board({
       {confirm ? (
         <div className="overlay" onClick={() => setConfirm(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-h">Удалить задачу</div>
-            <div className="modal-b">Удалить задачу «{confirm.title}»? Это необратимо.</div>
+            <div className="modal-h">Delete task</div>
+            <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
             <div className="modal-f">
-              <button className="btn" onClick={() => setConfirm(null)}>Отмена</button>
-              <button className="btn acc" onClick={() => doDelete(confirm.id)}>Удалить</button>
+              <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
+              <button className="btn acc" onClick={() => doDelete(confirm.id)}>Delete</button>
             </div>
           </div>
         </div>

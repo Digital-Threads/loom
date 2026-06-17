@@ -5,19 +5,19 @@ import type { LoomClient } from "../api";
 // a capability/config page rather than a live dashboard.
 export function Swarm(_props: { client: LoomClient }) {
   const caps = [
-    { k: "runConcurrent", d: "Запускает одну задачу несколькими агентами параллельно и собирает исходы." },
-    { k: "majorityVote", d: "Консенсус по результатам — берёт ответ большинства." },
-    { k: "successes", d: "Отбирает успешные исходы из набора попыток." },
+    { k: "runConcurrent", d: "Runs one task across several agents in parallel and collects the outcomes." },
+    { k: "majorityVote", d: "Consensus over results — takes the majority answer." },
+    { k: "successes", d: "Picks the successful outcomes from a set of attempts." },
   ];
   return (
     <div className="panel">
       <p className="muted" style={{ marginTop: 0 }}>
-        Координатор мульти-агента. Standalone-пакет <code>@digital-threads/loom-swarm</code>.
+        Multi-agent coordinator. Standalone package <code>@digital-threads/loom-swarm</code>.
       </p>
 
-      <div className="kv"><b>Попыток по умолчанию</b><span><span className="chip">attempts: 3</span></span></div>
+      <div className="kv"><b>Default attempts</b><span><span className="chip">attempts: 3</span></span></div>
 
-      <h2>Что умеет</h2>
+      <h2>Capabilities</h2>
       <ul className="finding-list">
         {caps.map((c) => (
           <li key={c.k} className="finding sev-info">
@@ -27,8 +27,7 @@ export function Swarm(_props: { client: LoomClient }) {
         ))}
       </ul>
       <p className="muted" style={{ fontSize: 12 }}>
-        Stateless-утилита — живого состояния/панели мониторинга нет: swarm работает эфемерно внутри задачи.
-        Панель появится, когда swarm дорастёт до фоновых прогонов.
+        Stateless utility — no live state or dashboard: swarm runs ephemerally inside a task. A panel will appear once swarm grows background runs.
       </p>
     </div>
   );

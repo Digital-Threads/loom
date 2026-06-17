@@ -27,7 +27,7 @@ const STAGE_DESC: Record<string, string> = {
 // The review stage runs three reviewers in order, accumulating findings; the
 // user approves & runs the next between them, then fixes all findings once.
 const REVIEWER_ORDER = ["self", "ralph", "adversarial"] as const;
-const REVIEWER_LABELS: Record<string, string> = { self: "Своё ревью", ralph: "Ralph-loop", adversarial: "Adversarial" };
+const REVIEWER_LABELS: Record<string, string> = { self: "Self review", ralph: "Ralph-loop", adversarial: "Adversarial" };
 
 function badgeClass(status: string): string {
   if (status === "active") return "badge-acc";
@@ -384,13 +384,13 @@ export function TaskView({
         <div className="pb">
           {detail.stopReason?.kind === "rate_limit" ? (
             <div className="banner banner-warn" role="status">
-              ⚠ Прогон остановлен: лимит аккаунта{detail.stopReason.profile ? ` «${detail.stopReason.profile}»` : ""} исчерпан
-              {detail.stopReason.resetsAt ? ` — сброс ${detail.stopReason.resetsAt}` : ""}. Смени аккаунт (выше) или подожди, затем ▶▶ Advance.
+              ⚠ Run stopped: account{detail.stopReason.profile ? ` "${detail.stopReason.profile}"` : ""} limit reached
+              {detail.stopReason.resetsAt ? ` — resets ${detail.stopReason.resetsAt}` : ""}. Switch account (above) or wait, then ▶▶ Advance.
             </div>
           ) : detail.stopReason?.kind === "cost_cap" ? (
             <div className="banner banner-warn" role="status">
-              ⚠ Прогон остановлен: достигнут лимит стоимости ${detail.stopReason.cap}
-              {detail.stopReason.spent != null ? ` (потрачено $${detail.stopReason.spent.toFixed(2)})` : ""}. Подними лимит в Settings или ▶▶ Advance чтобы продолжить.
+              ⚠ Run stopped: cost limit ${detail.stopReason.cap}
+              {detail.stopReason.spent != null ? ` (spent $${detail.stopReason.spent.toFixed(2)})` : ""}. Raise the limit in Settings or ▶▶ Advance to continue.
             </div>
           ) : null}
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />

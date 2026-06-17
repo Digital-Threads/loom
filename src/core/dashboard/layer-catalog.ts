@@ -22,15 +22,15 @@ export interface LayerCatalogEntry {
 
 export const LAYER_CATALOG: LayerCatalogEntry[] = [
   // ── standalone plugins (own @digital-threads/loom-* package + repo) ──
-  { id: "accounts", label: "Access / accounts", node: "aimux", status: "standalone", plugin: "aimux", source: "plugin", description: "Подписки и аккаунты CLI, запуск сессий под профилем." },
-  { id: "efficiency", label: "Efficiency / tokens", node: "token-pilot", status: "standalone", plugin: "token-pilot", source: "plugin", description: "Экономия токенов: дешёвое чтение кода, учёт расхода." },
-  { id: "memory", label: "Memory / tasks", node: "task-journal", status: "standalone", plugin: "task-journal", source: "plugin", description: "Журнал задач — история решений, находок, отклонений." },
-  { id: "security", label: "Security", node: "loom-security", status: "standalone", source: "@digital-threads/loom-security", description: "Песочница для агента: worktree-изоляция, политика команд, скан секретов, аудит." },
-  { id: "quality", label: "Quality", node: "loom-quality", status: "standalone", source: "@digital-threads/loom-quality", description: "AI-ревью кода (self/ralph/adversarial) + прогон проверок." },
-  { id: "swarm", label: "Swarm", node: "loom-swarm", status: "standalone", source: "@digital-threads/loom-swarm", description: "Координатор мульти-агента (несколько агентов на задачу)." },
-  // ── inline modules (in loom-host/src/core; могут стать плагинами позже) ──
-  { id: "automation", label: "Automation", node: "automation", status: "inline", source: "core/automation/*", description: "Сессии задач, конвейер, дирижёр (движок Loom)." },
-  { id: "knowledge", label: "Knowledge", node: "knowledge", status: "inline", source: "core/knowledge/*", description: "Recall «уже решали это» на стадии анализа." },
-  { id: "learning", label: "Learning", node: "learning", status: "inline", source: "core/learning/*", description: "Обучение на истории прошлых задач." },
-  { id: "observability", label: "Observability", node: "observability", status: "inline", source: "core/observability/*", description: "Cost-rollups, метрики, timeline событий." },
+  { id: "accounts", label: "Access / accounts", node: "aimux", status: "standalone", plugin: "aimux", source: "plugin", description: "CLI subscriptions and accounts, running sessions under a profile." },
+  { id: "efficiency", label: "Efficiency / tokens", node: "token-pilot", status: "standalone", plugin: "token-pilot", source: "plugin", description: "Token savings: cheap code reads, usage accounting." },
+  { id: "memory", label: "Memory / tasks", node: "task-journal", status: "standalone", plugin: "task-journal", source: "plugin", description: "Task journal — history of decisions, findings, rejections." },
+  { id: "security", label: "Security", node: "loom-security", status: "standalone", source: "@digital-threads/loom-security", description: "Agent sandbox: worktree isolation, command policy, secret scanning, audit." },
+  { id: "quality", label: "Quality", node: "loom-quality", status: "standalone", source: "@digital-threads/loom-quality", description: "AI code review (self/ralph/adversarial) + quality checks." },
+  { id: "swarm", label: "Swarm", node: "loom-swarm", status: "standalone", source: "@digital-threads/loom-swarm", description: "Multi-agent coordinator (several agents per task)." },
+  // ── inline modules (in loom-host/src/core; may become plugins later) ──
+  { id: "automation", label: "Automation", node: "automation", status: "inline", source: "core/automation/*", description: "Task sessions, pipeline, conductor (the Loom engine)." },
+  { id: "knowledge", label: "Knowledge", node: "knowledge", status: "inline", source: "core/knowledge/*", description: "Recall 'we solved this before' at the analysis stage." },
+  { id: "learning", label: "Learning", node: "learning", status: "inline", source: "core/learning/*", description: "Learning from past task history." },
+  { id: "observability", label: "Observability", node: "observability", status: "inline", source: "core/observability/*", description: "Cost rollups, metrics, event timeline." },
 ];

@@ -41,12 +41,11 @@ export function Settings({ client }: { client: LoomClient }) {
         <span>
           <input type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80 }}
             onBlur={(e) => save("cost.capUsd", Number(e.target.value) || 0)} />
-          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = без лимита (по умолчанию)</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = no limit (default)</span>
         </span>
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: -4 }}>
-        Полезно при оплате по Anthropic API-ключу (плата за токены) — ограничивает трату на одну задачу,
-        autopilot остановится при достижении. На подписке (flat-rate) можно оставить 0.
+        Useful with Anthropic API-key billing (pay-per-token) — caps spend per task; autopilot stops when reached. On a flat-rate subscription, leave 0.
       </div>
       <div className="kv">
         <b>token-pilot</b>

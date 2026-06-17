@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, ReviewResult, QaResult, PrResult } from "../api";
 
 const REVIEWER_ORDER = ["self", "ralph", "adversarial"] as const;
-const REVIEWER_LABELS: Record<string, string> = { self: "Своё ревью", ralph: "Ralph-loop", adversarial: "Adversarial" };
+const REVIEWER_LABELS: Record<string, string> = { self: "Self review", ralph: "Ralph-loop", adversarial: "Adversarial" };
 
 // Structured result card for the review / qa stages — the findings table and
 // check pass/fail list, shown above the transcript so the outcome is scannable

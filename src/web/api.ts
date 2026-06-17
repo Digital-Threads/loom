@@ -930,7 +930,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         const res = await advanceTask(db, id, runners, advanceOpts());
         if (res.reason?.kind === "cost_cap") {
           saveResult(id, res.stoppedAt ?? "advance", "stop-reason", res.reason); // surfaced as a banner
-          recordTurn(id, res.stoppedAt ?? "advance", "Cost cap", `Прогон остановлен: достигнут лимит стоимости $${res.reason.cap} (потрачено $${res.reason.spent?.toFixed(2)}).`);
+          recordTurn(id, res.stoppedAt ?? "advance", "Cost cap", `Run stopped: cost limit $${res.reason.cap} reached (spent $${res.reason.spent?.toFixed(2)}).`);
         }
         return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {
