@@ -717,6 +717,18 @@ describe("web api — fs browse + PR connector", () => {
     expect(getTask(database, "prk")?.status).not.toBe("done");
   });
 
+  it("autopilot parks at pr when the PR push fails, not silently done (loom-ae6s)", async () => {
+    createTask(database, { id: "prf", title: "PRfail", repo: "/tmp/x", route: ["pr", "done"], run_mode: "autopilot" });
+    startTask(database, "prf");
+    // connector path with a failing git → pr.created=false + pr.error set
+    const a = createApi(database, {
+      prOptions: () => ({ connector: true, repoRoot: "/tmp/x", branch: "loom/prf", sh: async (cmd: string) => ({ code: cmd === "gh" ? 0 : 1, stdout: "boom" }) }),
+    });
+    const res = (await (await a.request("/api/tasks/prf/run-stage", { method: "POST", body: "{}" })).json()) as { stoppedAt: string | null };
+    expect(res.stoppedAt).toBe("pr"); // a failed PR must not count as done
+    expect(getTask(database, "prf")?.status).not.toBe("done");
+  });
+
   it("done run leaves a turn", async () => {
     createTask(database, { id: "dn1", title: "Donetask" });
     const a = createApi(database);
