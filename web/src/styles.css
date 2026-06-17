@@ -3,15 +3,17 @@
   --txt:#e6edf3; --mut:#8b97a7; --dim:#5c6675;
   --acc:#5b9bff; --acc2:#7c5cff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
   --chip:#202938; --radius:12px; --r2:9px;
+  --code-bg:#0b0e13; --code-fg:#c8d3e0; /* fixed dark code/terminal surface (theme-independent) */
+  --scroll:#333d4d; /* scrollbar thumb */
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* thin dark scrollbars everywhere (replace the grey OS default) */
-*{scrollbar-width:thin;scrollbar-color:#333d4d transparent}
+*{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#333d4d;border-radius:7px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:7px;border:3px solid transparent;background-clip:content-box}
 ::-webkit-scrollbar-thumb:hover{background:#454f60;background-clip:content-box}
 html,body,#root{margin:0;height:100%}
 /* keyboard accessibility: buttons/links set outline:none for the mouse, but
@@ -288,9 +290,9 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .toast-error::before{content:"⚠ ";color:var(--bad)}
 @keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-.term{margin:12px;border:1px solid var(--line);border-radius:8px;background:#0b0e13;overflow:hidden}
+.term{margin:12px;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
 .term-head{display:flex;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut)}
-.term-body{margin:0;padding:11px;white-space:pre-wrap;font:12px/1.5 var(--mono);color:#c8d3e0;max-height:240px;overflow:auto}
+.term-body{margin:0;padding:11px;white-space:pre-wrap;font:12px/1.5 var(--mono);color:var(--code-fg);max-height:240px;overflow:auto}
 .term-input{display:flex;gap:8px;padding:9px 11px;border-top:1px solid var(--line)}
 .term-input input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--txt);padding:7px 10px;font:inherit;outline:none}
 .term-input input:focus{border-color:var(--acc)}
@@ -343,9 +345,9 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .turn-head{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut)}
 .turn-toggle{margin-left:auto;background:none;border:0;color:var(--dim);font-size:11px;cursor:pointer}
 .turn-toggle:hover{color:var(--acc)}
-.turn-in{margin:0;padding:10px 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;font:11px/1.5 var(--mono);color:var(--dim);max-height:160px;overflow:auto;background:#0b0e13}
+.turn-in{margin:0;padding:10px 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;font:11px/1.5 var(--mono);color:var(--dim);max-height:160px;overflow:auto;background:var(--code-bg)}
 .turn-out{padding:11px 12px;white-space:pre-wrap;font-size:13px;line-height:1.55;color:var(--txt);max-height:340px;overflow:auto}
-.turn-out.mono{font:12px/1.5 var(--mono);color:#c8d3e0}
+.turn-out.mono{font:12px/1.5 var(--mono);color:var(--code-fg)}
 /* rendered markdown inside a turn */
 .md{font-size:13px;line-height:1.55;color:var(--txt)}
 .md>*:first-child{margin-top:0}
@@ -356,8 +358,8 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .md-list{margin:0 0 9px;padding-left:20px}
 .md-list li{margin:2px 0}
 .md-code{font:12px/1.4 var(--mono);background:var(--chip);padding:1px 5px;border-radius:5px}
-.md-pre{margin:0 0 9px;padding:11px;background:#0b0e13;border:1px solid var(--line);border-radius:8px;overflow:auto}
-.md-pre code{font:12px/1.5 var(--mono);color:#c8d3e0;white-space:pre}
+.md-pre{margin:0 0 9px;padding:11px;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;overflow:auto}
+.md-pre code{font:12px/1.5 var(--mono);color:var(--code-fg);white-space:pre}
 .md-quote{margin:0 0 9px;padding:4px 12px;border-left:3px solid var(--line);color:var(--mut);white-space:pre-wrap}
 .md a{color:var(--acc)}
 .turn-live{border-color:rgba(91,155,255,.35)}
@@ -366,7 +368,7 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 /* live stream: prose blocks + collapsible tool-call groups */
 .livestream{padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:360px;overflow:auto}
 .live-empty{padding:11px 12px;font-size:13px}
-.live-text{margin:0;padding:3px 2px;white-space:pre-wrap;font:12px/1.5 var(--mono);color:#c8d3e0}
+.live-text{margin:0;padding:3px 2px;white-space:pre-wrap;font:12px/1.5 var(--mono);color:var(--code-fg)}
 .live-tool{font-size:12px}
 .live-tool-head{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:none;border:0;color:var(--txt);cursor:pointer;padding:3px 2px;font:inherit}
 .live-tool-head:disabled{cursor:default}
@@ -420,7 +422,7 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .doc-panel-h{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .doc-panel-path{flex:1;font:12px/1.4 var(--mono);color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-panel-b{flex:1;overflow:auto;padding:18px 20px}
-.doc-raw{margin:0;white-space:pre-wrap;font:12px/1.55 var(--mono);color:#c8d3e0}
+.doc-raw{margin:0;white-space:pre-wrap;font:12px/1.55 var(--mono);color:var(--code-fg)}
 .doc-panel-tabs{display:inline-flex;gap:2px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:2px}
 .doc-panel-tabs .tab{background:none;border:0;color:var(--mut);font-size:12px;padding:3px 10px;border-radius:5px;cursor:pointer}
 .doc-panel-tabs .tab.on{background:var(--chip);color:var(--txt)}
@@ -431,4 +433,4 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .diff .dl.del{background:rgba(248,81,73,.13);color:#ffa198}
 .diff .dl.hunk{color:#79c0ff;background:rgba(91,155,255,.08)}
 .diff .dl.meta{color:var(--dim)}
-.diff .dl.ctx{color:#c8d3e0}
+.diff .dl.ctx{color:var(--code-fg)}
