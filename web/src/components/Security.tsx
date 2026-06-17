@@ -23,7 +23,8 @@ export function Security({ client }: { client: LoomClient }) {
 
   function load() {
     client.timeline().then((all) => setEvents(all.filter((e) => e.type.startsWith("audit.")))).catch((e) => setErr(String(e)));
-    client.settings().then((s) => setSandbox((s["sandbox.enabled"] as boolean) ?? false)).catch(() => {});
+    client.settings().then((s) => setSandbox((s["sandbox.enabled"] as boolean) ?? false))
+      .catch((e) => { console.warn("settings unavailable:", e); setSandbox(false); }); // fall to a usable default, not a stuck "…"
   }
   useEffect(load, [client]);
 

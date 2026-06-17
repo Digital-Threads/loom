@@ -12,8 +12,8 @@ export function Timeline({ client }: { client: LoomClient }) {
 
   useEffect(() => {
     client.timeline().then(setEvents).catch((e) => setErr(String(e)));
-    client.boardMetrics().then(setBoard).catch(() => {});
-    client.agentMetrics().then((m) => { setAgents(m.agents); setFailures(m.failures); }).catch(() => {});
+    client.boardMetrics().then(setBoard).catch((e) => console.warn("board metrics unavailable:", e));
+    client.agentMetrics().then((m) => { setAgents(m.agents); setFailures(m.failures); }).catch((e) => console.warn("agent metrics unavailable:", e));
   }, [client]);
 
   if (err) return <StateView kind="error" msg={err} />;

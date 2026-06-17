@@ -28,6 +28,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
   async function setDefault(id: string) {
     setBusy(true);
     try { await client.setActiveProject(id); refresh(); onSwitched?.(); toast.success("Default project set"); }
+    catch (e) { toast.error(`Couldn’t set default: ${e}`); }
     finally { setBusy(false); }
   }
   async function remove(id: string, name: string) {

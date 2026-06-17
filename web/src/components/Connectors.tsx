@@ -11,21 +11,30 @@ export function Connectors({ client }: { client: LoomClient }) {
   const [command, setCommand] = useState("");
   const [status, setStatus] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  function refresh() { client.mcpList().then(setServers).catch((e) => setErr(String(e))); }
+  function refresh() { client.mcpList().then(setServers).catch((e) => setErr(String(e))).finally(() => setLoading(false)); }
   useEffect(refresh, [client]);
 
   async function add() {
     if (!id.trim() || !command.trim()) return;
-    await client.mcpAdd({ id: id.trim(), command: command.trim() });
-    setId(""); setCommand(""); refresh(); toast.success("MCP server added");
+    try { await client.mcpAdd({ id: id.trim(), command: command.trim() }); setId(""); setCommand(""); refresh(); toast.success("MCP server added"); }
+    catch (e) { toast.error(`Couldn’t add server: ${e}`); }
   }
-  async function toggle(s: McpServer) { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? "Disabled" : "Enabled"); }
-  async function remove(sid: string) { await client.mcpRemove(sid); refresh(); toast.success("Server removed"); }
+  async function toggle(s: McpServer) {
+    try { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? "Disabled" : "Enabled"); }
+    catch (e) { toast.error(`Couldn’t toggle ${s.id}: ${e}`); }
+  }
+  async function remove(sid: string) {
+    try { await client.mcpRemove(sid); refresh(); toast.success("Server removed"); }
+    catch (e) { toast.error(`Couldn’t remove ${sid}: ${e}`); }
+  }
   async function test(sid: string) {
-    const r = await client.mcpTest(sid);
-    setStatus((m) => ({ ...m, [sid]: r.ok ? "ok" : r.error ?? "fail" }));
-    if (r.ok) toast.success(`${sid}: reachable`); else toast.error(`${sid}: ${r.error ?? "unreachable"}`);
+    try {
+      const r = await client.mcpTest(sid);
+      setStatus((m) => ({ ...m, [sid]: r.ok ? "ok" : r.error ?? "fail" }));
+      if (r.ok) toast.success(`${sid}: reachable`); else toast.error(`${sid}: ${r.error ?? "unreachable"}`);
+    } catch (e) { toast.error(`Couldn’t test ${sid}: ${e}`); }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -36,10 +45,12 @@ export function Connectors({ client }: { client: LoomClient }) {
         <input className="inp" placeholder="id" value={id} onChange={(e) => setId(e.target.value)} />
         <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
         <button className="btn acc" onClick={add}>Add MCP</button>
-        <button className="btn" onClick={async () => { const r = await client.importTracker(); setStatus((m) => ({ ...m, import: `imported ${r.created}` })); }}>Import from beads</button>
+        <button className="btn" onClick={async () => { try { const r = await client.importTracker(); setStatus((m) => ({ ...m, import: `imported ${r.created}` })); } catch (e) { toast.error(`Import failed: ${e}`); } }}>Import from beads</button>
       </div>
       {status.import ? <div className="muted">{status.import}</div> : null}
-      {servers.length === 0 ? (
+      {loading ? (
+        <StateView kind="loading" />
+      ) : servers.length === 0 ? (
         <StateView kind="empty" msg="No MCP servers yet." />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
