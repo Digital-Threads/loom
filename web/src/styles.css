@@ -21,7 +21,7 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px soli
 /* Skip link: off-screen until a keyboard user tabs to it, then slides into view. */
 .skip-link{position:absolute;left:8px;top:-48px;z-index:100;background:var(--acc);color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;transition:top .15s}
 .skip-link:focus{top:8px}
-body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+body{background:var(--bg);background-image:var(--mesh);background-attachment:fixed;color:var(--txt);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 
 .side{width:230px;flex:0 0 230px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;z-index:40}

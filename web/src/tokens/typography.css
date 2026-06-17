@@ -3,15 +3,13 @@
    Display  — Bricolage Grotesque (characterful, woven, confident at scale)
    Body/UI  — Geist (technical, precise — built for developer tools)
    Mono     — Geist Mono (code, transcripts, data, numerics)
-   Fonts load from Google Fonts CDN (requires network). See readme for swapping
-   to self-hosted binaries.
+   Fonts are self-hosted via @fontsource (imported in main.tsx) — no runtime
+   network. Family names match the @fontsource packages exactly.
    ──────────────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
-
 :root{
-  /* families */
-  --font-display:"Bricolage Grotesque","Geist",system-ui,sans-serif;
-  --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  /* families — names match the installed @fontsource packages */
+  --font-display:"Bricolage Grotesque Variable","Geist Sans",system-ui,sans-serif;
+  --font-sans:"Geist Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
 
   /* type scale — 1.250 major-third off a 14px UI base, with display steps above */
