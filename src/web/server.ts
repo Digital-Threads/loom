@@ -8,6 +8,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createApi } from "./api.js";
 import { openStore, storePath } from "../core/store/db.js";
+import { configureSecurity } from "../core/security/config.js";
+import { appendLoomEvent } from "../core/spine/event-bus.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import type Database from "better-sqlite3";
 
@@ -40,6 +42,11 @@ export interface ServeOptions {
 export function serveApi(opts: ServeOptions = {}) {
   const db = opts.db ?? defaultDb();
   const port = opts.port ?? DEFAULT_PORT;
+
+  // Wire the extracted security layer to the host: route audit events to the
+  // event bus (the package's default sink is a no-op). The worktree data dir
+  // default already matches loomDataDir, so it needs no override.
+  configureSecurity({ emit: (projectId, ev) => appendLoomEvent(projectId, ev as never) });
 
   const app = new Hono();
   app.route("/", createApi(db));
