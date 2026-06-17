@@ -135,10 +135,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     db.prepare("UPDATE tasks SET project_id = ? WHERE project_id IS NULL OR project_id = ''").run(home);
   } catch { /* fresh db or no tasks */ }
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
+  // Scope recall/search to the ACTIVE project (resolved per call), not the
+  // server's cwd — otherwise task-journal looks in the wrong repo and recall
+  // always returns 0 (loom-g2qf).
   const recall =
-    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(process.cwd()), query));
+    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query));
   const search =
-    deps.search ?? ((query: string) => askSearch(resolveProjectRoot(process.cwd()), query));
+    deps.search ?? ((query: string) => askSearch(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query));
   // In production, review runs through the task's session (stageAgentFor) so the
   // agent has full context. Tests inject deps.reviewPass / deps.stageAgent to
   // avoid spawning real processes.
