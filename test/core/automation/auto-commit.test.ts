@@ -1,4 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { commitWorktree, type GitSh } from "../../../src/core/automation/auto-commit.js";
 
 describe("commitWorktree", () => {
@@ -7,10 +11,15 @@ describe("commitWorktree", () => {
     const git: GitSh = (args) => {
       calls.push(args);
       if (args[0] === "status") return { code: 0, stdout: " M greet.js\n" };
-      return { code: 0, stdout: "" };
+      return { code: 0, stdout: "" }; // rev-parse → "" → no exclude file work
     };
     expect(commitWorktree("/wt", "loom: task", git)).toEqual({ committed: true });
-    expect(calls).toEqual([["add", "-A"], ["status", "--porcelain"], ["commit", "-m", "loom: task"]]);
+    expect(calls).toEqual([
+      ["rev-parse", "--git-path", "info/exclude"],
+      ["add", "-A"],
+      ["status", "--porcelain"],
+      ["commit", "-m", "loom: task"],
+    ]);
   });
 
   it("commits nothing when the tree is clean", () => {
@@ -20,6 +29,37 @@ describe("commitWorktree", () => {
       return { code: 0, stdout: "" };
     };
     expect(commitWorktree("/wt", "loom: task", git)).toEqual({ committed: false });
-    expect(calls).toEqual([["add", "-A"], ["status", "--porcelain"]]);
+    expect(calls).toEqual([
+      ["rev-parse", "--git-path", "info/exclude"],
+      ["add", "-A"],
+      ["status", "--porcelain"],
+    ]);
+  });
+});
+
+describe("commitWorktree — excludes session/tool artifacts (real git)", () => {
+  let dir: string;
+  const g = (args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "loom-commit-"));
+    g(["init", "-q"]);
+    g(["config", "user.email", "t@t"]);
+    g(["config", "user.name", "t"]);
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("commits the task's files but not .claude / .token-pilot artifacts (loom-isd)", () => {
+    writeFileSync(join(dir, "index.js"), "export const x = 1;\n");
+    mkdirSync(join(dir, ".claude"), { recursive: true });
+    writeFileSync(join(dir, ".claude/settings.json"), "{}\n");
+    mkdirSync(join(dir, ".token-pilot"), { recursive: true });
+    writeFileSync(join(dir, ".token-pilot/hook-events.jsonl"), "{}\n");
+    writeFileSync(join(dir, ".token-pilot-fingerprint.json"), "{}\n");
+
+    expect(commitWorktree(dir, "loom: add x").committed).toBe(true);
+    const tracked = g(["ls-files"]).split("\n").filter(Boolean);
+    expect(tracked).toContain("index.js");
+    expect(tracked.some((f) => f.startsWith(".claude/"))).toBe(false);
+    expect(tracked.some((f) => f.startsWith(".token-pilot"))).toBe(false);
   });
 });

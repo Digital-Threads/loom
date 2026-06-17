@@ -4,6 +4,8 @@
 // nothing (returns committed:false) rather than erroring.
 
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 
 export type GitSh = (args: string[], cwd: string) => { code: number; stdout: string };
 
@@ -17,9 +19,34 @@ const defaultGit: GitSh = (args, cwd) => {
   }
 };
 
+// Session/tool artifacts that leak into the worktree cwd — the spawned agent's
+// Claude config and token-pilot runtime files — and must never land in the
+// task's commit/PR (loom-isd). Excluded via the worktree-local git exclude
+// before staging, so a fresh worktree never tracks them.
+const ARTIFACT_PATTERNS = [".claude/", ".token-pilot/", ".token-pilot-fingerprint.json"];
+
+function excludeArtifacts(cwd: string, git: GitSh): void {
+  const rel = git(["rev-parse", "--git-path", "info/exclude"], cwd).stdout.trim();
+  if (!rel) return;
+  const path = isAbsolute(rel) ? rel : join(cwd, rel);
+  try {
+    const have = existsSync(path) ? readFileSync(path, "utf8") : "";
+    const lines = have.split("\n");
+    const missing = ARTIFACT_PATTERNS.filter((p) => !lines.includes(p));
+    if (missing.length) {
+      mkdirSync(dirname(path), { recursive: true });
+      appendFileSync(path, (have && !have.endsWith("\n") ? "\n" : "") + missing.join("\n") + "\n");
+    }
+  } catch {
+    /* best-effort: a missing exclude path just means no extra filtering */
+  }
+}
+
 /** Stage and commit all changes in a worktree. Returns committed:false when the
- *  tree is clean (nothing to commit). */
+ *  tree is clean (nothing to commit). Session/tool artifacts are excluded so the
+ *  commit carries only the task's real work. */
 export function commitWorktree(cwd: string, message: string, git: GitSh = defaultGit): { committed: boolean } {
+  excludeArtifacts(cwd, git);
   git(["add", "-A"], cwd);
   const status = git(["status", "--porcelain"], cwd);
   if (!status.stdout.trim()) return { committed: false };
