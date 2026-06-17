@@ -225,6 +225,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // L9 — observability
     timeline: () => getJson<{ events: TimelineEvent[] }>(`${base}/api/timeline`, f).then((d) => d.events),
     flowConfig: (stage: string) => getJson<{ passes: string[] }>(`${base}/api/flow-config/${stage}`, f).then((d) => d.passes),
+    saveFlowConfig: (stage: string, passes: string[]) => postJson<{ ok: boolean }>(`${base}/api/flow-config/${stage}`, { passes }, f),
     boardMetrics: () => getJson<{ used: number; saved: number; events: number }>(`${base}/api/metrics/board`, f),
     agentMetrics: () =>
       getJson<{ agents: AgentPerf[]; failures: FailureReason[] }>(`${base}/api/metrics/agents`, f),

@@ -320,9 +320,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         resolve({ code: typeof err.code === "number" ? err.code : 1, stdout: combined });
       });
     });
+  /** A persisted per-stage flow config (the Quality view's editable QA checks),
+   *  used as the column default for resolveFlow. undefined → built-in defaults. */
+  const storedFlow = (stage: string): { passes: string[] } | undefined => {
+    const v = getSetting<string[] | undefined>(db, `flow.${stage}`, undefined);
+    return Array.isArray(v) && v.length ? { passes: v } : undefined;
+  };
   /** QA checks for a task: explicit override, else real tests/build in its repo. */
   const qaChecksFor = (taskId: string): QaCheck[] => {
-    const keys = resolveFlow("qa");
+    const keys = resolveFlow("qa", storedFlow("qa"));
     if (deps.qaChecks) return deps.qaChecks(keys);
     const t = getTask(db, taskId);
     return buildQaChecks(keys, { repoRoot: t?.repo || process.cwd() });
@@ -1122,7 +1128,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
 
   // ─── quality: review / qa (L6) ────────────────────────────────────────────────
-  app.get("/api/flow-config/:stage", (c) => c.json({ passes: resolveFlow(c.req.param("stage")) }));
+  app.get("/api/flow-config/:stage", (c) => {
+    const stage = c.req.param("stage");
+    return c.json({ passes: resolveFlow(stage, storedFlow(stage)) });
+  });
+  // Persist the editable flow config (Quality view). Empty array → back to defaults.
+  app.post("/api/flow-config/:stage", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { passes?: unknown };
+    if (!Array.isArray(body.passes)) return c.json({ error: "passes[] required" }, 400);
+    setSetting(db, `flow.${c.req.param("stage")}`, body.passes.filter((p): p is string => typeof p === "string"));
+    return c.json({ ok: true });
+  });
   // Run the NEXT reviewer in the pipeline (or a specific one via {reviewer}).
   // This is the "approve & run next" action: running ralph/adversarial implies
   // the previous reviewer was approved. Findings accumulate; the response's

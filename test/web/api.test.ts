@@ -286,6 +286,14 @@ describe("web api", () => {
     expect(Array.isArray(body.skills)).toBe(true);
   });
 
+  it("flow-config: POST persists the QA checks, GET reads them back (L6)", async () => {
+    const app2 = createApi(db);
+    await app2.request("/api/flow-config/qa", { method: "POST", body: JSON.stringify({ passes: ["tests"] }) });
+    const got = (await (await app2.request("/api/flow-config/qa")).json()) as { passes: string[] };
+    expect(got.passes).toEqual(["tests"]);
+    expect((await app2.request("/api/flow-config/qa", { method: "POST", body: "{}" })).status).toBe(400);
+  });
+
   it("POST /api/skills/generate requires a description; 422 on invalid agent output", async () => {
     // agent returns text with no valid frontmatter name → nothing written, 422.
     const app2 = createApi(db, { skillAgent: async () => "no frontmatter" });
