@@ -25,8 +25,8 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 
 .side{width:230px;flex:0 0 230px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;z-index:40}
-.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;padding:6px 8px 14px}
-.brand .dot{width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,var(--acc),var(--acc2))}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:-.01em;padding:6px 8px 14px}
+.brand-mark{width:22px;height:22px;display:block}
 .nav{display:flex;flex-direction:column;gap:2px;overflow:auto}
 .nav .grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:12px 10px 4px}
 .nav button{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;color:var(--mut);cursor:pointer;font-size:13px;background:none;border:0;text-align:left;width:100%}
@@ -42,7 +42,7 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .top{min-height:52px;flex:0 0 auto;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel)}
 .burger{display:none;background:var(--chip);border:1px solid var(--line);color:var(--txt);width:36px;height:36px;border-radius:8px;font-size:16px;cursor:pointer}
 .side-backdrop{display:none} /* only shown as a drawer scrim on mobile (see @media) */
-.top h1{font-size:15px;margin:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top h1{font-family:var(--font-display);font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .page-title{display:flex;flex-direction:column;gap:1px;min-width:0}
 .page-sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top .crumb{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
@@ -127,7 +127,7 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .board{display:flex;gap:12px;height:100%;min-width:max-content}
 .col{width:212px;flex:0 0 212px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;max-height:100%;transition:border-color .12s,background .12s}
 .col-over{border-color:var(--filament-400);background:rgba(239,177,78,.07)}
-.col h2{font-size:12px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--mut);font-weight:600}
+.col h2{font-size:11px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--fg-dim);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
 .col h2 .n{margin-left:auto;background:var(--chip);color:var(--mut);border-radius:20px;font-size:11px;padding:0 7px}
 .col .stack{padding:9px;display:flex;flex-direction:column;gap:9px;overflow:auto}
 .card{position:relative;background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 12px 11px 13px;cursor:pointer;overflow:hidden;transition:border-color var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}

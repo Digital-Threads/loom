@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, AttentionItem } from "../api";
+import loomMark from "../assets/loom-mark.svg";
 
 const NAV = [
   { key: "board", label: "Board", icon: "▦" },
@@ -51,7 +52,7 @@ export function Sidebar({
   return (
     <aside className={`side ${open ? "open" : ""}`}>
       <div className="brand">
-        <span className="dot" /> Loom
+        <img className="brand-mark" src={loomMark} alt="" aria-hidden="true" /> Loom
       </div>
       <nav className="nav">
         {NAV.map((n) => (

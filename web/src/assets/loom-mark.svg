@@ -1,0 +1,9 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Loom">
+  
+  <line x1="9" y1="4" x2="9" y2="28" stroke="#2B323E" stroke-width="2.4" stroke-linecap="round"></line>
+  <line x1="16" y1="4" x2="16" y2="28" stroke="#2B323E" stroke-width="2.4" stroke-linecap="round"></line>
+  <line x1="23" y1="4" x2="23" y2="28" stroke="#2B323E" stroke-width="2.4" stroke-linecap="round"></line>
+  
+  <path d="M5 11 C 9 11, 9 11, 12.5 11 C 15 11, 17 11, 19.5 11 C 23 11, 23 11, 27 11" stroke="#EFB14E" stroke-width="2.6" stroke-linecap="round" fill="none"></path>
+  <path d="M5 21 C 9 21, 9 21, 12.5 21 C 15 21, 17 21, 19.5 21 C 23 21, 23 21, 27 21" stroke="#EFB14E" stroke-width="2.6" stroke-linecap="round" fill="none" opacity="0.55"></path>
+</svg>
