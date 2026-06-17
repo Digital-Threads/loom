@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTask } from "../../src/core/store/db.js";
+import { setSetting } from "../../src/core/store/settings.js";
 import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
@@ -532,6 +533,13 @@ describe("web api mutations", () => {
     const out = await (await mk("/api/tasks/dnd2/move", { stageKey: "rd" })).json();
     expect(out.runId).toBeUndefined();
     expect(calls).toEqual([]);
+  });
+
+  it("new task inherits the global default run_mode when none is given (loom-wkhe)", async () => {
+    setSetting(db, "run_mode", "autopilot");
+    const res = await app.request("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Inherits" }) });
+    const { task } = (await res.json()) as { task: { run_mode: string } };
+    expect(task.run_mode).toBe("autopilot"); // not the hardcoded "gated"
   });
 
   it("GET /api/tasks/:id/dossier weaves stages, cost and artifacts into the history", async () => {

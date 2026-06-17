@@ -21,7 +21,6 @@ export function Settings({ client }: { client: LoomClient }) {
   if (!s) return <StateView kind="loading" />;
 
   const runMode = (s["run_mode"] as string) ?? "gated";
-  const tokenPilot = (s["tokenPilot.enabled"] as boolean) ?? true;
   const notify = (s["notify.enabled"] as boolean) ?? true;
   const sandbox = (s["sandbox.enabled"] as boolean) ?? false;
   const costCap = (s["cost.capUsd"] as number) ?? 0;
@@ -46,10 +45,6 @@ export function Settings({ client }: { client: LoomClient }) {
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: -4 }}>
         Useful with Anthropic API-key billing (pay-per-token) — caps spend per task; autopilot stops when reached. On a flat-rate subscription, leave 0.
-      </div>
-      <div className="kv">
-        <b>token-pilot</b>
-        <span><button className="btn" onClick={() => save("tokenPilot.enabled", !tokenPilot)}>{tokenPilot ? "on" : "off"}</button></span>
       </div>
       <div className="kv">
         <b>Notifications</b>

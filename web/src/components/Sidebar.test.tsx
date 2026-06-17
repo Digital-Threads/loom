@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { Sidebar } from "./Sidebar";
 import type { LoomClient } from "../api";
 
-const client = { attention: () => Promise.resolve([]) } as unknown as LoomClient;
+const client = { attention: () => Promise.resolve([]), settings: () => Promise.resolve({}) } as unknown as LoomClient;
 
 describe("Sidebar a11y", () => {
   it("marks the active nav item with aria-current=page", () => {

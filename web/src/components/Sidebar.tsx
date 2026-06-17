@@ -30,10 +30,14 @@ export function Sidebar({
   open: boolean;
 }) {
   const [attn, setAttn] = useState<AttentionItem[]>([]);
+  const [notifyOn, setNotifyOn] = useState(true);
+  // Honour the Settings "Notifications" toggle (loom-wkhe): default on, off when
+  // the user disabled it.
+  useEffect(() => { client.settings().then((s) => setNotifyOn(s["notify.enabled"] !== false)).catch(() => {}); }, [client]);
   useEffect(() => {
     client.attention().then((items) => {
-      // D6.4 — browser push when new items need attention.
-      if (typeof Notification !== "undefined" && items.length > attn.length) {
+      // D6.4 — browser push when new items need attention (unless disabled).
+      if (notifyOn && typeof Notification !== "undefined" && items.length > attn.length) {
         if (Notification.permission === "granted") {
           new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
         } else if (Notification.permission === "default") {

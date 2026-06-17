@@ -664,7 +664,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       repo: repo || undefined,
       branch: typeof body.branch === "string" ? body.branch : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
-      run_mode: typeof body.run_mode === "string" ? body.run_mode : undefined,
+      // Fall back to the global default run mode (Settings), not a hardcoded
+      // "gated" — so the Settings "Default run mode" actually takes effect (loom-wkhe).
+      run_mode: typeof body.run_mode === "string" ? body.run_mode : getSetting<string>(db, "run_mode", "gated"),
       route: Array.isArray(body.route) ? (body.route as string[]) : undefined,
       profile: typeof body.profile === "string" && body.profile ? body.profile : (loadActiveProfile() ?? undefined),
       projectId,

@@ -39,6 +39,8 @@ export function NewTaskModal({
       setProfiles(w.subscriptions.map((s) => s.name).filter(Boolean));
       if (w.activeProfile) setProfile(w.activeProfile);
     }).catch(() => {});
+    // Seed the run-mode select from the global default (Settings → Default run mode).
+    client.settings().then((s) => { const m = s["run_mode"]; if (typeof m === "string") setRunMode(m); }).catch(() => {});
   }, [client]);
 
   async function submit() {
