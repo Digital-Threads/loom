@@ -53,3 +53,26 @@ export function commitWorktree(cwd: string, message: string, git: GitSh = defaul
   const res = git(["commit", "-m", message], cwd);
   return { committed: res.code === 0 };
 }
+
+/** Rebase the worktree branch onto its base branch (first of `candidates` that
+ *  exists) so the PR / diff reflects only the task's own changes — not drift
+ *  from a base that moved during the run (loom-705a). On conflict the rebase is
+ *  aborted and `conflict:true` returned so the caller can park for a human.
+ *  base:null when no candidate ref exists (nothing to rebase onto). */
+export function rebaseWorktreeOnBase(
+  cwd: string,
+  candidates: Array<string | null | undefined>,
+  git: GitSh = defaultGit,
+): { base: string | null; conflict: boolean } {
+  let base: string | null = null;
+  for (const r of candidates) {
+    if (r && git(["rev-parse", "--verify", "--quiet", r], cwd).code === 0) { base = r; break; }
+  }
+  if (!base) return { base: null, conflict: false };
+  const res = git(["rebase", base], cwd);
+  if (res.code !== 0) {
+    git(["rebase", "--abort"], cwd);
+    return { base, conflict: true };
+  }
+  return { base, conflict: false };
+}

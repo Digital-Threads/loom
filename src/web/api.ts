@@ -50,7 +50,7 @@ import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launch
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
-import { commitWorktree } from "../core/automation/auto-commit.js";
+import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, spawnSync } from "node:child_process";
@@ -484,6 +484,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { ok: res.passed, needsAttention: !res.passed };
     },
     pr: async (_d, id) => {
+      // Rebase the worktree onto the current base first, so the PR/diff shows only
+      // this task's changes — not drift from a base that moved during the run
+      // (loom-705a). A conflict parks for the human to resolve the branch.
+      const prT = getTask(db, id);
+      const prWt = taskCwd(id);
+      if (prWt && isGitRepo(prWt)) {
+        const reb = rebaseWorktreeOnBase(prWt, [prT?.branch, "master", "main"]);
+        if (reb.conflict) {
+          const note = `Rebase onto ${reb.base} conflicts — resolve the task branch manually before opening the PR.`;
+          saveResult(id, "pr", "pr-result", { description: "", created: false, connector: false, error: note });
+          recordTurn(id, "pr", "Rebase needed", note);
+          return { ok: true, needsAttention: true, note };
+        }
+      }
       const pr = await runPr(db, id, deps.prOptions?.(id) ?? {});
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
