@@ -7,7 +7,7 @@ import { setSetting } from "../../src/core/store/settings.js";
 import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
-import { startTask } from "../../src/core/pipeline/engine.js";
+import { startTask, attentionQueue } from "../../src/core/pipeline/engine.js";
 import { createApi } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
 import type Database from "better-sqlite3";
@@ -818,6 +818,14 @@ describe("web api — fs browse + PR connector", () => {
     insertRun(database, { id: "run_stale", taskId: "rc" }); // left 'running' by a dead process
     expect(reconcileInterruptedRuns(database)).toBeGreaterThanOrEqual(1);
     expect(listRunsForTask(database, "rc")[0].status).toBe("interrupted");
+  });
+
+  it("attentionQueue surfaces a task crashed mid-run, not just gated ones (loom-oldr)", () => {
+    createTask(database, { id: "crash1", title: "Crashed", route: ["impl", "done"], run_mode: "autopilot" });
+    startTask(database, "crash1"); // impl active, gate 0 (autopilot ignores gates)
+    insertRun(database, { id: "run_c", taskId: "crash1" }); // running, then the process dies
+    reconcileInterruptedRuns(database); // boot reconcile → interrupted
+    expect(attentionQueue(database).some((i) => i.taskId === "crash1")).toBe(true);
   });
 
   it("stage run streams the live session output into the run record", async () => {

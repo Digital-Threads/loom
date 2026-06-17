@@ -13,6 +13,7 @@ import {
   updateTaskStatus,
   type StageRow,
 } from "../store/db.js";
+import { listRunsForTask } from "../store/execute.js";
 
 /** The task's current position: first route stage not done/skipped. */
 export function currentStage(stages: StageRow[]): StageRow | undefined {
@@ -109,12 +110,18 @@ export interface AttentionItem {
   stageKey: string;
 }
 
-/** "Требует внимания": tasks parked at an active, gated stage awaiting approval. */
+/** "Требует внимания": tasks parked at an active, gated stage awaiting approval,
+ *  OR crashed mid-run — the latest run was interrupted (process died on
+ *  restart/crash) while the stage is still active. Without the second case a
+ *  crashed autopilot task (gate 0) would sit invisible, looking idle (loom-oldr). */
 export function attentionQueue(db: Database.Database): AttentionItem[] {
   const out: AttentionItem[] = [];
   for (const t of listTasks(db)) {
     const cur = currentStage(getStages(db, t.id));
-    if (cur && cur.status === "active" && cur.gate === 1) {
+    if (!cur || cur.status !== "active") continue;
+    const runs = listRunsForTask(db, t.id);
+    const crashed = runs[runs.length - 1]?.status === "interrupted";
+    if (cur.gate === 1 || crashed) {
       out.push({ taskId: t.id, title: t.title, stageKey: cur.stage_key });
     }
   }
