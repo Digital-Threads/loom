@@ -14,6 +14,9 @@ import { Layers } from "./components/Layers";
 import { Skills } from "./components/Skills";
 import { Settings } from "./components/Settings";
 import { Connectors } from "./components/Connectors";
+import { Security } from "./components/Security";
+import { Quality } from "./components/Quality";
+import { Swarm } from "./components/Swarm";
 import { Onboarding } from "./components/Onboarding";
 import { Toaster } from "./components/Toaster";
 
@@ -23,6 +26,9 @@ const SECTION_TITLES: Record<string, string> = {
   accounts: "Accounts",
   tokens: "Tokens",
   memory: "Memory",
+  security: "Security",
+  quality: "Quality",
+  swarm: "Swarm",
   connectors: "Connectors (MCP)",
   knowledge: "Knowledge",
   skills: "Skills",
@@ -39,10 +45,13 @@ const SECTION_DESC: Record<string, string> = {
   accounts: "aimux subscriptions, sessions and health.",
   tokens: "token-pilot usage — tokens spent and saved per session.",
   memory: "task-journal reasoning — decisions, findings and rejections per task.",
+  security: "Песочница для агента — worktree-изоляция, политика команд, скан секретов, аудит.",
+  quality: "AI-ревью кода (self/ralph/adversarial) + прогон проверок.",
+  swarm: "Координатор мульти-агента — несколько агентов на одну задачу.",
   connectors: "MCP servers passed into agent sessions — add, enable, test.",
   knowledge: "Recall prior reasoning across projects — what was decided or rejected.",
   skills: "Библиотека скиллов из ~/.claude/skills — открывай, правь, создавай новые через AI.",
-  layers: "Архитектура Loom: 3 слоя — standalone-плагины, остальные inline в core/* (вынос в Фазе 2).",
+  layers: "Архитектура Loom: standalone-пакеты (aimux/token-pilot/task-journal/security/quality/swarm) + inline-модули в core/*.",
   timeline: "Event stream, board totals and agent performance.",
   settings: "Loom configuration.",
 };
@@ -143,6 +152,12 @@ export function App() {
             <Settings client={client} />
           ) : view === "connectors" ? (
             <Connectors client={client} />
+          ) : view === "security" ? (
+            <Security client={client} />
+          ) : view === "quality" ? (
+            <Quality client={client} />
+          ) : view === "swarm" ? (
+            <Swarm client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}

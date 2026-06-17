@@ -224,6 +224,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<DirListing>(`${base}/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ""}`, f),
     // L9 — observability
     timeline: () => getJson<{ events: TimelineEvent[] }>(`${base}/api/timeline`, f).then((d) => d.events),
+    flowConfig: (stage: string) => getJson<{ passes: string[] }>(`${base}/api/flow-config/${stage}`, f).then((d) => d.passes),
     boardMetrics: () => getJson<{ used: number; saved: number; events: number }>(`${base}/api/metrics/board`, f),
     agentMetrics: () =>
       getJson<{ agents: AgentPerf[]; failures: FailureReason[] }>(`${base}/api/metrics/agents`, f),
