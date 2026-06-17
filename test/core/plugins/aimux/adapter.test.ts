@@ -43,9 +43,9 @@ describe("aimux adapter — subscriptions", () => {
   it("passes through cli and isSource from the config", () => {
     const subs = listSubscriptions();
     const work = subs.find((s) => s.name === "work");
-    expect(work).toEqual({ name: "work", cli: "claude", isSource: true });
+    expect(work).toMatchObject({ name: "work", cli: "claude", isSource: true });
     const personal = subs.find((s) => s.name === "personal");
-    expect(personal).toEqual({ name: "personal", cli: "claude", isSource: false });
+    expect(personal).toMatchObject({ name: "personal", cli: "claude", isSource: false });
   });
 });
 

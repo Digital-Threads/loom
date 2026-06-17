@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { computeWitness } from "../../../src/core/extensibility/verify.js";
 import { verifyPlugin } from "../../../src/core/extensibility/verify-plugin.js";
 import { scaffoldPlugin } from "../../../src/core/extensibility/scaffold.js";
-import { loadLoomEvents } from "../../../src/core/spine/event-bus.js";
+import { appendLoomEvent, loadLoomEvents } from "../../../src/core/spine/event-bus.js";
+import { configureSecurity } from "../../../src/core/security/config.js";
 
 describe("verifyPlugin (L11.1)", () => {
   let prevXdg: string | undefined;
@@ -14,6 +15,9 @@ describe("verifyPlugin (L11.1)", () => {
     prevXdg = process.env.XDG_DATA_HOME;
     dir = mkdtempSync(join(tmpdir(), "loom-ext-"));
     process.env.XDG_DATA_HOME = dir;
+    // Mirror prod wiring (server.ts): forward security audits to the event bus,
+    // else emitAudit is a no-op and the witness-mismatch audit never lands.
+    configureSecurity({ emit: (projectId, ev) => appendLoomEvent(projectId, ev as never) });
   });
   afterEach(() => {
     if (prevXdg === undefined) delete process.env.XDG_DATA_HOME;
