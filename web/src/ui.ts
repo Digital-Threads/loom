@@ -80,7 +80,9 @@ export function summarizeCosts(costs: CostRowLike[]): CostSummary {
 
   const known = new Set(["aimux:spent", "token-pilot:used", "token-pilot:saved"]);
   const other = costs
-    .filter((c) => !known.has(`${c.source}:${c.metric}`))
+    // hide per-session aimux spend rows (spent:<sid>) — internal to the
+    // cross-session accumulation; the "spent" aggregate already represents them.
+    .filter((c) => !known.has(`${c.source}:${c.metric}`) && !(c.source === "aimux" && c.metric.startsWith("spent:")))
     .map((c) => ({ label: `${c.source}/${c.metric}`, value: String(c.value), estimate: c.exact === 0 }));
 
   let tokens: CostSummary["tokens"] = null;

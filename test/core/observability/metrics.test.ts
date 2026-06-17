@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../../src/core/store/db.js";
 import { getCosts } from "../../../src/core/store/execute.js";
-import { taskRollup, boardTotals, rollupToStore } from "../../../src/core/observability/metrics.js";
+import { taskRollup, boardTotals, rollupToStore, recordSpend } from "../../../src/core/observability/metrics.js";
 import { makeEvent, type LoomEvent } from "../../../src/core/spine/event.js";
 import type Database from "better-sqlite3";
 
@@ -67,5 +67,34 @@ describe("rollupToStore", () => {
     const used = costs.find((c) => c.metric === "used")!;
     expect(saved).toMatchObject({ source: "token-pilot", value: 30, exact: 1 });
     expect(used).toMatchObject({ value: 80, exact: 1 });
+  });
+});
+
+describe("recordSpend (cross-session accumulation, loom-0wrw)", () => {
+  let dir: string;
+  let db: Database.Database;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "loom-spend-"));
+    db = openStore(join(dir, "t.db"));
+    createTask(db, { id: "t1", title: "T" });
+  });
+  afterEach(() => { db.close(); rmSync(dir, { recursive: true, force: true }); });
+
+  const spentTotal = () => getCosts(db, "t1").find((r) => r.source === "aimux" && r.metric === "spent")?.value ?? 0;
+
+  it("accumulates across sessions instead of overwriting when a new session starts at 0", () => {
+    recordSpend(db, "t1", 5, true, "sid1");
+    expect(spentTotal()).toBe(5);
+    recordSpend(db, "t1", 0, true, "sid2"); // a new session's counter starts at 0
+    expect(spentTotal()).toBe(5); // prior session's spend must NOT be wiped
+    recordSpend(db, "t1", 3, true, "sid2");
+    expect(spentTotal()).toBe(8); // 5 (sid1) + 3 (sid2)
+    recordSpend(db, "t1", 6, true, "sid1"); // sid1 grows further (cumulative)
+    expect(spentTotal()).toBe(9); // 6 (sid1) + 3 (sid2)
+  });
+
+  it("without a sessionId writes the spent row directly (back-compat)", () => {
+    recordSpend(db, "t1", 4, true);
+    expect(spentTotal()).toBe(4);
   });
 });

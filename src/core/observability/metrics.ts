@@ -5,7 +5,7 @@
 
 import type Database from "better-sqlite3";
 import type { LoomEvent } from "../spine/event.js";
-import { upsertCost } from "../store/execute.js";
+import { upsertCost, getCosts } from "../store/execute.js";
 
 export interface TaskRollup {
   taskId: string;
@@ -134,12 +134,28 @@ export function spentForTask(rows: SessionSpend[], sessionIds: string[]): number
 }
 
 /** Persist a task's real spend into cost_rollups (source: aimux). `exact` =
- *  spine-linked (sessions tied to the task). */
+ *  spine-linked (sessions tied to the task).
+ *
+ *  `spent` is the CURRENT session's cumulative cost. A task can run across
+ *  several sessions (profile switch / resume), each starting its counter at 0 —
+ *  so overwriting a single "spent" row would wipe prior sessions' spend and let
+ *  the cost cap be bypassed (loom-0wrw). Instead, keep one row per session
+ *  ("spent:<sid>") and maintain the aggregate "spent" = their sum, which every
+ *  reader (cost cap, CostBar) consumes unchanged. */
 export function recordSpend(
   db: Database.Database,
   taskId: string,
   spent: number,
   exact: boolean,
+  sessionId?: string,
 ): void {
-  upsertCost(db, taskId, "aimux", "spent", spent, exact);
+  if (!sessionId) {
+    upsertCost(db, taskId, "aimux", "spent", spent, exact);
+    return;
+  }
+  upsertCost(db, taskId, "aimux", `spent:${sessionId}`, spent, exact);
+  const total = getCosts(db, taskId)
+    .filter((r) => r.source === "aimux" && r.metric.startsWith("spent:"))
+    .reduce((sum, r) => sum + r.value, 0);
+  upsertCost(db, taskId, "aimux", "spent", total, exact);
 }

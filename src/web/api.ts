@@ -255,7 +255,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try {
       const sid = getTaskSession(db, id).sessionId;
       const spent = sid ? (sessionLauncher as { costOf?: (s: string) => number }).costOf?.(sid) : undefined;
-      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent });
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: sid ?? undefined });
     } catch {
       /* cost is best-effort */
     }

@@ -13,6 +13,9 @@ export interface RecordCostInput {
   tokenEvents: TokenEvent[];
   /** Real spend already summed for this task (aimux usage); omit if unknown. */
   spent?: number;
+  /** The session `spent` belongs to — lets recordSpend accumulate across
+   *  sessions instead of overwriting (loom-0wrw). */
+  sessionId?: string;
   /** Provenance: spine-linked (task_id-tagged) → exact, else ≈estimate. */
   exact?: boolean;
 }
@@ -22,5 +25,5 @@ export function recordRunCost(db: Database.Database, taskId: string, input: Reco
   const t = tokensForTaskExact(input.tokenEvents, taskId);
   upsertCost(db, taskId, "token-pilot", "used", t.used, exact);
   upsertCost(db, taskId, "token-pilot", "saved", t.saved, exact);
-  if (input.spent !== undefined) recordSpend(db, taskId, input.spent, exact);
+  if (input.spent !== undefined) recordSpend(db, taskId, input.spent, exact, input.sessionId);
 }
