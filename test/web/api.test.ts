@@ -847,6 +847,29 @@ describe("web api — fs browse + PR connector", () => {
     expect(stages.stages.find((s) => s.stage_key === "impl")!.status).toBe("active");
   });
 
+  it("scans agent output for secrets and audits them on the normal run path (loom-l6z1)", async () => {
+    const prevXdg = process.env.XDG_DATA_HOME;
+    const xdg = mkdtempSync(join(tmpdir(), "loom-sec-"));
+    process.env.XDG_DATA_HOME = xdg;
+    try {
+      const { configureSecurity } = await import("../../src/core/security/config.js");
+      const { appendLoomEvent, loadLoomEvents } = await import("../../src/core/spine/event-bus.js");
+      configureSecurity({ emit: (pid, ev) => appendLoomEvent(pid, ev as never) }); // mirror server.ts wiring
+      createTask(database, { id: "sec1", title: "Sec", run_mode: "manual" });
+      const sessionLauncher = { run: async () => ({ text: `leaked sk-ant-${"a".repeat(24)}` }), denialsOf: () => [] };
+      const rm = createRunManager();
+      const a = createApi(database, { sessionLauncher, runManager: rm });
+      await a.request("/api/tasks/sec1/start", { method: "POST" });
+      await a.request("/api/tasks/sec1/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "rd" }) });
+      const { runId } = (await (await a.request("/api/tasks/sec1/stages/rd/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+      await rm.wait(runId);
+      expect(loadLoomEvents("default").some((e) => e.type === "audit.secret.found")).toBe(true);
+    } finally {
+      if (prevXdg === undefined) delete process.env.XDG_DATA_HOME; else process.env.XDG_DATA_HOME = prevXdg;
+      rmSync(xdg, { recursive: true, force: true });
+    }
+  });
+
   it("a parked stage (needs attention) stays active after a run", async () => {
     createTask(database, { id: "pk", title: "Park", run_mode: "manual" });
     const rm = createRunManager();

@@ -56,6 +56,8 @@ import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
+import { scanSecrets } from "../core/security/secrets.js";
+import { audit } from "../core/security/audit.js";
 import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
@@ -301,6 +303,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     recordSessionCost(id, repoRoot);
     recordDenials(id);
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
+    // Secret scan on the NORMAL execution path (not just the experimental
+    // sandbox): flag leaked credentials in the agent's output so the Security
+    // panel's audit trail is real for every run (loom-l6z1).
+    const secrets = scanSecrets(text);
+    if (secrets.length) {
+      audit({
+        projectId: projectActive()?.projectId ?? "default",
+        taskId: id,
+        kind: "secret.found",
+        message: `${secrets.length} potential secret(s) in agent output: ${[...new Set(secrets.map((s) => s.kind))].join(", ")}`,
+        metrics: { count: secrets.length },
+      });
+    }
     // Surface a provider rate-limit so a stop reads as "limited, resets X" rather
     // than an ambiguous park. Cleared by the next non-limited turn (latest wins).
     const rl = detectRateLimit(text);

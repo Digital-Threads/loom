@@ -57,6 +57,9 @@ export function Security({ client }: { client: LoomClient }) {
         <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">secrets found</div></div>
         <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">worktree events</div></div>
       </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+        Secret scanning runs on every agent turn. Command-blocking and worktree events require the OS sandbox (above) — those counters stay 0 until it's enabled.
+      </div>
 
       <div className="row" style={{ gap: 6, margin: "16px 0 8px" }}>
         {CATS.map((c) => (
