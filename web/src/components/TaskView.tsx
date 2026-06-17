@@ -375,7 +375,7 @@ export function TaskView({
               {task.repo ? (
                 <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
               ) : null}
-              <button className="btn sm" title="The task's full history (goal, decisions, artifacts, PR)" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History</button>
+              <button className="btn sm" title="The task's full history — goal, decisions, stages, cost and artifacts" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History</button>
             </div>
           </div>
           <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>

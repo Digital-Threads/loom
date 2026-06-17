@@ -60,6 +60,7 @@ import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
+import { renderDossier } from "../core/dashboard/dossier.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
@@ -871,7 +872,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     const t = getTask(db, id);
     const root = resolveProjectRoot(t?.repo || projectActive()?.root || process.cwd());
-    return c.json({ pack: taskPackByLoomId(root, id) });
+    const pack = taskPackByLoomId(root, id);
+    return c.json({
+      pack: renderDossier({
+        pack,
+        stages: getStages(db, id),
+        costs: getCosts(db, id),
+        attachments: getAttachments(db, id),
+      }),
+    });
   });
   // task-journal's own readable dossier (its `pack` render) as Markdown.
   app.get("/api/memory/tasks/:id/pack", (c) =>

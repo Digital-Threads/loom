@@ -3,8 +3,9 @@ import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../src/core/store/db.js";
-import { listRunsForTask, insertRun, reconcileInterruptedRuns } from "../../src/core/store/execute.js";
+import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
+import { addAttachment } from "../../src/core/store/attachments.js";
 import { startTask } from "../../src/core/pipeline/engine.js";
 import { createApi } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
@@ -520,6 +521,18 @@ describe("web api mutations", () => {
     const out = await (await mk("/api/tasks/dnd2/move", { stageKey: "rd" })).json();
     expect(out.runId).toBeUndefined();
     expect(calls).toEqual([]);
+  });
+
+  it("GET /api/tasks/:id/dossier weaves stages, cost and artifacts into the history", async () => {
+    upsertCost(db, "t1", "claude", "tokens", 1200, true);
+    addAttachment(db, { id: "att1", taskId: "t1", kind: "file", name: "plan.md", pathOrUrl: "/repo/plan.md" });
+    const { status, body } = await json("/api/tasks/t1/dossier");
+    expect(status).toBe(200);
+    expect(body.pack).toContain("## Stages"); // task was started → has stage rows
+    expect(body.pack).toContain("## Cost");
+    expect(body.pack).toContain("1200");
+    expect(body.pack).toContain("## Artifacts");
+    expect(body.pack).toContain("plan.md");
   });
 
   it("POST gate toggles the stage gate", async () => {
