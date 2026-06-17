@@ -457,7 +457,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const pr = await runPr(db, id, deps.prOptions?.(id) ?? {});
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
-      return { ok: true };
+      // Opening the PR is the irreversible, opt-in step. When no PR was actually
+      // created (description-only / connector off), park here for the human to
+      // push + open it — don't silently advance the task to "done" with no PR.
+      return { ok: true, needsAttention: !pr.created };
     },
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });

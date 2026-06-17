@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openStore, createTask } from "../../src/core/store/db.js";
+import { openStore, createTask, getTask } from "../../src/core/store/db.js";
 import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
@@ -698,6 +698,15 @@ describe("web api — fs browse + PR connector", () => {
     const a = createApi(database, { prOptions: () => ({ describe: () => "PR: adds the thing" }) });
     await a.request("/api/tasks/pr1/pr/run", { method: "POST", body: "{}" });
     expect((await transcriptOf(a, "pr1")).some((t) => t.stage === "pr" && /adds the thing/.test(t.output))).toBe(true);
+  });
+
+  it("autopilot parks at pr when no PR was opened, instead of marking done (loom-sd0k)", async () => {
+    createTask(database, { id: "prk", title: "PRpark", route: ["pr", "done"], run_mode: "autopilot" });
+    startTask(database, "prk");
+    const a = createApi(database); // no connector → description-only, pr.created=false
+    const res = (await (await a.request("/api/tasks/prk/run-stage", { method: "POST", body: "{}" })).json()) as { stoppedAt: string | null };
+    expect(res.stoppedAt).toBe("pr"); // parked for the human to open the (irreversible) PR
+    expect(getTask(database, "prk")?.status).not.toBe("done");
   });
 
   it("done run leaves a turn", async () => {
