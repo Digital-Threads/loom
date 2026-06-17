@@ -93,6 +93,7 @@ export function App() {
     <div className="app">
       <a className="skip-link" href="#content">Skip to content</a>
       <Sidebar client={client} view={inTask ? "" : view} onNav={nav} open={drawer} />
+      {drawer ? <div className="side-backdrop" aria-hidden="true" onClick={() => setDrawer(false)} /> : null}
       <div className="main">
         <header className="top">
           <button className="burger" aria-label="Toggle menu" aria-expanded={drawer} onClick={() => setDrawer((d) => !d)}>

@@ -42,6 +42,7 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .top{min-height:52px;flex:0 0 auto;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel)}
 .burger{display:none;background:var(--chip);border:1px solid var(--line);color:var(--txt);width:36px;height:36px;border-radius:8px;font-size:16px;cursor:pointer}
+.side-backdrop{display:none} /* only shown as a drawer scrim on mobile (see @media) */
 .top h1{font-size:15px;margin:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .page-title{display:flex;flex-direction:column;gap:1px;min-width:0}
 .page-sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -169,10 +170,20 @@ body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--sans);-webkit-fon
   .burger{display:block}
   .side{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .22s;box-shadow:0 0 40px rgba(0,0,0,.5)}
   .side.open{transform:translateX(0)}
+  .side-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38}
   .task{flex-direction:column;height:auto}
   .rail{width:auto} .rail .steps{display:flex;overflow:auto;gap:6px}
   .col{width:84vw;flex:0 0 84vw;max-height:none}
   .board{height:auto}
+}
+
+/* phones: tighten spacing/typography and let the description drop. */
+@media (max-width:520px){
+  .content{padding:10px}
+  .top{padding:6px 10px;gap:8px}
+  .page-sub{display:none}
+  .col{width:88vw;flex:0 0 88vw}
+  .overlay{padding:8px}
 }
 
 /* modal */
