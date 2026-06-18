@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build:host": "tsc -p tsconfig.json",
-    "build:web": "vite build web",
+    "build:web": "tsc --noEmit -p web/tsconfig.json && vite build web",
     "check:ds": "node web/scripts/check-design-system.mjs",
     "copy:manifests": "node scripts/copy-manifests.mjs",
     "build": "bun run check:ds && tsc -p tsconfig.json && bun run build:web && bun run copy:manifests",

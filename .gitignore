@@ -1,5 +1,6 @@
 node_modules
 dist
+*.tsbuildinfo
 .token-pilot
 .task-journal
 .token-pilot-fingerprint.json
