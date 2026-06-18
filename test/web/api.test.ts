@@ -601,6 +601,10 @@ describe("web api — fs browse + PR connector", () => {
     symlinkSync("/etc/hostname", join(d, "escape.md"));
     const sym = await a.request("/api/tasks/fr/file?path=escape.md");
     expect(sym.status).toBe(403);
+    // a path INSIDE the tree that just doesn't exist (e.g. an unbuilt artifact
+    // like dist/cli.js) → 404 not-found, NOT a misleading 403 "outside the task"
+    const missing = await a.request("/api/tasks/fr/file?path=dist/cli.js");
+    expect(missing.status).toBe(404);
   });
 
   it("GET /diff returns empty for a non-git repo (no crash)", async () => {

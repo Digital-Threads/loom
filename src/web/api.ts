@@ -1359,7 +1359,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     // lexical check, then resolve symlinks and re-verify containment so a symlink
     // planted in the repo can't read a file outside it.
     const real = abs ? realContained(roots, abs) : null;
-    if (!real) return c.json({ error: "path outside the task" }, 403);
+    if (!real) {
+      // `abs` is lexically inside a root but realContained failed. Distinguish a
+      // file that simply isn't there (e.g. an unbuilt artifact like dist/cli.js)
+      // from a real escape, so the viewer shows "not found" (404) instead of a
+      // misleading "outside the task" (403). Never reads — safe.
+      if (abs && !existsSync(abs)) return c.json({ error: "file not found in the task's working tree" }, 404);
+      return c.json({ error: "path outside the task" }, 403);
+    }
     try {
       const st = statSync(real);
       if (!st.isFile()) return c.json({ error: "not a file" }, 400);
