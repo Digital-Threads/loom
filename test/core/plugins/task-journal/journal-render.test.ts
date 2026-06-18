@@ -34,14 +34,34 @@ describe("renderJournalFromEvents (unit)", () => {
     ];
     const out = renderJournalFromEvents(events);
     expect(out).toContain("My board task");
-    expect(out).toContain("Decisions");
+    expect(out).toContain("What was decided");
     expect(out).toContain("Chose approach B");
-    expect(out).toContain("Findings");
+    expect(out).toContain("What we found");
     expect(out).toContain("data survives deletion");
-    expect(out).toContain("Rejected");
+    expect(out).toContain("What we ruled out");
     expect(out).toContain("env override does not exist");
-    expect(out).toContain("Evidence");
+    expect(out).toContain("Verified");
     expect(out).toContain("test proves it");
+  });
+
+  it("renders a decision's weighed alternatives (chosen + ruled out, with rationale)", () => {
+    const events: TjEvent[] = [
+      ev({ type: "open", text: "T", timestamp: "2026-06-18T10:00:00.000Z" }),
+      ev({
+        type: "decision",
+        text: "Pick the storage",
+        timestamp: "2026-06-18T10:01:00.000Z",
+        meta: { alternatives: JSON.stringify([
+          { option: "sqlite", chosen: true, rationale: "embedded, no server" },
+          { option: "postgres", chosen: false, rationale: "needs a server" },
+        ]) },
+      }),
+    ];
+    const out = renderJournalFromEvents(events);
+    expect(out).toContain("Chose **sqlite**");
+    expect(out).toContain("embedded, no server");
+    expect(out).toContain("Ruled out: postgres");
+    expect(out).toContain("needs a server");
   });
 
   it("returns empty string when there are no events", () => {

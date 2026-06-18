@@ -149,26 +149,44 @@ export function renderJournalFromEvents(events: TjEvent[]): string {
   const tasks = tasksFromEvents(events);
   if (tasks.length === 0) return "";
   const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+  // A decision's weighed options live in meta.alternatives (a JSON string, or an
+  // array): [{option, chosen, rationale}]. Surfacing them is what turns a terse
+  // note into a readable "we chose X because Y, and ruled out Z".
+  const alternatives = (e: TjEvent): Array<{ option?: string; chosen?: boolean; rationale?: string }> => {
+    const raw = (e.meta as Record<string, unknown> | undefined)?.alternatives;
+    if (Array.isArray(raw)) return raw as Array<{ option?: string; chosen?: boolean; rationale?: string }>;
+    if (typeof raw === "string") { try { return JSON.parse(raw); } catch { return []; } }
+    return [];
+  };
   const blocks: string[] = [];
   for (const t of tasks) {
     const own = events.filter((e) => e.task_id === t.id);
     const detail = taskDetailFromEvents(events, t.id);
     const open = own.find((e) => e.type === "open");
     const goal = typeof open?.meta?.goal === "string" ? (open.meta.goal as string) : "";
-    const lines: string[] = [`## ${t.title || t.id}`];
-    if (goal && clean(goal) !== clean(t.title)) lines.push(`\n_${clean(goal)}_`);
+    const lines: string[] = [`# ${clean(t.title || t.id)}`];
+    if (goal && clean(goal) !== clean(t.title)) lines.push(`\n**Goal —** ${clean(goal)}`);
+
+    if (detail.decisions.length) {
+      lines.push(`\n## What was decided`);
+      for (const e of detail.decisions) {
+        lines.push(`\n**${clean(e.text)}**`);
+        const alts = alternatives(e);
+        for (const a of alts.filter((x) => x.chosen)) lines.push(`- ✅ Chose **${clean(a.option ?? "")}**${a.rationale ? ` — ${clean(a.rationale)}` : ""}`);
+        for (const a of alts.filter((x) => !x.chosen)) lines.push(`- ❌ Ruled out: ${clean(a.option ?? "")}${a.rationale ? ` — ${clean(a.rationale)}` : ""}`);
+      }
+    }
     const section = (label: string, evs: TjEvent[]) => {
       if (!evs.length) return;
-      lines.push(`\n### ${label}`);
+      lines.push(`\n## ${label}`);
       for (const e of evs) lines.push(`- ${clean(e.text)}`);
     };
-    section("Decisions", detail.decisions);
-    section("Findings", detail.findings);
-    section("Rejected", detail.rejections);
-    section("Evidence", own.filter((e) => e.type === "evidence"));
+    section("What we found", detail.findings);
+    section("What we ruled out", detail.rejections);
+    section("Verified", own.filter((e) => e.type === "evidence"));
     blocks.push(lines.join("\n"));
   }
-  return blocks.join("\n\n");
+  return blocks.join("\n\n---\n\n");
 }
 
 /** A board task's journal pack, read live from the project the agent actually
