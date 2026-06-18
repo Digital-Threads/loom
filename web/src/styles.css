@@ -151,12 +151,13 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 .col-over{border-color:var(--filament-400);background:rgba(239,177,78,.07)}
 .col h2{font-size:11px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--fg-dim);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
 .col h2 .n{margin-left:auto;background:var(--chip);color:var(--mut);border-radius:var(--r-pill);font-size:11px;padding:0 var(--space-3)}
-.col .stack{padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4);overflow:auto}
+.col .stack{flex:1;min-height:0;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4);overflow-y:auto}
 .card{position:relative;background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--space-6) var(--space-6) var(--space-6) var(--space-7);cursor:pointer;overflow:hidden;transition:border-color var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
 .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--idle);opacity:0;transition:opacity var(--dur-1) var(--ease-out)}
 .card.run::before{background:var(--run);opacity:1}
 .card.done::before{background:var(--done);opacity:.7}
 .card.wait::before{background:var(--wait);opacity:.85}
+.card.fail::before{background:var(--fail);opacity:.9}
 /* Keyboard alternative to drag-drop: pick a stage to move + run the card. */
 .lm-select-wrap.card-move{margin-top:var(--space-4)}
 .card:hover{border-color:var(--line-strong);transform:translateY(-1px);box-shadow:var(--elev-2)}
@@ -175,6 +176,7 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 .chip.run{color:var(--run);border-color:rgba(239,177,78,.32);background:rgba(239,177,78,.10)}.chip.run .dotc{background:var(--run)}
 .chip.wait{color:var(--wait);border-color:rgba(91,162,240,.30);background:rgba(91,162,240,.10)}.chip.wait .dotc{background:var(--wait)}
 .chip.done{color:var(--done);border-color:rgba(67,196,110,.30);background:rgba(67,196,110,.10)}.chip.done .dotc{background:var(--done)}
+.chip.fail{color:var(--fail);border-color:rgba(240,86,74,.32);background:rgba(240,86,74,.10)}.chip.fail .dotc{background:var(--fail)}
 .dotc{width:7px;height:7px;border-radius:50%;display:inline-block}
 .run .dotc{background:var(--acc)} .wait .dotc{background:var(--warn)} .done .dotc{background:var(--ok)}
 .dropzone{display:flex;align-items:center;justify-content:center;min-height:var(--space-20);padding:var(--space-6);border:1px dashed var(--line);border-radius:var(--r-md);color:var(--dim);font-size:11px;text-align:center}

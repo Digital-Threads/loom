@@ -478,6 +478,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       /* journal snapshot is best-effort */
     }
   };
+  const DIFF_SNAPSHOT_KIND = "diff-snapshot";
+  /** Snapshot the task's `git diff --stat` at Done, while the worktree branch
+   *  still exists. After the branch is merged + deleted the live diff is gone,
+   *  so the History "Changes" would vanish without this stored copy. */
+  const snapshotDiff = async (id: string): Promise<void> => {
+    try {
+      const t = getTask(db, id);
+      if (!t?.repo) return;
+      const diff = await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id));
+      if (diff.trim()) saveResult(id, "memory", DIFF_SNAPSHOT_KIND, { diff });
+    } catch {
+      /* diff snapshot is best-effort */
+    }
+  };
   // Record a readable turn in the shared transcript. Stages that produce
   // structured results (review/qa/pr/done/brainstorm) call this so the user
   // actually SEES the outcome — the chat-first transcript renders only turns.
@@ -616,6 +630,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
       snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
+      void snapshotDiff(id); // and freeze the git diff --stat before the branch is merged + deleted
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
       if (sid) sessionLauncher.stop?.(sid);
@@ -1097,7 +1112,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const pack = boardJournalPack(id);
     // Best-effort git diff --stat of the task's branch; "" (no Changes section)
     // when the task has no repo, the branch doesn't exist yet, or git is absent.
-    const diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id)) : "";
+    let diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id)) : "";
+    if (!diff.trim()) diff = loadResult<{ diff?: string }>(id, DIFF_SNAPSHOT_KIND)?.diff ?? ""; // branch merged+deleted → stored snapshot
     return c.json({
       pack: renderDossier({
         pack,

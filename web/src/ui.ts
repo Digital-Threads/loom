@@ -21,6 +21,7 @@ export function statusClass(status: string): string {
   if (status === "waiting") return "wait";
   if (status === "wait" || status === "pending" || status === "needs_input") return "wait";
   if (status === "done") return "done";
+  if (status === "failed" || status === "error") return "fail";
   return "";
 }
 
