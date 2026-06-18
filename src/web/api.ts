@@ -1083,16 +1083,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     }
     const pr = await runPr(db, id, opts);
     saveResult(id, "pr", "pr-result", pr); // visible in the PR result card + on revisit
-    const status = pr.created ? `\n\n✅ PR создан: ${pr.url ?? "(no url)"}` : pr.error ? `\n\n⚠️ PR не создан: ${pr.error}` : "";
-    recordTurn(id, "pr", pr.connector ? "Create the PR" : "Generate the PR description", pr.description + status);
-    // A created PR is the finish line: complete the PR stage and finalize, so the
-    // task reaches "done" instead of lingering on PR. Description-only runs don't
-    // finalize — the user hasn't opened a PR yet.
-    const prIsActive = getStages(db, id).some((s) => s.stage_key === "pr" && s.status === "active");
-    if (pr.created && prIsActive) {
-      completeStage(db, id, "pr");
-      await runners.done(db, id, "done");
-    }
+    const status = pr.pushed
+      ? `\n\n✅ Branch pushed.${pr.compareUrl ? ` Open a PR: ${pr.compareUrl}` : " Open a PR on your host."}`
+      : pr.error ? `\n\n⚠️ Push failed: ${pr.error}` : "";
+    recordTurn(id, "pr", pr.connector ? "Push & PR link" : "Generate the PR description", pr.description + status);
+    // We push the branch and hand back a link; the user opens the PR on their
+    // forge and merges there — Loom can't know when that lands, so the task stays
+    // parked at PR (not auto-finalized) until the user marks it done.
     return c.json({ pr, done: pr.created });
   });
 
@@ -1318,16 +1315,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "qa", "qa-result", { result });
     return c.json({ result });
   });
-  // Latest PR result (description + created/url/error) for the PR result card.
+  // Latest PR result (description + pushed/compareUrl/error) for the PR result card.
   app.get("/api/tasks/:id/pr", (c) => {
-    const stored = loadResult<{ description: string; created: boolean; url?: string; connector: boolean; error?: string }>(c.req.param("id"), "pr-result");
+    const stored = loadResult<{ description: string; created: boolean; pushed?: boolean; compareUrl?: string; url?: string; connector: boolean; error?: string }>(c.req.param("id"), "pr-result");
     return c.json({ pr: stored });
   });
-  // Is the GitHub PR connector usable for this task (gh on PATH + origin remote)?
-  // Drives the "push + PR" affordance so the user knows before clicking.
+  // Can the connector push for this task (just an origin remote — we push the
+  // branch and return a host PR/MR link, no gh, so any forge works)? Drives the
+  // "push + PR link" affordance so the user knows before clicking.
   app.get("/api/tasks/:id/pr/connector", async (c) => {
     const t = getTask(db, c.req.param("id"));
-    if (!t?.repo) return c.json({ gh: false, remote: false, repo: false });
+    if (!t?.repo) return c.json({ remote: false, repo: false });
     return c.json({ ...(await prConnectorStatus(realSh, t.repo)), repo: true });
   });
   // Stored stage results (history re-display when revisiting a completed stage).

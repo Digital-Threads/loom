@@ -22,18 +22,17 @@ export function StageActions({
 }) {
   const [busy, setBusy] = useState(false);
   const [connector, setConnector] = useState(false);
-  // PR connector availability (gh on PATH + origin remote) — so "push + PR" is
-  // only offered when it can actually work, with a clear reason when it can't.
-  const [conn, setConn] = useState<{ gh: boolean; remote: boolean; repo: boolean } | null>(null);
+  // Push availability (just an origin remote) — we push the branch and hand back
+  // a host PR/MR link, so "push + PR link" only needs a remote, no gh.
+  const [conn, setConn] = useState<{ remote: boolean; repo: boolean } | null>(null);
   useEffect(() => {
     if (stage !== "pr") return;
     client.prConnector(taskId).then(setConn).catch(() => setConn(null));
   }, [client, taskId, stage]);
-  const connReady = !!conn && conn.repo && conn.gh && conn.remote;
+  const connReady = !!conn && conn.repo && conn.remote;
   const connReason = !conn
     ? ""
     : !conn.repo ? "task has no repo"
-    : !conn.gh ? "gh (GitHub CLI) not installed"
     : !conn.remote ? "no origin remote"
     : "";
   const [returning, setReturning] = useState(false);
@@ -80,11 +79,11 @@ export function StageActions({
     const useConnector = connector && connReady;
     return (
       <>
-        <label className="fld-check sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }} title={connReady ? "Push the branch and open a PR via gh" : `push + PR unavailable: ${connReason}`}>
-          <input type="checkbox" checked={useConnector} disabled={!connReady} onChange={(e) => setConnector(e.target.checked)} /> push + PR
+        <label className="fld-check sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }} title={connReady ? "Push the branch and return a link to open the PR yourself" : `push unavailable: ${connReason}`}>
+          <input type="checkbox" checked={useConnector} disabled={!connReady} onChange={(e) => setConnector(e.target.checked)} /> push + PR link
         </label>
-        {conn && !connReady ? <span className="muted sm" title={connReason}>⚠ no connector — {connReason}</span> : null}
-        <button className="btn acc sm" disabled={busy} onClick={() => run(() => client.prRun(taskId, { connector: useConnector }))}>{busy ? <><Spin /> …</> : useConnector ? "▶ Create PR" : "▶ Generate PR"}</button>
+        {conn && !connReady ? <span className="muted sm" title={connReason}>⚠ can’t push — {connReason}</span> : null}
+        <button className="btn acc sm" disabled={busy} onClick={() => run(() => client.prRun(taskId, { connector: useConnector }))}>{busy ? <><Spin /> …</> : useConnector ? "▶ Push & PR link" : "▶ Generate PR"}</button>
       </>
     );
   }

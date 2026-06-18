@@ -1089,12 +1089,14 @@ describe("web api — fs browse + PR connector", () => {
     expect(Array.isArray(body.entries)).toBe(true);
   });
 
-  it("POST /api/tasks/:id/pr/run with connector pushes the branch and opens a PR", async () => {
+  it("POST /api/tasks/:id/pr/run with connector pushes the branch and returns a host PR link (no gh)", async () => {
     createTask(database, { id: "p1", title: "Ship it", repo: "/repo", branch: "main" });
     const calls: Array<[string, string[]]> = [];
     const sh = async (cmd: string, args: string[]) => {
       calls.push([cmd, args]);
-      return { code: 0, stdout: "https://github.com/x/y/pull/1\n" };
+      if (cmd === "git" && args[0] === "remote") return { code: 0, stdout: "git@github.com:x/y.git\n" };
+      if (cmd === "git" && args[0] === "symbolic-ref") return { code: 0, stdout: "origin/master\n" };
+      return { code: 0, stdout: "" };
     };
     const a = createApi(database, { prOptions: () => ({ sh }) });
     const res = await a.request("/api/tasks/p1/pr/run", {
@@ -1102,14 +1104,12 @@ describe("web api — fs browse + PR connector", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ connector: true }),
     });
-    const body = (await res.json()) as { pr: { created: boolean; url?: string } };
-    expect(body.pr.created).toBe(true);
-    expect(body.pr.url).toBe("https://github.com/x/y/pull/1");
+    const body = (await res.json()) as { pr: { created: boolean; pushed?: boolean; compareUrl?: string } };
+    expect(body.pr.pushed).toBe(true);
+    expect(body.pr.created).toBe(false); // we never auto-create — the user opens the PR
+    expect(body.pr.compareUrl).toBe("https://github.com/x/y/compare/master...loom/p1?expand=1");
     expect(calls.some((c) => c[0] === "git" && c[1][0] === "push" && c[1].includes("loom/p1"))).toBe(true);
-    const ghCreate = calls.find((c) => c[0] === "gh" && c[1][0] === "pr" && c[1][1] === "create");
-    expect(ghCreate).toBeDefined();
-    expect(ghCreate![1]).toContain("--head");
-    expect(ghCreate![1]).toContain("loom/p1");
+    expect(calls.some((c) => c[0] === "gh")).toBe(false); // host-agnostic — no gh
   });
 
   it("PR connector without a repo → 400", async () => {
@@ -1142,17 +1142,20 @@ describe("web api — fs browse + PR connector", () => {
     expect(got.pr!.description).toContain("Persisted PR");
   });
 
-  it("creating a PR finalizes the task (pr → done)", async () => {
+  it("pushing the branch does NOT finalize — the task stays parked at pr for the user to open the PR", async () => {
     createTask(database, { id: "prd", title: "PR Done", repo: "/repo", branch: "main" });
-    const sh = async () => ({ code: 0, stdout: "https://github.com/x/y/pull/9\n" });
+    const sh = async (cmd: string, args: string[]) => {
+      if (cmd === "git" && args[0] === "remote") return { code: 0, stdout: "git@github.com:x/y.git\n" };
+      return { code: 0, stdout: "" };
+    };
     const a = createApi(database, { prOptions: () => ({ sh }) });
     await a.request("/api/tasks/prd/start", { method: "POST" });
     await a.request("/api/tasks/prd/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "pr" }) });
-    const res = (await (await a.request("/api/tasks/prd/pr/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connector: true }) })).json()) as { pr: { created: boolean }; done: boolean };
-    expect(res.pr.created).toBe(true);
-    expect(res.done).toBe(true);
+    const res = (await (await a.request("/api/tasks/prd/pr/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connector: true }) })).json()) as { pr: { pushed?: boolean }; done: boolean };
+    expect(res.pr.pushed).toBe(true);
+    expect(res.done).toBeFalsy(); // pushing isn't merging — Loom can't know when the PR lands
     const t = (await (await a.request("/api/tasks/prd")).json()) as { task: { status: string }; stages: { stage_key: string; status: string }[] };
-    expect(t.task.status).toBe("done"); // finalized, not lingering on pr
-    expect(t.stages.find((s) => s.stage_key === "pr")!.status).toBe("done");
+    expect(t.task.status).not.toBe("done"); // parked, not finalized
+    expect(t.stages.find((s) => s.stage_key === "pr")!.status).toBe("active");
   });
 });

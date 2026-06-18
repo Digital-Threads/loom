@@ -90,16 +90,20 @@ export function StageResult({
   }
 
   if (stage === "pr" && pr) {
-    const badge = pr.created ? "badge-ok" : pr.error ? "badge-warn" : "badge-dim";
-    const label = pr.created ? "PR created" : pr.error ? "not created" : "description only";
+    const link = pr.compareUrl ?? pr.url;
+    const pushed = pr.pushed ?? pr.created; // legacy results used `created`
+    const badge = pushed ? "badge-ok" : pr.error ? "badge-warn" : "badge-dim";
+    const label = pushed ? "branch pushed" : pr.error ? "push failed" : "description only";
     return (
       <div className="result-card">
         <div className="result-head">
           <span className={`badge ${badge}`}>{label}</span>
-          {pr.created && pr.url ? (
-            <a className="chip" href={pr.url} target="_blank" rel="noreferrer">{pr.url}</a>
+          {pushed && link ? (
+            <a className="chip" href={link} target="_blank" rel="noreferrer">↗ Open a PR</a>
+          ) : pushed ? (
+            <span className="muted">branch pushed — open a PR on your host</span>
           ) : null}
-          {!pr.connector && !pr.created ? <span className="muted">no connector — push + PR was off</span> : null}
+          {!pr.connector && !pushed ? <span className="muted">push was off — enable “push + PR link” to push the branch</span> : null}
         </div>
         {pr.error ? (
           <pre className="finding sev-bug" style={{ whiteSpace: "pre-wrap", padding: "6px 8px", margin: "6px 0" }}>{pr.error}</pre>
