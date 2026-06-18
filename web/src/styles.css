@@ -151,7 +151,7 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 /* Cap each column to the viewport (minus the top bar + content padding) so its
    card stack scrolls on its own, instead of a tall column stretching the page.
    A dvh value sidesteps the fragile percentage-height-of-a-flex-item chain. */
-.col{width:212px;flex:0 0 212px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;max-height:calc(100dvh - 84px);transition:border-color .12s,background .12s}
+.col{width:212px;flex:0 0 212px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;max-height:calc(100vh - 84px);max-height:calc(100dvh - 84px);transition:border-color .12s,background .12s}
 .col-over{border-color:var(--filament-400);background:rgba(239,177,78,.07)}
 .col h2{font-size:11px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--fg-dim);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
 .col h2 .n{margin-left:auto;background:var(--chip);color:var(--mut);border-radius:var(--r-pill);font-size:11px;padding:0 var(--space-3)}
