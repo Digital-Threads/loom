@@ -146,7 +146,7 @@ export function Accounts({ client }: { client: LoomClient }) {
                       ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
                       : <button className="btn sm" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
                     {!s.isSource && !active ? (
-                      <button className="btn sm icon-bad" disabled={busy} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
+                      <button className="btn sm icon-bad" disabled={busy} aria-label={`Remove subscription ${s.name}`} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
                     ) : null}
                   </div>
                 </td>

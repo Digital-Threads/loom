@@ -11,6 +11,7 @@ export function Memory({ client }: { client: LoomClient }) {
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [pack, setPack] = useState<string | null>(null);
+  const [packErr, setPackErr] = useState<string | null>(null);
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
@@ -19,7 +20,8 @@ export function Memory({ client }: { client: LoomClient }) {
   useEffect(() => {
     if (!sel) return;
     setPack(null);
-    client.memoryPack(sel).then(setPack).catch(() => setPack(""));
+    setPackErr(null);
+    client.memoryPack(sel).then(setPack).catch((e) => setPackErr(String(e)));
   }, [client, sel]);
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -48,10 +50,12 @@ export function Memory({ client }: { client: LoomClient }) {
         <div className="detail">
           {!sel ? (
             <StateView kind="empty" msg="Pick a task to see its full history." />
+          ) : packErr ? (
+            <StateView kind="error" msg={packErr} />
           ) : pack === null ? (
             <StateView kind="loading" />
           ) : pack.trim() === "" ? (
-            <div className="muted mem-none">No history recorded for this task yet.</div>
+            <StateView kind="empty" msg="No history recorded for this task yet." />
           ) : (
             <div className="mem-pack"><Markdown text={pack} /></div>
           )}

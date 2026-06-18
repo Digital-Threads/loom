@@ -80,7 +80,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
                     {p.active ? <span className="muted" style={{ fontSize: 12 }}>default</span>
                       : <button className="btn sm" disabled={busy} onClick={() => setDefault(p.projectId)}>Set default</button>}
                     {!p.active ? (
-                      <button className="btn sm icon-bad" disabled={busy} title="Remove this project from Loom" onClick={() => remove(p.projectId, p.name)}>✕</button>
+                      <button className="btn sm icon-bad" disabled={busy} aria-label={`Remove project ${p.name}`} title="Remove this project from Loom" onClick={() => remove(p.projectId, p.name)}>✕</button>
                     ) : null}
                   </div>
                 </td>
