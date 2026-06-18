@@ -350,6 +350,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
         { custom, enabled },
         f,
       ),
+    // Flip only the on/off switch — leaves custom rules untouched (partial update).
+    setSecretScanEnabled: (enabled: boolean) =>
+      postJson<{ ok?: boolean; error?: string; enabled?: boolean }>(`${base}/api/security/secrets`, { enabled }, f),
   };
 }
 

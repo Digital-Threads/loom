@@ -1383,6 +1383,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.post("/api/security/policy", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { allow?: unknown; deny?: unknown };
+    if (body.allow !== undefined && !Array.isArray(body.allow)) return c.json({ error: "allow must be an array" }, 400);
+    if (body.deny !== undefined && !Array.isArray(body.deny)) return c.json({ error: "deny must be an array" }, 400);
     const r = saveCommandPolicy(db, body.allow ?? [], body.deny ?? []);
     if (!r.ok) return c.json({ error: r.error }, 400);
     return c.json({ ok: true, summary: policySummary(loadSecurityConfig(db)) });
@@ -1397,6 +1399,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.post("/api/security/secrets", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { custom?: unknown; enabled?: unknown };
+    if (body.enabled !== undefined && typeof body.enabled !== "boolean") return c.json({ error: "enabled must be a boolean" }, 400);
+    if (body.custom !== undefined && !Array.isArray(body.custom)) return c.json({ error: "custom must be an array" }, 400);
     const cfg = loadSecurityConfig(db);
     const enabled = body.enabled === undefined ? cfg.secretScanEnabled : body.enabled;
     const rules = body.custom === undefined ? cfg.secretRules : body.custom;

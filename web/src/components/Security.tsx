@@ -106,7 +106,8 @@ export function Security({ client }: { client: LoomClient }) {
   const toggleScan = () => {
     const next = !scanOn;
     setSecrets((s) => (s ? { ...s, enabled: next } : s));
-    client.saveSecuritySecrets(rules, next)
+    // Only flip the switch — don't commit unsaved custom-rule edits in `rules`.
+    client.setSecretScanEnabled(next)
       .then((r) => { if (r.error) { setSaveMsg(r.error); setSecrets((s) => (s ? { ...s, enabled: !next } : s)); } })
       .catch(() => setSecrets((s) => (s ? { ...s, enabled: !next } : s)));
   };
@@ -125,7 +126,8 @@ export function Security({ client }: { client: LoomClient }) {
     }).catch((e) => setSaveMsg(String(e)));
   };
 
-  const sum = policy?.summary;
+  const builtinDeny = policy?.defaults.deny.length ?? 0;
+  const builtinKinds = secrets?.defaults.length ?? 0;
 
   return (
     <div className="panel">
@@ -155,10 +157,10 @@ export function Security({ client }: { client: LoomClient }) {
         </span>
       </div>
 
-      {sum ? (
+      {policy && secrets ? (
         <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>
-          Policy summary: {sum.allowCount} allow · {sum.denyCount} custom deny (+{sum.defaultDenyCount} built-in) ·
-          {" "}{sum.secretRuleCount} custom secret rule(s) (+{sum.defaultSecretKindCount} built-in) ·
+          Policy summary: {allow.length} allow · {deny.length} custom deny (+{builtinDeny} built-in) ·
+          {" "}{rules.length} custom secret rule(s) (+{builtinKinds} built-in) ·
           {" "}secret scanning {scanOn ? "on" : "off"}
         </div>
       ) : null}
@@ -174,7 +176,9 @@ export function Security({ client }: { client: LoomClient }) {
 
       <h3 style={{ marginTop: 18, marginBottom: 0 }}>Command policy</h3>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
-        Allow / deny RegExp patterns. Built-in deny patterns always apply; deny wins over allow.
+        Allow / deny RegExp patterns, stored for the security layer. The built-in deny list (shown below)
+        is the package default; in this policy model deny wins over allow. Note: runtime command-blocking is
+        gated by the OS sandbox — these lists are configuration, not yet enforced on the normal execution path.
       </div>
       <PatternList title="Deny (built-in + custom)" builtin={policy?.defaults.deny ?? []} items={deny}
         onAdd={(v) => setDeny((d) => [...d, v])} onRemove={(i) => setDeny((d) => d.filter((_, j) => j !== i))}

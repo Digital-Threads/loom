@@ -38,6 +38,25 @@ describe("security policy-config", () => {
     expect(compileRegex("a.b")).toBeInstanceOf(RegExp);
   });
 
+  it("rejects ReDoS-prone and over-long patterns", () => {
+    expect(checkRegex("(a+)+$").ok).toBe(false); // nested quantifier
+    expect(checkRegex("(ab|a)*c").ok).toBe(true); // ordinary alternation is fine
+    expect(checkRegex("a".repeat(201)).ok).toBe(false); // too long
+  });
+
+  it("secret-scan switch is strict boolean (non-boolean does not enable)", () => {
+    saveSecretConfig(db, [], "false" as unknown as boolean);
+    expect(loadSecurityConfig(db).secretScanEnabled).toBe(false);
+    saveSecretConfig(db, [], true);
+    expect(loadSecurityConfig(db).secretScanEnabled).toBe(true);
+  });
+
+  it("scanWithCustom bounds matches per rule", () => {
+    const text = "x".repeat(5000);
+    const found = scanWithCustom(text, [{ kind: "x", source: "x" }]);
+    expect(found.filter((f) => f.kind === "x").length).toBeLessThanOrEqual(1000);
+  });
+
   it("defaults: scanning on, empty lists, built-in mirrors present", () => {
     const cfg = loadSecurityConfig(db);
     expect(cfg.secretScanEnabled).toBe(true);
