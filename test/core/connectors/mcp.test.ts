@@ -54,6 +54,50 @@ describe("mcpRunConfig — payload for the agent's --mcp-config", () => {
     expect(mcpRunConfig([])).toBeNull();
     expect(mcpRunConfig([srv({ enabled: false })])).toBeNull();
   });
+  it("passes env for a stdio server, and omits it when empty/non-string", () => {
+    const cfg = mcpRunConfig([
+      srv({ id: "a", command: "c", env: { TOKEN: "x", N: 1 as unknown as string } }),
+      srv({ id: "b", command: "c", env: {} }),
+    ]);
+    expect(cfg!.mcpServers.a).toEqual({ command: "c", env: { TOKEN: "x" } });
+    expect(cfg!.mcpServers.b).toEqual({ command: "c" });
+  });
+  it("serializes a remote (sse/http) server as { type, url }", () => {
+    const cfg = mcpRunConfig([
+      srv({ id: "h", command: undefined, transport: "http", url: "https://host/mcp" }),
+      srv({ id: "s", command: undefined, transport: "sse", url: "https://host/sse" }),
+    ]);
+    expect(cfg!.mcpServers.h).toEqual({ type: "http", url: "https://host/mcp" });
+    expect(cfg!.mcpServers.s).toEqual({ type: "sse", url: "https://host/sse" });
+  });
+  it("drops a remote server with no url and a stdio server with no command", () => {
+    const cfg = mcpRunConfig([
+      srv({ id: "noUrl", command: undefined, transport: "http" }),
+      srv({ id: "noCmd", command: undefined }),
+      srv({ id: "ok", command: "c" }),
+    ]);
+    expect(Object.keys(cfg!.mcpServers)).toEqual(["ok"]);
+  });
+});
+
+describe("addMcp — persists transport-specific fields", () => {
+  it("stores env/args for stdio and stays idempotent by id", () => {
+    addMcp({ id: "x", command: "c", args: ["--a"], env: { K: "v" } }, file);
+    expect(listMcp(file)[0]).toMatchObject({ id: "x", command: "c", args: ["--a"], env: { K: "v" }, enabled: true });
+    addMcp({ id: "x", command: "c2" }, file);
+    expect(listMcp(file)).toHaveLength(1);
+    expect(listMcp(file)[0].command).toBe("c2");
+  });
+  it("stores transport/url for a remote server and no command", () => {
+    addMcp({ id: "r", transport: "sse", url: "https://h/sse" }, file);
+    const s = listMcp(file)[0];
+    expect(s).toMatchObject({ id: "r", transport: "sse", url: "https://h/sse", enabled: true });
+    expect(s.command).toBeUndefined();
+  });
+  it("keeps back-compat: a plain {command,args} entry serializes unchanged", () => {
+    addMcp({ id: "fs", command: "mcp-fs", args: ["--root", "/"] }, file);
+    expect(mcpRunConfig(listMcp(file))!.mcpServers.fs).toEqual({ command: "mcp-fs", args: ["--root", "/"] });
+  });
 });
 
 describe("writeMcpRunConfig — file-backed config (no argv blowup)", () => {

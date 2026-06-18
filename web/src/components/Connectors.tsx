@@ -1,7 +1,28 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, McpServer } from "../api";
+import type { LoomClient, McpServer, McpTransport } from "../api";
 import { StateView } from "./StateView";
+import { Select } from "./Select";
 import { toast } from "../toast";
+
+// Parse the args field — one argument per line (so an argument may contain
+// spaces). Blank lines are dropped.
+function parseArgs(raw: string): string[] {
+  return raw.split(/\r?\n/).map((a) => a.trim()).filter(Boolean);
+}
+
+// Parse the env field — one KEY=VALUE per line (split on the first =), so a
+// value may itself contain commas, spaces or further '='. Lines without a key
+// or without an = are ignored.
+function parseEnv(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    if (key) out[key] = line.slice(eq + 1).trim();
+  }
+  return out;
+}
 
 // D5.3 — Connectors (MCP): list/add/enable/test the MCP servers Loom passes
 // into agent sessions.
@@ -25,7 +46,11 @@ function TestStatus({ state }: { state?: TestState }) {
 export function Connectors({ client }: { client: LoomClient }) {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [id, setId] = useState("");
+  const [transport, setTransport] = useState<McpTransport>("stdio");
   const [command, setCommand] = useState("");
+  const [args, setArgs] = useState("");
+  const [env, setEnv] = useState("");
+  const [url, setUrl] = useState("");
   const [tests, setTests] = useState<Record<string, TestState>>({});
   const [imp, setImp] = useState<ImportState>({ kind: "idle" });
   const [err, setErr] = useState<string | null>(null);
@@ -34,10 +59,29 @@ export function Connectors({ client }: { client: LoomClient }) {
   function refresh() { client.mcpList().then(setServers).catch((e) => setErr(String(e))).finally(() => setLoading(false)); }
   useEffect(refresh, [client]);
 
+  function resetForm() { setId(""); setCommand(""); setArgs(""); setEnv(""); setUrl(""); }
+  const remote = transport === "sse" || transport === "http";
   async function add() {
-    if (!id.trim() || !command.trim()) return;
-    try { await client.mcpAdd({ id: id.trim(), command: command.trim() }); setId(""); setCommand(""); refresh(); toast.success("MCP server added"); }
-    catch (e) { toast.error(`Couldn’t add server: ${e}`); }
+    if (!id.trim()) return;
+    if (remote ? !url.trim() : !command.trim()) return;
+    try {
+      if (remote) {
+        await client.mcpAdd({ id: id.trim(), transport, url: url.trim() });
+      } else {
+        const parsedArgs = parseArgs(args);
+        const parsedEnv = parseEnv(env);
+        await client.mcpAdd({
+          id: id.trim(),
+          transport,
+          command: command.trim(),
+          args: parsedArgs.length ? parsedArgs : undefined,
+          env: Object.keys(parsedEnv).length ? parsedEnv : undefined,
+        });
+      }
+      resetForm();
+      refresh();
+      toast.success("MCP server added");
+    } catch (e) { toast.error(`Couldn’t add server: ${e}`); }
   }
   async function toggle(s: McpServer) {
     try { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? "Disabled" : "Enabled"); }
@@ -80,9 +124,22 @@ export function Connectors({ client }: { client: LoomClient }) {
 
   return (
     <div className="panel">
-      <div className="row" style={{ gap: 8 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <input className="inp" placeholder="id" value={id} onChange={(e) => setId(e.target.value)} />
-        <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
+        <Select aria-label="Transport" value={transport} onChange={(e) => setTransport(e.target.value as McpTransport)}>
+          <option value="stdio">stdio</option>
+          <option value="sse">sse</option>
+          <option value="http">http</option>
+        </Select>
+        {remote ? (
+          <input className="inp" placeholder="url (e.g. https://host/mcp)" value={url} onChange={(e) => setUrl(e.target.value)} />
+        ) : (
+          <>
+            <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
+            <textarea className="inp" rows={2} placeholder="args (one per line)" value={args} onChange={(e) => setArgs(e.target.value)} />
+            <textarea className="inp" rows={2} placeholder="env (KEY=VALUE, one per line)" value={env} onChange={(e) => setEnv(e.target.value)} />
+          </>
+        )}
         <button className="btn acc" onClick={add}>Add MCP</button>
         <button className="btn" onClick={importFromBeads} disabled={imp.kind === "running"}>Import from beads</button>
       </div>
@@ -99,19 +156,26 @@ export function Connectors({ client }: { client: LoomClient }) {
         <StateView kind="empty" msg="No MCP servers yet." />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
-          <thead><tr><th>Server</th><th>Command</th><th></th></tr></thead>
+          <thead><tr><th>Server</th><th>Endpoint</th><th></th></tr></thead>
           <tbody>
-            {servers.map((s) => (
+            {servers.map((s) => {
+              const isRemote = s.transport === "sse" || s.transport === "http";
+              return (
               <tr key={s.id}>
                 <td>{s.id}{s.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
-                <td className="crumb">{s.command}<TestStatus state={tests[s.id]} /></td>
+                <td className="crumb">
+                  {isRemote ? <span className="chip" style={{ marginRight: 6 }}>{s.transport}</span> : null}
+                  {isRemote ? s.url : s.command}
+                  {isRemote ? null : <TestStatus state={tests[s.id]} />}
+                </td>
                 <td>
                   <button className="btn" onClick={() => toggle(s)}>{s.enabled ? "Disable" : "Enable"}</button>
-                  <button className="btn" onClick={() => test(s.id)} disabled={tests[s.id]?.kind === "checking"}>Test</button>
+                  {isRemote ? null : <button className="btn" onClick={() => test(s.id)} disabled={tests[s.id]?.kind === "checking"}>Test</button>}
                   <button className="btn" onClick={() => remove(s.id)}>Remove</button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}

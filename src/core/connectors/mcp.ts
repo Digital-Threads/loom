@@ -5,11 +5,26 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loomDataDir } from "../paths.js";
 
+export type McpTransport = "stdio" | "sse" | "http";
+
 export interface McpServer {
   id: string;
-  command: string;
+  /** stdio: the executable to spawn. Optional because a remote server has a
+   *  url instead. */
+  command?: string;
   args?: string[];
+  /** Environment passed to a stdio server's process. */
+  env?: Record<string, string>;
+  /** Absent == "stdio" (back-compat with pre-remote registries). */
+  transport?: McpTransport;
+  /** Endpoint for an sse/http (remote) server. */
+  url?: string;
   enabled: boolean;
+}
+
+/** A remote server is one whose transport speaks over a URL (sse/http). */
+function isRemote(s: McpServer): boolean {
+  return s.transport === "sse" || s.transport === "http";
 }
 
 interface McpFile {
@@ -40,11 +55,30 @@ export function listMcp(file: string = mcpFile()): McpServer[] {
 }
 
 export function addMcp(
-  input: { id: string; command: string; args?: string[] },
+  input: {
+    id: string;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    transport?: McpTransport;
+    url?: string;
+  },
   file: string = mcpFile(),
 ): McpServer {
   const data = read(file);
-  const server: McpServer = { id: input.id, command: input.command, args: input.args, enabled: true };
+  const remote = input.transport === "sse" || input.transport === "http";
+  // Persist only the fields that make sense for the chosen transport so the
+  // registry stays clean (no stray command on a remote server, no url on stdio).
+  const server: McpServer = { id: input.id, enabled: true };
+  if (remote) {
+    server.transport = input.transport;
+    if (input.url) server.url = input.url;
+  } else {
+    if (input.transport) server.transport = input.transport;
+    if (input.command) server.command = input.command;
+    if (input.args && input.args.length) server.args = input.args;
+    if (input.env && Object.keys(input.env).length) server.env = input.env;
+  }
   const idx = data.servers.findIndex((s) => s.id === input.id);
   if (idx >= 0) data.servers[idx] = server;
   else data.servers.push(server);
@@ -72,21 +106,47 @@ export function mcpRunConfigFile(): string {
   return join(loomDataDir(), "mcp.run.json");
 }
 
-/** Build the Claude `--mcp-config` payload from the registry: only enabled
- *  servers with a valid (non-empty string) command. The registry file is
- *  user-editable, so every field is validated here — a malformed entry is
- *  dropped rather than written out as a broken server. Returns null when there
- *  is nothing to inject (zero behaviour change). */
+/** A single server entry in the Claude `--mcp-config` payload: a stdio process
+ *  (command/args/env) or a remote endpoint (type/url). */
+type RunStdio = { command: string; args?: string[]; env?: Record<string, string> };
+type RunRemote = { type: "sse" | "http"; url: string };
+export type McpRunServer = RunStdio | RunRemote;
+
+/** Keep only string→string pairs; return undefined when nothing valid is left
+ *  so a missing/empty env never changes the stdio output shape. */
+function sanitizeEnv(env: unknown): Record<string, string> | undefined {
+  if (!env || typeof env !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
+    if (typeof k === "string" && k && typeof v === "string") out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Build the Claude `--mcp-config` payload from the registry: only enabled,
+ *  valid servers. stdio needs a non-empty command; remote (sse/http) needs a
+ *  url. The registry file is user-editable, so every field is validated here —
+ *  a malformed entry is dropped rather than written out as a broken server.
+ *  Returns null when there is nothing to inject (zero behaviour change). */
 export function mcpRunConfig(
   servers: McpServer[],
-): { mcpServers: Record<string, { command: string; args?: string[] }> } | null {
-  const mcpServers: Record<string, { command: string; args?: string[] }> = {};
+): { mcpServers: Record<string, McpRunServer> } | null {
+  const mcpServers: Record<string, McpRunServer> = {};
   for (const s of servers) {
     if (!s || !s.enabled) continue;
     if (typeof s.id !== "string" || !s.id) continue;
+    if (isRemote(s)) {
+      if (typeof s.url !== "string" || !s.url) continue;
+      mcpServers[s.id] = { type: s.transport as "sse" | "http", url: s.url };
+      continue;
+    }
     if (typeof s.command !== "string" || !s.command) continue;
     const args = Array.isArray(s.args) ? s.args.filter((a) => typeof a === "string") : undefined;
-    mcpServers[s.id] = args && args.length ? { command: s.command, args } : { command: s.command };
+    const env = sanitizeEnv(s.env);
+    const entry: RunStdio = { command: s.command };
+    if (args && args.length) entry.args = args;
+    if (env) entry.env = env;
+    mcpServers[s.id] = entry;
   }
   return Object.keys(mcpServers).length ? { mcpServers } : null;
 }
@@ -110,6 +170,10 @@ export type McpProbe = (command: string, args: string[]) => { code: number };
 export function testMcp(id: string, opts: { file?: string; probe?: McpProbe } = {}): { ok: boolean; error?: string } {
   const server = listMcp(opts.file).find((s) => s.id === id);
   if (!server) return { ok: false, error: "unknown server" };
+  // Remote servers have no command to probe — reachability would need an HTTP
+  // call we don't make here; report it plainly instead of crashing.
+  if (isRemote(server)) return { ok: false, error: "remote test not supported" };
+  if (!server.command) return { ok: false, error: "no command configured" };
   if (!opts.probe) return { ok: false, error: "no probe configured" };
   try {
     return { ok: opts.probe(server.command, [...(server.args ?? []), "--help"]).code === 0 };

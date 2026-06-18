@@ -1335,10 +1335,34 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // ─── connectors: MCP (D5) ─────────────────────────────────────────────────────
   app.get("/api/connectors/mcp", (c) => c.json({ servers: runtime.connectors.listMcp() }));
   app.post("/api/connectors/mcp", async (c) => {
-    const b = (await c.req.json().catch(() => ({}))) as { id?: unknown; command?: unknown; args?: unknown };
-    if (typeof b.id !== "string" || typeof b.command !== "string") return c.json({ error: "id and command required" }, 400);
-    const args = Array.isArray(b.args) ? (b.args as string[]) : undefined;
-    return c.json({ server: addMcp({ id: b.id, command: b.command, args }) }, 201);
+    const b = (await c.req.json().catch(() => ({}))) as {
+      id?: unknown;
+      command?: unknown;
+      args?: unknown;
+      env?: unknown;
+      transport?: unknown;
+      url?: unknown;
+    };
+    if (typeof b.id !== "string" || !b.id) return c.json({ error: "id required" }, 400);
+    const transport =
+      b.transport === "sse" || b.transport === "http" || b.transport === "stdio" ? b.transport : undefined;
+    const remote = transport === "sse" || transport === "http";
+    if (remote) {
+      // Trim so a whitespace-only url can't slip past the "required" check.
+      const url = typeof b.url === "string" ? b.url.trim() : "";
+      if (!url) return c.json({ error: "url required for remote server" }, 400);
+      return c.json({ server: addMcp({ id: b.id, transport, url }) }, 201);
+    }
+    const command = typeof b.command === "string" ? b.command.trim() : "";
+    if (!command) return c.json({ error: "command required for stdio server" }, 400);
+    const args = Array.isArray(b.args) ? (b.args.filter((a) => typeof a === "string") as string[]) : undefined;
+    const env =
+      b.env && typeof b.env === "object" && !Array.isArray(b.env)
+        ? Object.fromEntries(
+            Object.entries(b.env as Record<string, unknown>).filter(([, v]) => typeof v === "string"),
+          ) as Record<string, string>
+        : undefined;
+    return c.json({ server: addMcp({ id: b.id, command, args, env, transport }) }, 201);
   });
   app.post("/api/connectors/mcp/:id/toggle", async (c) => {
     const b = (await c.req.json().catch(() => ({}))) as { enabled?: unknown };

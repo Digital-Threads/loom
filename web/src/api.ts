@@ -325,7 +325,14 @@ export function createClient(base = "", f: Fetcher = fetch) {
     doneRun: (id: string) => postJson<{ ok: boolean }>(`${base}/api/tasks/${id}/done/run`, {}, f),
     // D5 — connectors (MCP)
     mcpList: () => getJson<{ servers: McpServer[] }>(`${base}/api/connectors/mcp`, f).then((d) => d.servers),
-    mcpAdd: (s: { id: string; command: string; args?: string[] }) =>
+    mcpAdd: (s: {
+      id: string;
+      command?: string;
+      args?: string[];
+      env?: Record<string, string>;
+      transport?: McpTransport;
+      url?: string;
+    }) =>
       postJson<{ server: McpServer }>(`${base}/api/connectors/mcp`, s, f).then((d) => d.server),
     mcpToggle: (id: string, enabled: boolean) =>
       postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/toggle`, { enabled }, f),
@@ -381,7 +388,16 @@ export interface SecuritySecretsData {
   custom: SecretRule[];
   enabled: boolean;
 }
-export interface McpServer { id: string; command: string; args?: string[]; enabled: boolean }
+export type McpTransport = "stdio" | "sse" | "http";
+export interface McpServer {
+  id: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  transport?: McpTransport;
+  url?: string;
+  enabled: boolean;
+}
 
 export interface LayerInfo {
   id: string;
