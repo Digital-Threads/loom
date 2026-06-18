@@ -10,6 +10,10 @@ function mkClient(over: Partial<Record<keyof LoomClient, unknown>> = {}) {
     mcpList: () => Promise.resolve(servers),
     mcpTest: () => Promise.resolve({ ok: true }),
     importTracker: () => Promise.resolve({ created: 3 }),
+    listConnectors: () => Promise.resolve([
+      { id: "beads", label: "beads", needsRepo: false },
+      { id: "github", label: "GitHub Issues", needsRepo: true },
+    ]),
     ...over,
   } as unknown as LoomClient;
 }
@@ -31,18 +35,41 @@ describe("Connectors status feedback", () => {
     expect(await screen.findByText("Unreachable")).toBeInTheDocument();
   });
 
-  it("shows the import result after Import from beads", async () => {
+  it("shows the import result after Import", async () => {
     const user = userEvent.setup();
     render(<Connectors client={mkClient()} />);
-    await user.click(screen.getByRole("button", { name: "Import from beads" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
     expect(await screen.findByText("Imported 3")).toBeInTheDocument();
   });
 
   it("reports nothing-new when import created zero", async () => {
     const user = userEvent.setup();
     render(<Connectors client={mkClient({ importTracker: () => Promise.resolve({ created: 0 }) })} />);
-    await user.click(screen.getByRole("button", { name: "Import from beads" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
     expect(await screen.findByText("Nothing new to import")).toBeInTheDocument();
+  });
+});
+
+describe("Connectors — connector selector", () => {
+  it("shows the owner/repo field when GitHub Issues is selected", async () => {
+    const user = userEvent.setup();
+    render(<Connectors client={mkClient()} />);
+    await screen.findByText("mcp-server-fs");
+    expect(screen.queryByPlaceholderText("owner/repo")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connector"), "github");
+    expect(screen.getByPlaceholderText("owner/repo")).toBeInTheDocument();
+  });
+
+  it("sends the selected connector and repo to importTracker", async () => {
+    const user = userEvent.setup();
+    const calls: unknown[] = [];
+    const client = mkClient({ importTracker: (o: unknown) => { calls.push(o); return Promise.resolve({ created: 1 }); } });
+    render(<Connectors client={client} />);
+    await screen.findByText("mcp-server-fs");
+    await user.selectOptions(screen.getByLabelText("Connector"), "github");
+    await user.type(screen.getByPlaceholderText("owner/repo"), "octocat/hello");
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    expect(calls).toEqual([{ connector: "github", repo: "octocat/hello" }]);
   });
 });
 

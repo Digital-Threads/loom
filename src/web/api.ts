@@ -79,6 +79,8 @@ import {
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
+import { CONNECTORS } from "../core/connectors/registry.js";
+import type { ImportOptions } from "../core/runtime/agent-runtime.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
@@ -128,8 +130,8 @@ export interface ApiDeps {
   runners?: RunnerRegistry;
   /** Probe for MCP connector tests (default: none → test reports unconfigured). */
   mcpProbe?: McpProbe;
-  /** Tracker import drafts (default: beads connector). */
-  importDrafts?: () => TaskDraft[];
+  /** Tracker import drafts (default: connector chosen by opts, beads when unset). */
+  importDrafts?: (opts?: ImportOptions) => TaskDraft[];
   /** Environment prerequisite check (default: which/where probe of REQUIRED_TOOLS). */
   prereqs?: () => PrereqReport;
 }
@@ -1371,11 +1373,23 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
   app.post("/api/connectors/mcp/:id/remove", (c) => { removeMcp(c.req.param("id")); return c.json({ ok: true }); });
   app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe ?? realMcpProbe })));
+  // D5.5 — available tracker connectors (drives the import selector in the UI).
+  app.get("/api/connectors", (c) => c.json({ connectors: CONNECTORS }));
   // D5.4/5.5 — import open tracker items as tasks on the board.
-  app.post("/api/connectors/import", (c) => {
+  app.post("/api/connectors/import", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { connector?: unknown; repo?: unknown };
+    const connector = typeof b.connector === "string" && b.connector ? b.connector : "beads";
+    // Trim server-side so a whitespace-only repo can't slip past the guard below.
+    const repo = typeof b.repo === "string" && b.repo.trim() ? b.repo.trim() : undefined;
+    const meta = CONNECTORS.find((m) => m.id === connector);
+    // Reject an unknown connector id outright (a typo must not look like success).
+    if (!meta) return c.json({ error: "unknown connector" }, 400);
+    // Connectors that need a repo (e.g. github) must be given one.
+    if (meta.needsRepo && !repo) return c.json({ error: "repo required" }, 400);
     // Call importDrafts AS A METHOD (not a torn-off reference) so a future
     // AgentRuntime whose connectors rely on `this` keeps its binding.
-    const drafts = deps.importDrafts ? deps.importDrafts() : runtime.connectors.importDrafts();
+    const opts: ImportOptions = { connector, repo };
+    const drafts = deps.importDrafts ? deps.importDrafts(opts) : runtime.connectors.importDrafts(opts);
     let created = 0;
     let skipped = 0;
     for (const d of drafts) {

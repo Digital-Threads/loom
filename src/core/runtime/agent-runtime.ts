@@ -26,9 +26,17 @@ export interface SkillsProvider {
 /** The engine's connectors — MCP servers it exposes plus tracker imports. The
  *  LIST surface only; mutating Loom's own mcp.json is config management, not the
  *  engine, so it stays outside the runtime. */
+/** Which connector to import from, and its parameters (e.g. a GitHub repo). */
+export interface ImportOptions {
+  /** Connector id from the registry (default: "beads"). */
+  connector?: string;
+  /** Repository ("owner/repo") for connectors that need one (e.g. github). */
+  repo?: string;
+}
+
 export interface ConnectorsProvider {
   listMcp(): McpServer[];
-  importDrafts(): TaskDraft[];
+  importDrafts(opts?: ImportOptions): TaskDraft[];
 }
 
 /** A swappable agent engine. One implementation today: ClaudeRuntime. */

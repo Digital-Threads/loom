@@ -10,7 +10,7 @@ import type { RecallHit } from "../knowledge/recall.js";
 import { createAimuxLiveLauncher } from "../automation/aimux-session-launcher.js";
 import { listSkills, readSkill, writeSkill, deleteSkill, generateSkill } from "../skills/skills.js";
 import { listMcp } from "../connectors/mcp.js";
-import { beadsConnector } from "../connectors/beads.js";
+import { selectConnector } from "../connectors/registry.js";
 
 export interface ClaudeRuntimeDeps {
   /** OS-sandbox toggle, resolved per spawn (see aimux launcher). */
@@ -34,7 +34,10 @@ export function createClaudeRuntime(deps: ClaudeRuntimeDeps = {}): AgentRuntime 
     },
     connectors: {
       listMcp,
-      importDrafts: () => beadsConnector().import(),
+      importDrafts: (opts) => {
+        const c = selectConnector(opts?.connector ?? "beads", { repo: opts?.repo });
+        return c ? c.import() : [];
+      },
     },
     recall: deps.recall,
   };

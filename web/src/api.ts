@@ -338,7 +338,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/toggle`, { enabled }, f),
     mcpRemove: (id: string) => postJson<{ ok: boolean }>(`${base}/api/connectors/mcp/${id}/remove`, {}, f),
     mcpTest: (id: string) => postJson<{ ok: boolean; error?: string }>(`${base}/api/connectors/mcp/${id}/test`, {}, f),
-    importTracker: () => postJson<{ created: number }>(`${base}/api/connectors/import`, {}, f),
+    listConnectors: () => getJson<{ connectors: ConnectorMeta[] }>(`${base}/api/connectors`, f).then((d) => d.connectors),
+    importTracker: (opts?: { connector?: string; repo?: string }) =>
+      postJson<{ created: number }>(`${base}/api/connectors/import`, opts ?? {}, f),
     // D6 — settings / attachments
     settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
     saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),
@@ -387,6 +389,11 @@ export interface SecuritySecretsData {
   defaults: string[];
   custom: SecretRule[];
   enabled: boolean;
+}
+export interface ConnectorMeta {
+  id: string;
+  label: string;
+  needsRepo: boolean;
 }
 export type McpTransport = "stdio" | "sse" | "http";
 export interface McpServer {

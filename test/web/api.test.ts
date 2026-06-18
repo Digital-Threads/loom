@@ -311,6 +311,46 @@ describe("web api", () => {
     expect(b).toMatchObject({ created: 1, skipped: 0 });
   });
 
+  it("GET /api/connectors lists the registry (D5.5)", async () => {
+    const app2 = createApi(db);
+    const r = (await (await app2.request("/api/connectors")).json()) as { connectors: { id: string; needsRepo: boolean }[] };
+    const ids = r.connectors.map((m) => m.id);
+    expect(ids).toContain("beads");
+    expect(ids).toContain("github");
+    expect(r.connectors.find((m) => m.id === "github")?.needsRepo).toBe(true);
+  });
+
+  it("POST /api/connectors/import passes connector + repo to importDrafts (D5.5)", async () => {
+    let seen: { connector?: string; repo?: string } | undefined;
+    const app2 = createApi(db, {
+      importDrafts: (opts) => { seen = opts; return [{ title: "Issue", externalId: "github:o/r#1" }]; },
+    });
+    const r = (await (await app2.request("/api/connectors/import", { method: "POST", body: JSON.stringify({ connector: "github", repo: "o/r" }) })).json()) as { created: number };
+    expect(seen).toMatchObject({ connector: "github", repo: "o/r" });
+    expect(r.created).toBe(1);
+  });
+
+  it("POST /api/connectors/import rejects github without a repo (D5.5)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "x" }] });
+    const res = await app2.request("/api/connectors/import", { method: "POST", body: JSON.stringify({ connector: "github" }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "repo required" });
+  });
+
+  it("POST /api/connectors/import rejects a whitespace-only github repo (D5.5)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "x" }] });
+    const res = await app2.request("/api/connectors/import", { method: "POST", body: JSON.stringify({ connector: "github", repo: "   " }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "repo required" });
+  });
+
+  it("POST /api/connectors/import rejects an unknown connector id (D5.5)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "x" }] });
+    const res = await app2.request("/api/connectors/import", { method: "POST", body: JSON.stringify({ connector: "nope" }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "unknown connector" });
+  });
+
   // ── settings / attachments (D6) ──
   it("settings round-trip via /api/settings (D6)", async () => {
     const app2 = createApi(db);

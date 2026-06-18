@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { LoomClient, McpServer, McpTransport } from "../api";
+import type { ConnectorMeta, LoomClient, McpServer, McpTransport } from "../api";
 import { StateView } from "./StateView";
 import { Select } from "./Select";
 import { toast } from "../toast";
@@ -53,11 +53,18 @@ export function Connectors({ client }: { client: LoomClient }) {
   const [url, setUrl] = useState("");
   const [tests, setTests] = useState<Record<string, TestState>>({});
   const [imp, setImp] = useState<ImportState>({ kind: "idle" });
+  const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
+  const [connector, setConnector] = useState("beads");
+  const [repo, setRepo] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   function refresh() { client.mcpList().then(setServers).catch((e) => setErr(String(e))).finally(() => setLoading(false)); }
   useEffect(refresh, [client]);
+  useEffect(() => { client.listConnectors().then(setConnectors).catch(() => {}); }, [client]);
+
+  const selected = connectors.find((m) => m.id === connector);
+  const needsRepo = selected?.needsRepo ?? false;
 
   function resetForm() { setId(""); setCommand(""); setArgs(""); setEnv(""); setUrl(""); }
   const remote = transport === "sse" || transport === "http";
@@ -108,10 +115,10 @@ export function Connectors({ client }: { client: LoomClient }) {
     }
   }
 
-  async function importFromBeads() {
+  async function importFromTracker() {
     setImp({ kind: "running" });
     try {
-      const r = await client.importTracker();
+      const r = await client.importTracker({ connector, repo: repo.trim() || undefined });
       setImp({ kind: "done", created: r.created });
       toast.success(r.created > 0 ? `Imported ${r.created}` : "Nothing new to import");
     } catch (e) {
@@ -141,7 +148,15 @@ export function Connectors({ client }: { client: LoomClient }) {
           </>
         )}
         <button className="btn acc" onClick={add}>Add MCP</button>
-        <button className="btn" onClick={importFromBeads} disabled={imp.kind === "running"}>Import from beads</button>
+        {connectors.length > 0 ? (
+          <Select aria-label="Connector" value={connector} onChange={(e) => setConnector(e.target.value)}>
+            {connectors.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </Select>
+        ) : null}
+        {needsRepo ? (
+          <input className="inp" placeholder="owner/repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
+        ) : null}
+        <button className="btn" onClick={importFromTracker} disabled={imp.kind === "running" || (needsRepo && !repo.trim())}>Import</button>
       </div>
       {imp.kind === "running" ? (
         <div style={{ marginTop: 8 }}><span className="chip warn">Importing…</span></div>
