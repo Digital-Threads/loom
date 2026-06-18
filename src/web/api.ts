@@ -35,7 +35,7 @@ import { listSessions } from "../core/plugins/aimux/adapter.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
-import { recallPrior, partitionHits, buildGraph, askSearch, type RecallHit } from "../core/knowledge/recall.js";
+import { recallPrior, partitionHits, askSearch, type RecallHit } from "../core/knowledge/recall.js";
 import {
   runAnalysis,
   brainstormTurn,
@@ -1158,11 +1158,6 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/knowledge/search", (c) => {
     const q = c.req.query("q") ?? "";
     return c.json({ hits: q ? search(q) : [] });
-  });
-  // L7.3 — problem→solution graph derived from recall hits.
-  app.get("/api/knowledge/graph", (c) => {
-    const q = c.req.query("q") ?? "";
-    return c.json(buildGraph(q ? recall(q) : []));
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────
