@@ -105,6 +105,20 @@ export function TaskView({
     return () => { alive = false; clearInterval(iv); };
   }, [runId, curProfile, client]);
 
+  // When the task is PARKED on a rate limit (the run already stopped → no live
+  // runId, so the watcher above is off), still surface the switch-account modal —
+  // not just the banner — so the user is prompted to pick a healthy subscription.
+  const stoppedProfile = detail?.stopReason?.kind === "rate_limit" ? (detail.stopReason.profile ?? curProfile) : "";
+  useEffect(() => {
+    if (!stoppedProfile || dismissedRef.current === stoppedProfile) return;
+    let alive = true;
+    const fallback: RateLimit = { profile: stoppedProfile, fiveHourPct: 100, weeklyPct: 0, status: "rejected" };
+    client.accountLimits(stoppedProfile)
+      .then((ls) => { if (alive) setLimit(ls.find((x) => x.profile === stoppedProfile) ?? fallback); })
+      .catch(() => { if (alive) setLimit(fallback); });
+    return () => { alive = false; };
+  }, [stoppedProfile, client]);
+
   const refreshLocal = () => setReload((r) => r + 1);
 
   useEffect(() => {
