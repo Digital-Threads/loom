@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, LayerInfo } from "../api";
+import { layerSection } from "../layers";
 import { StateView } from "./StateView";
 
 // L11.2 — Layers: the full Loom architecture. 3 layers are already standalone
 // plugins (aimux / token-pilot / task-journal); the rest are inline in core/*
 // and become standalone packages in Phase 2. Shows every layer + its status.
-export function Layers({ client }: { client: LoomClient }) {
+// Layers that have their own menu section (see ../layers) are clickable and jump
+// straight to that section.
+export function Layers({ client, onNav }: { client: LoomClient; onNav: (v: string) => void }) {
   const [layers, setLayers] = useState<LayerInfo[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { client.layers().then(setLayers).catch((e) => setErr(String(e))); }, [client]);
@@ -18,32 +21,53 @@ export function Layers({ client }: { client: LoomClient }) {
 
   return (
     <div className="panel">
-      <Group title="Standalone plugins" hint="extracted into their own packages" layers={standalone} />
-      <Group title="Inline modules" hint="live in core/* — may become standalone plugins later" layers={inline} />
+      <Group title="Standalone plugins" hint="extracted into their own packages" layers={standalone} onNav={onNav} />
+      <Group title="Inline modules" hint="live in core/* — may become standalone plugins later" layers={inline} onNav={onNav} />
     </div>
   );
 }
 
-function Group({ title, hint, layers }: { title: string; hint: string; layers: LayerInfo[] }) {
+function Group({ title, hint, layers, onNav }: { title: string; hint: string; layers: LayerInfo[]; onNav: (v: string) => void }) {
   if (layers.length === 0) return null;
   return (
     <div style={{ marginBottom: 18 }}>
       <div className="layer-group-h"><b>{title}</b> <span className="muted">— {hint}</span></div>
-      {layers.map((l) => (
-        <div key={l.id} className="layer-row">
-          <div className="layer-main">
-            <span className={`badge ${l.status === "standalone" ? "badge-ok" : "badge-warn"}`}>
-              {l.status === "standalone" ? "✅ standalone" : "🔨 inline"}
-            </span>
-            <b className="layer-title">{l.title}</b>
-            <span className="crumb">{l.node}</span>
-            {l.executes ? <span className="chip ok">execute</span> : null}
-            {l.slots.length ? <span className="chip">{l.slots.length} slot(s)</span> : null}
+      {layers.map((l) => {
+        const section = layerSection(l.id);
+        const inner = (
+          <>
+            <div className="layer-main">
+              <span className={`badge ${l.status === "standalone" ? "badge-ok" : "badge-warn"}`}>
+                {l.status === "standalone" ? "✅ standalone" : "🔨 inline"}
+              </span>
+              <b className="layer-title">{l.title}</b>
+              <span className="crumb">{l.node}</span>
+              {l.executes ? <span className="chip ok">execute</span> : null}
+              {l.slots.length ? <span className="chip">{l.slots.length} slot(s)</span> : null}
+            </div>
+            <div className="layer-desc">{l.description}</div>
+            <div className="layer-src muted">{l.source}</div>
+          </>
+        );
+        return section ? (
+          // role=button (not <button>) so the block-level layer-* divs stay valid
+          // DOM; the global [tabindex]:focus-visible rule supplies the focus ring.
+          <div
+            key={l.id}
+            role="button"
+            tabIndex={0}
+            className="layer-row layer-row-link"
+            onClick={() => onNav(section)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNav(section); } }}
+            title={`Open ${l.title}`}
+            aria-label={`Open ${l.title}`}
+          >
+            {inner}
           </div>
-          <div className="layer-desc">{l.description}</div>
-          <div className="layer-src muted">{l.source}</div>
-        </div>
-      ))}
+        ) : (
+          <div key={l.id} className="layer-row">{inner}</div>
+        );
+      })}
     </div>
   );
 }

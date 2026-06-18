@@ -148,7 +148,7 @@ export function App() {
           ) : view === "knowledge" ? (
             <Knowledge client={client} />
           ) : view === "layers" ? (
-            <Layers client={client} />
+            <Layers client={client} onNav={nav} />
           ) : view === "skills" ? (
             <Skills client={client} />
           ) : view === "settings" ? (
