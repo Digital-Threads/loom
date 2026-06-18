@@ -255,11 +255,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
    *  and persist. `reset` starts a fresh pipeline (drops all prior findings). */
   const recordReviewer = (id: string, reviewerKey: string, findings: Finding[], opts: { reset?: boolean } = {}): ReviewPayload => {
     const prev = opts.reset ? null : loadResult<ReviewPayload>(id, "review-result");
-    const kept = (prev?.result.findings ?? []).filter((f) => f.pass !== reviewerKey);
+    const active = resolvedReviewerKeys();
+    // Keep prior findings only from reviewers still enabled (drop ones whose
+    // reviewer was disabled mid-pipeline), replacing this reviewer's own.
+    const kept = (prev?.result.findings ?? []).filter((f) => f.pass !== reviewerKey && active.includes(f.pass));
     const result = aggregateFindings([...kept, ...findings]);
     const doneSet = new Set(opts.reset ? [] : prev?.reviewersDone ?? []);
     doneSet.add(reviewerKey);
-    const reviewersDone = REVIEWER_KEYS.filter((k) => doneSet.has(k));
+    const reviewersDone = active.filter((k) => doneSet.has(k));
     const payload: ReviewPayload = { result, action: reviewAction(result, "triage"), reviewersDone };
     saveResult(id, "review", "review-result", payload);
     return payload;
@@ -284,8 +287,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       `Return ONLY a JSON array of findings that STILL REMAIN (not fixed). ` +
       `Do NOT re-report fixed issues. Empty array if all fixed.\n\n` +
       `PRIOR FINDINGS:\n${priorList}\n\nReturn JSON array only, no prose.`;
-    const verifyFindings = await makeReviewPass(id, reReviewTarget)("self").run();
-    return recordReviewer(id, "self", verifyFindings, { reset: true });
+    // The post-fix verification pass is labelled as the first enabled reviewer so
+    // it honours the configurable flow.review set (not a hardcoded "self").
+    const firstKey = resolvedReviewerKeys()[0];
+    const verifyFindings = await makeReviewPass(id, reReviewTarget)(firstKey).run();
+    return recordReviewer(id, firstKey, verifyFindings, { reset: true });
   };
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
@@ -422,6 +428,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const storedFlow = (stage: string): { passes: string[] } | undefined => {
     const v = getSetting<string[] | undefined>(db, `flow.${stage}`, undefined);
     return Array.isArray(v) && v.length ? { passes: v } : undefined;
+  };
+  /** Reviewers the user enabled (Quality view), in saved order. The host's
+   *  reviewer pipeline (self/ralph/adversarial) is its own catalog, distinct from
+   *  the package's generic review passes, so we resolve against REVIEWER_KEYS here
+   *  rather than via resolveFlow. Persisted under flow.review. Empty/unset → all. */
+  const resolvedReviewerKeys = (): string[] => {
+    const stored = storedFlow("review")?.passes ?? [];
+    // Validate against the catalog and dedupe: persisted config can carry unknown
+    // or repeated keys; duplicates would break React keys / reorder and re-run a
+    // reviewer. Empty/all-invalid → the full default set.
+    const valid = [...new Set(stored.filter((k) => REVIEWER_KEYS.includes(k)))];
+    return valid.length ? valid : REVIEWER_KEYS;
   };
   /** QA checks for a task: explicit override, else real tests/build in its repo. */
   const qaChecksFor = (taskId: string): QaCheck[] => {
@@ -578,11 +596,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const autopilot = getTask(db, id)?.run_mode === "autopilot";
       if (autopilot) {
         let payload: ReviewPayload | undefined;
-        for (let i = 0; i < REVIEWERS.length; i++) {
-          const findings = await runReviewer(id, REVIEWERS[i]);
-          payload = recordReviewer(id, REVIEWERS[i].key, findings, { reset: i === 0 });
+        const activeKeys = resolvedReviewerKeys();
+        for (let i = 0; i < activeKeys.length; i++) {
+          const reviewer = REVIEWERS.find((r) => r.key === activeKeys[i])!;
+          const findings = await runReviewer(id, reviewer);
+          payload = recordReviewer(id, reviewer.key, findings, { reset: i === 0 });
         }
-        recordTurn(id, "review", "Review (self → ralph → adversarial)", fmtReview(payload!.result));
+        recordTurn(id, "review", `Review (${activeKeys.join(" → ")})`, fmtReview(payload!.result));
         // Autopilot fixes the accumulated findings once, then re-reviews — no
         // human gate, so it must resolve the work rather than park on it.
         if (payload!.result.findings.length) {
@@ -592,9 +612,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         }
         return { ok: payload!.result.passed, needsAttention: reviewHolds(payload!.result, "autopilot") };
       }
-      const findings = await runReviewer(id, REVIEWERS[0]);
-      const payload = recordReviewer(id, REVIEWERS[0].key, findings, { reset: true });
-      recordTurn(id, "review", `Review — ${REVIEWERS[0].label}`, fmtReview(payload.result));
+      const first = REVIEWERS.find((r) => r.key === resolvedReviewerKeys()[0])!;
+      const findings = await runReviewer(id, first);
+      const payload = recordReviewer(id, first.key, findings, { reset: true });
+      recordTurn(id, "review", `Review — ${first.label}`, fmtReview(payload.result));
       // Always park: the user approves and runs the next reviewer (ralph, then
       // adversarial) before the accumulated findings are fixed once at the end.
       return { ok: payload.result.passed, needsAttention: true };
@@ -1395,13 +1416,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // ─── quality: review / qa (L6) ────────────────────────────────────────────────
   app.get("/api/flow-config/:stage", (c) => {
     const stage = c.req.param("stage");
+    if (stage === "review") return c.json({ passes: resolvedReviewerKeys() });
     return c.json({ passes: resolveFlow(stage, storedFlow(stage)) });
   });
   // Persist the editable flow config (Quality view). Empty array → back to defaults.
   app.post("/api/flow-config/:stage", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { passes?: unknown };
     if (!Array.isArray(body.passes)) return c.json({ error: "passes[] required" }, 400);
-    setSetting(db, `flow.${c.req.param("stage")}`, body.passes.filter((p): p is string => typeof p === "string"));
+    setSetting(db, `flow.${c.req.param("stage")}`, body.passes.filter((p): p is string => typeof p === "string").slice(0, 64));
     return c.json({ ok: true });
   });
   // Run the NEXT reviewer in the pipeline (or a specific one via {reviewer}).
@@ -1412,19 +1434,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const body = (await c.req.json().catch(() => ({}))) as { reviewer?: unknown };
+    const active = resolvedReviewerKeys();
     const prev = loadResult<ReviewPayload>(id, "review-result");
     const done = new Set(prev?.reviewersDone ?? []);
-    const explicit = typeof body.reviewer === "string" && REVIEWER_KEYS.includes(body.reviewer) ? body.reviewer : undefined;
-    const key = explicit ?? REVIEWER_KEYS.find((k) => !done.has(k));
+    const explicit = typeof body.reviewer === "string" && active.includes(body.reviewer) ? body.reviewer : undefined;
+    const key = explicit ?? active.find((k) => !done.has(k));
     if (!key) return c.json({ error: "all reviewers done" }, 400);
     const reviewer = REVIEWERS.find((r) => r.key === key)!;
     const findings = await runReviewer(id, reviewer);
-    // First reviewer with no prior progress starts a fresh pipeline.
-    const reset = key === REVIEWERS[0].key && done.size === 0;
+    // First active reviewer with no prior progress starts a fresh pipeline.
+    const reset = key === active[0] && done.size === 0;
     const payload = recordReviewer(id, key, findings, { reset });
     recordTurn(id, "review", `Review — ${reviewer.label}`, fmtReview(payload.result));
     const doneSet = new Set(payload.reviewersDone);
-    const next = REVIEWER_KEYS.find((k) => !doneSet.has(k)) ?? null;
+    const next = active.find((k) => !doneSet.has(k)) ?? null;
     return c.json({ ...payload, ran: key, next });
   });
   // Fix the findings from the last review. The fix IS implementation work, so the

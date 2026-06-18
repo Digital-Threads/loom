@@ -343,7 +343,29 @@ describe("web api", () => {
   // ── quality (L6) ──
   it("GET /api/flow-config/:stage returns the resolved passes (L6)", async () => {
     const app2 = createApi(db);
-    expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["normal", "simplify"] });
+    // review resolves the host reviewer catalog (self/ralph/adversarial), not the
+    // package's generic passes; qa still resolves via the package default.
+    expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["self", "ralph", "adversarial"] });
+    expect(await (await app2.request("/api/flow-config/qa")).json()).toEqual({ passes: ["tests", "build"] });
+  });
+
+  it("flow-config review: persists reviewer subset/order; empty → default (L6)", async () => {
+    const app2 = createApi(db);
+    await app2.request("/api/flow-config/review", { method: "POST", body: JSON.stringify({ passes: ["adversarial", "self"] }) });
+    expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["adversarial", "self"] });
+    // disabling all reviewers falls back to the full default order (symmetric with QA)
+    await app2.request("/api/flow-config/review", { method: "POST", body: JSON.stringify({ passes: [] }) });
+    expect(await (await app2.request("/api/flow-config/review")).json()).toEqual({ passes: ["self", "ralph", "adversarial"] });
+  });
+
+  it("POST /review/run honors the persisted reviewer subset and order (L6)", async () => {
+    const app2 = createApi(db, { reviewPass: (key) => ({ key, run: async () => [] }) });
+    // Only "adversarial" enabled → it is the first (and only) reviewer; next is null.
+    await app2.request("/api/flow-config/review", { method: "POST", body: JSON.stringify({ passes: ["adversarial"] }) });
+    const r = (await (await app2.request("/api/tasks/t1/review/run", { method: "POST", body: "{}" })).json()) as { ran: string; next: string | null; reviewersDone: string[] };
+    expect(r.ran).toBe("adversarial");
+    expect(r.next).toBeNull();
+    expect(r.reviewersDone).toEqual(["adversarial"]);
   });
 
   it("POST /review/run steps through reviewers, accumulating findings (L6)", async () => {
