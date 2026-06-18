@@ -295,6 +295,11 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .chip.sm{font-size:11px;padding:1px 5px}
 .layer-group-h{margin:0 0 8px;font-size:13px}
 .layer-row{padding:10px;border:1px solid var(--line);border-radius:6px;margin-bottom:8px;background:var(--chip)}
+/* Clickable layer cards (those with their own menu section) — rendered as a real
+   button, so reset the UA button styling and mirror the sidebar nav hover/active. */
+.layer-row-link{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:background .12s,border-color .12s}
+.layer-row-link:hover{background:var(--panel2);border-color:var(--filament-400)}
+.layer-row-link:active{background:rgba(239,177,78,.10)}
 .layer-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .layer-title{font-size:14px}
 .layer-desc{font-size:13px;color:var(--txt);margin-top:6px}
