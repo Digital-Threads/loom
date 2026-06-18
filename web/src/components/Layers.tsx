@@ -30,7 +30,7 @@ export function Layers({ client, onNav }: { client: LoomClient; onNav: (v: strin
 function Group({ title, hint, layers, onNav }: { title: string; hint: string; layers: LayerInfo[]; onNav: (v: string) => void }) {
   if (layers.length === 0) return null;
   return (
-    <div style={{ marginBottom: 18 }}>
+    <div className="layer-group">
       <div className="layer-group-h"><b>{title}</b> <span className="muted">— {hint}</span></div>
       {layers.map((l) => {
         const section = layerSection(l.id);

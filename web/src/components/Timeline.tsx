@@ -22,7 +22,7 @@ export function Timeline({ client }: { client: LoomClient }) {
   return (
     <div className="panel">
       {board && (board.used || board.saved) ? (
-        <div className="row" style={{ gap: 24 }}>
+        <div className="row tl-metrics">
           <div><div className="grp">Spent</div><div className="big">{board.used.toLocaleString()}</div></div>
           <div><div className="grp">Saved ≈</div><div className="big">{board.saved.toLocaleString()}</div></div>
         </div>
@@ -30,7 +30,7 @@ export function Timeline({ client }: { client: LoomClient }) {
 
       {agents.length ? (
         <>
-          <h2 style={{ marginTop: 20 }}>Agent performance</h2>
+          <h2>Agent performance</h2>
           <table className="tbl">
             <thead><tr><th>Profile</th><th>Runs</th><th>Failures</th><th>Duration ms</th></tr></thead>
             <tbody>{agents.map((a) => (
@@ -42,14 +42,14 @@ export function Timeline({ client }: { client: LoomClient }) {
 
       {failures.length ? (
         <>
-          <h2 style={{ marginTop: 20 }}>Failure reasons</h2>
+          <h2>Failure reasons</h2>
           {failures.map((fr, i) => <div className="kv" key={i}><b>{fr.count}×</b><span>{fr.message}</span></div>)}
         </>
       ) : null}
 
-      <h2 style={{ marginTop: 20 }}>Timeline <span className="n">{events.length}</span></h2>
+      <h2>Timeline <span className="n">{events.length}</span></h2>
       {events.length === 0 ? (
-        <div className="empty">No events yet — run a task to see its trail.</div>
+        <div className="state-empty">No events yet — run a task to see its trail.</div>
       ) : (
         events.map((e, i) => (
           <div className={`tl-row ${e.severity === "error" ? "warn" : ""}`} key={i}>
