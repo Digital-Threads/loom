@@ -444,13 +444,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // deletion — but to be safe we ALSO snapshot it at Done. Reads prefer the live
   // journal and fall back to the snapshot when the worktree is gone.
   const JOURNAL_SNAPSHOT_KIND = "journal-snapshot";
-  /** A board task's journal as Markdown. Read live ONLY from the task's own
-   *  worktree project (1:1 with the board task) and ONLY while that worktree
-   *  still exists — never a shared or walked-up project. Once the worktree is
-   *  gone, fall back to the snapshot captured at Done. */
+  /** A board task's journal as Markdown. Read live from the task's own worktree
+   *  project (1:1 with the board task) — task-journal keys projects by the path
+   *  STRING, so `export --project <worktreePath>` still returns the events after
+   *  the worktree dir is deleted. The Done-time snapshot is only a fallback for
+   *  when the central store itself is gone. */
   const boardJournalPack = (id: string): string => {
     const root = journalProjectRoot(id);
-    if (root && existsSync(worktreePath(id))) {
+    if (root) {
       const live = boardTaskJournal(root);
       if (live.trim()) return live;
     }
