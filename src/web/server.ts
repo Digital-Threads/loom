@@ -62,6 +62,17 @@ export function serveApi(opts: ServeOptions = {}) {
 
   if (opts.webDist && existsSync(opts.webDist)) {
     const root = opts.webDist;
+    // Cache policy: hash-named build assets are immutable → cache forever; HTML
+    // (and the SPA fallback) must NEVER be cached, or a browser keeps serving an
+    // old index.html that references stale asset hashes after Loom updates — so
+    // the user never sees the new build even on reload.
+    app.use("/*", async (c, next) => {
+      await next();
+      const p = c.req.path;
+      if (p.startsWith("/api")) return;
+      if (p.startsWith("/assets/")) c.header("Cache-Control", "public, max-age=31536000, immutable");
+      else c.header("Cache-Control", "no-cache");
+    });
     app.use("/*", serveStatic({ root }));
     // SPA fallback: any non-/api path → index.html.
     app.get("*", serveStatic({ path: join(root, "index.html") }));
