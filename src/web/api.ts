@@ -88,7 +88,7 @@ import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
-import { computeLessons, lessonsPromptBlock, type Lesson, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
+import { computeLessons, lessonsPromptBlock, lessonToSkillDescription, type Lesson, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 import { isValidMarketplaceSource } from "../core/install/install.js";
 import { INSTALL_UNITS, runInstallPlan } from "../core/install/bootstrap.js";
@@ -1546,6 +1546,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // hoisted to module scope earlier (so impl/review injection can use them).
   app.get("/api/learning/lessons", (c) => {
     return c.json({ lessons: projectLessons(Number(c.req.query("minRuns")) || 2) });
+  });
+  // Slice 2 — generate a SKILL.md draft from a lesson (human-in-control: a manual
+  // "Create skill" click; the draft lands in the editable skills library).
+  app.post("/api/learning/skill", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { signature?: unknown; profile?: unknown };
+    const signature = typeof body.signature === "string" ? body.signature : "";
+    const lesson = projectLessons(2).find((l) => l.signature === signature);
+    if (!lesson) return c.json({ error: "lesson not found" }, 404);
+    const profile = typeof body.profile === "string" ? body.profile : undefined;
+    const agent = deps.skillAgent ?? createAimuxStageAgent({ profile });
+    const r = await runtime.skills.generate(lessonToSkillDescription(lesson), agent);
+    return r ? c.json(r) : c.json({ error: "generation produced no valid skill" }, 422);
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────

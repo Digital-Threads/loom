@@ -161,3 +161,23 @@ export function lessonsPromptBlock(lessons: Lesson[], maxK = 5): string {
     ...top.map(line),
   ].join("\n");
 }
+
+/**
+ * Turn a lesson into a description for skill generation (Slice 2): the recurring
+ * problem + concrete examples, framed as "write a skill that prevents this".
+ * Fed to the existing skills.generate(description, agent).
+ */
+export function lessonToSkillDescription(lesson: Lesson): string {
+  const where = lesson.file ? ` in \`${lesson.file}\`` : "";
+  const kind =
+    lesson.kind === "correction"
+      ? "A correction the user made"
+      : `A review issue (${lesson.severity ?? "issue"}) that recurred ${lesson.occurrences}× across tasks`;
+  const examples = lesson.sampleMessages.length
+    ? `\n\nExamples seen:\n${lesson.sampleMessages.map((m) => `- ${m}`).join("\n")}`
+    : "";
+  return (
+    `${kind}${where}. Write a skill that helps the agent AVOID this recurring problem in future work — ` +
+    `what to watch for and the correct approach.${examples}`
+  );
+}

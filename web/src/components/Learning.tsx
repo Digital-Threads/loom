@@ -10,6 +10,7 @@ export function Learning({ client }: { client: LoomClient }) {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [busy, setBusy] = useState(true);
   const [ran, setRan] = useState(false);
+  const [genFor, setGenFor] = useState<string | null>(null);
 
   async function load() {
     setBusy(true);
@@ -25,6 +26,23 @@ export function Learning({ client }: { client: LoomClient }) {
   useEffect(() => {
     load();
   }, []);
+
+  async function createSkill(l: Lesson) {
+    setGenFor(l.signature);
+    try {
+      const r = await client.skillFromLesson(l.signature);
+      toast.success(`Skill draft “${r.name}” created — refine it in Skills.`);
+    } catch (e) {
+      toast.error(`Skill generation failed: ${e}`);
+    }
+    setGenFor(null);
+  }
+
+  const skillBtn = (l: Lesson) => (
+    <button className="btn" disabled={genFor !== null} onClick={() => createSkill(l)}>
+      {genFor === l.signature ? "Generating…" : "Create skill"}
+    </button>
+  );
 
   const corrections = lessons.filter((l) => l.kind === "correction");
   const findings = lessons.filter((l) => l.kind === "finding");
@@ -54,6 +72,7 @@ export function Learning({ client }: { client: LoomClient }) {
                 {l.sampleMessages[0] ?? l.signature}
                 {l.occurrences > 1 ? ` · ×${l.occurrences}` : ""}
               </span>
+              {skillBtn(l)}
             </div>
           ))}
         </>
@@ -68,6 +87,7 @@ export function Learning({ client }: { client: LoomClient }) {
               <span>
                 [{l.severity}] {l.sampleMessages[0] ?? ""} · recurred ×{l.occurrences} across {l.taskIds.length} tasks
               </span>
+              {skillBtn(l)}
             </div>
           ))}
         </>
