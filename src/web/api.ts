@@ -44,9 +44,10 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { listSkills, readSkill, writeSkill, generateSkill } from "../core/skills/skills.js";
 import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../core/automation/task-session.js";
-import { createAimuxLiveLauncher } from "../core/automation/aimux-session-launcher.js";
+import type { SessionControl } from "../core/automation/live-session.js";
+import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
+import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
@@ -65,8 +66,7 @@ import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
 import { renderDossier, diffSummary } from "../core/dashboard/dossier.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
-import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
-import { beadsConnector } from "../core/connectors/beads.js";
+import { addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
@@ -96,9 +96,13 @@ export interface ApiDeps {
   stageAgent?: StageAgent;
   /** One-shot agent for AI skill generation (default: aimux headless). */
   skillAgent?: (prompt: string) => Promise<string>;
-  /** Launcher for the per-task Claude session (default: aimux session launcher).
-   *  When deps.stageAgent is set it wins (one-shot, for tests). */
-  sessionLauncher?: SessionLauncher;
+  /** Launcher for the per-task agent session (default: runtime's launcher).
+   *  When deps.stageAgent is set it wins (one-shot, for tests). Partial control
+   *  surface so test mocks can supply only the methods a case exercises. */
+  sessionLauncher?: SessionLauncher & Partial<SessionControl>;
+  /** The agent engine behind the pipeline (default: ClaudeRuntime). Everything
+   *  Claude-specific — launcher, skills, connectors, recall — lives behind this. */
+  runtime?: AgentRuntime;
   /** Build a review pass for a key/target (default: aimux agent + parseFindings). */
   reviewPass?: (key: string, target: string) => ReviewPass;
   /** Build QA checks for the resolved keys (default: none until configured). */
@@ -152,8 +156,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
     });
+  // The agent engine: one swappable runtime hides everything Claude-specific
+  // (launcher, skills, connectors, recall). Declared early so recall below can
+  // fall back to it; the per-task launcher is read off it further down.
+  const runtime = deps.runtime ?? createClaudeRuntime({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
   const recall =
-    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query, { run: recallRunner }));
+    deps.recall ?? runtime.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query, { run: recallRunner }));
   const search =
     deps.search ?? ((query: string) => askSearch(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query));
   // In production, review runs through the task's session (stageAgentFor) so the
@@ -253,7 +261,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Dialog stages run inside the task's ONE persistent session. deps.stageAgent
   // (tests) wins as a one-shot; otherwise each call goes through TaskSession so
   // analysis → brainstorm → spec share accumulating context.
-  const sessionLauncher = deps.sessionLauncher ?? createAimuxLiveLauncher({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
+  const sessionLauncher: SessionLauncher & Partial<SessionControl> = deps.sessionLauncher ?? runtime.launcher;
   const authMgr = createAuthManager(); // in-UI profile authorization (aimux auth login via PTY)
   // One cwd for the whole task = its worktree (created once, reused by every
   // stage), so the live process edits in isolation. Non-git repos use the repo.
@@ -268,7 +276,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const recordSessionCost = (id: string, repoRoot: string) => {
     try {
       const sid = getTaskSession(db, id).sessionId;
-      const spent = sid ? (sessionLauncher as { costOf?: (s: string) => number }).costOf?.(sid) : undefined;
+      const spent = sid ? sessionLauncher.costOf?.(sid) : undefined;
       recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: sid ?? undefined });
     } catch {
       /* cost is best-effort */
@@ -284,7 +292,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const recordDenials = (id: string) => {
     try {
       const sid = getTaskSession(db, id).sessionId;
-      const denials = sid ? (sessionLauncher as { denialsOf?: (s: string) => string[] }).denialsOf?.(sid) ?? [] : [];
+      const denials = sid ? sessionLauncher.denialsOf?.(sid) ?? [] : [];
       if (denials.length) saveResult(id, "permissions", "permission-denials", { denials });
     } catch {
       /* best-effort */
@@ -522,7 +530,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
-      if (sid) (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid);
+      if (sid) sessionLauncher.stop?.(sid);
       return { ok: true };
     },
   };
@@ -569,7 +577,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         streamSinks.set(taskId, ctx.appendOutput);
         ctx.onInput((data) => {
           const sid = getTaskSession(db, taskId).sessionId;
-          if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+          if (sid) sessionLauncher.interject?.(sid, data);
         });
         try {
           // run the stage's agent and STREAM it. On a clean outcome, complete the
@@ -738,7 +746,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const sid = getTaskSession(db, id).sessionId;
-    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    sessionLauncher.stop?.(sid ?? "");
     streamSinks.delete(id);
     deleteTask(db, id);
     return c.json({ ok: true });
@@ -752,7 +760,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const run = rm.list().find((r) => r.taskId === id && r.status === "running");
     if (run) rm.stop(run.runId);
     const sid = getTaskSession(db, id).sessionId;
-    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    sessionLauncher.stop?.(sid ?? "");
     return c.json({ ok: true });
   });
 
@@ -771,7 +779,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const resume = body.resume !== false;
     const sid = getTaskSession(db, id).sessionId;
     // Kill any live process so the next send respawns under the new profile.
-    (sessionLauncher as { stop?: (s: string) => void }).stop?.(sid ?? "");
+    sessionLauncher.stop?.(sid ?? "");
     setTaskProfile(db, id, profile);
     if (!resume) return c.json({ ok: true });
     const projectId = projectActive()?.projectId ?? "default";
@@ -850,7 +858,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       streamSinks.set(id, ctx.appendOutput);
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
-        if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+        if (sid) sessionLauncher.interject?.(sid, data);
       });
       try {
         const text = await sessionSend(id, stage, message, { raw: true });
@@ -1027,7 +1035,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       updateTaskStatus(db, id, "running"); // live while the pipeline advances
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
-        if (sid) (sessionLauncher as { interject?: (s: string, t: string) => boolean }).interject?.(sid, data);
+        if (sid) sessionLauncher.interject?.(sid, data);
       });
       try {
         const res = await advanceTask(db, id, runners, advanceOpts());
@@ -1151,7 +1159,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   });
 
   // ─── connectors: MCP (D5) ─────────────────────────────────────────────────────
-  app.get("/api/connectors/mcp", (c) => c.json({ servers: listMcp() }));
+  app.get("/api/connectors/mcp", (c) => c.json({ servers: runtime.connectors.listMcp() }));
   app.post("/api/connectors/mcp", async (c) => {
     const b = (await c.req.json().catch(() => ({}))) as { id?: unknown; command?: unknown; args?: unknown };
     if (typeof b.id !== "string" || typeof b.command !== "string") return c.json({ error: "id and command required" }, 400);
@@ -1167,7 +1175,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/connectors/mcp/:id/test", (c) => c.json(testMcp(c.req.param("id"), { probe: deps.mcpProbe ?? realMcpProbe })));
   // D5.4/5.5 — import open tracker items as tasks on the board.
   app.post("/api/connectors/import", (c) => {
-    const drafts = (deps.importDrafts ?? (() => beadsConnector().import()))();
+    // Call importDrafts AS A METHOD (not a torn-off reference) so a future
+    // AgentRuntime whose connectors rely on `this` keeps its binding.
+    const drafts = deps.importDrafts ? deps.importDrafts() : runtime.connectors.importDrafts();
     let created = 0;
     for (const d of drafts) {
       createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description });
@@ -1220,15 +1230,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
   });
   // Skills library — browse / read / edit / AI-generate skills from ~/.claude/skills.
-  app.get("/api/skills", (c) => c.json({ skills: listSkills() }));
+  app.get("/api/skills", (c) => c.json({ skills: runtime.skills.list() }));
   app.get("/api/skills/:name", (c) => {
-    const content = readSkill(c.req.param("name"));
+    const content = runtime.skills.read(c.req.param("name"));
     return content === null ? c.json({ error: "not found" }, 404) : c.json({ name: c.req.param("name"), content });
   });
   app.put("/api/skills/:name", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { content?: unknown };
     if (typeof body.content !== "string") return c.json({ error: "content required" }, 400);
-    return writeSkill(c.req.param("name"), body.content) ? c.json({ ok: true }) : c.json({ error: "invalid name" }, 400);
+    return runtime.skills.write(c.req.param("name"), body.content) ? c.json({ ok: true }) : c.json({ error: "invalid name" }, 400);
   });
   app.post("/api/skills/generate", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { description?: unknown; profile?: unknown };
@@ -1236,7 +1246,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!description.trim()) return c.json({ error: "description required" }, 400);
     const profile = typeof body.profile === "string" ? body.profile : undefined;
     const agent = deps.skillAgent ?? createAimuxStageAgent({ profile });
-    const r = await generateSkill(description, agent);
+    const r = await runtime.skills.generate(description, agent);
     return r ? c.json(r) : c.json({ error: "generation produced no valid skill" }, 422);
   });
 

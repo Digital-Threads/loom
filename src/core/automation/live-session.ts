@@ -61,8 +61,10 @@ export interface LiveLauncherDeps {
   replyTimeoutMs?: number;
 }
 
-/** A SessionLauncher backed by long-lived processes (one per sessionId). */
-export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLauncher & {
+/** Live-session control surface beyond a one-shot run: cost/denials readout and
+ *  mid-run lifecycle. Named so callers depend on the contract, not a duck-typed
+ *  cast (the pipeline reaches these through AgentRuntime.launcher). */
+export interface SessionControl {
   /** Cost accumulated for a session (sum of per-turn total_cost_usd). */
   costOf(sessionId: string): number;
   /** Tools the agent tried to use but were denied (await user approval). */
@@ -72,7 +74,10 @@ export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLaunch
   interject(sessionId: string, text: string): boolean;
   /** Stop a session's process (e.g. on task done). */
   stop(sessionId: string): void;
-} {
+}
+
+/** A SessionLauncher backed by long-lived processes (one per sessionId). */
+export function createLiveSessionLauncher(deps: LiveLauncherDeps): SessionLauncher & SessionControl {
   const live = new Map<string, Live>();
 
   function attach(sessionId: string, l: Live) {
