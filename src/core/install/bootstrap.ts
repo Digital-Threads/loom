@@ -55,6 +55,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
     why: "Token-efficient code reading so the agent uses far fewer tokens.",
     detect: tokenPilot.detect,
     steps: tokenPilot.install,
+    requires: ["claude"], // its steps call `claude plugin add/install`
   },
   {
     id: "task-journal",
@@ -114,7 +115,12 @@ export async function runInstallPlan(
     if (res.ok) {
       available.add(u.id);
       installed.push(u.id);
-      await emit({ kind: "step", id: u.id, title: u.title, state: "done", message: res.warning });
+      // Surface a partial-success warning (optional step failed) and any
+      // interactive step the recipe handed back instead of running.
+      const notes: string[] = [];
+      if (res.warning) notes.push(res.warning);
+      if (res.manual?.length) notes.push(`${res.manual.length} manual step(s) still needed`);
+      await emit({ kind: "step", id: u.id, title: u.title, state: "done", message: notes.join("; ") || undefined });
     } else {
       failed.push(u.id);
       await emit({ kind: "step", id: u.id, title: u.title, state: "failed", message: trimErr(res.error) });

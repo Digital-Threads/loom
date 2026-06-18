@@ -226,6 +226,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
   const doctorReport = deps.prereqs ?? (() => checkPrerequisites());
   const installRunner = deps.installRunner ?? makeShellRunner();
+  // Guards the auto-installer: only one install run at a time. The shell installs
+  // are synchronous and cannot be aborted, so a second concurrent stream (a retry
+  // after a transient disconnect, or a second tab) must not launch parallel
+  // `npm -g` / `cargo install` against the same machine.
+  let installInFlight = false;
   const memoryTask =
     deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
   const projectsList = deps.listProjects ?? (() => listProjects());
@@ -825,10 +830,23 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // without a terminal. Idempotent: detect() skips anything already present.
   app.get("/api/onboarding/install/stream", (c) =>
     streamSSE(c, async (stream) => {
-      const ideps: InstallDeps = { dataDir: loomDataDir(), run: installRunner };
-      await runInstallPlan(INSTALL_UNITS, ideps, async (e) => {
-        await stream.writeSSE({ event: e.kind, data: JSON.stringify(e) });
-      });
+      // Best-effort SSE write: a disconnected client must not throw out of the
+      // (unabortable) install loop. Also stop early once the client is gone.
+      const send = async (e: { kind: string }) => {
+        if (stream.aborted) return;
+        try { await stream.writeSSE({ event: e.kind, data: JSON.stringify(e) }); } catch { /* client gone */ }
+      };
+      if (installInFlight) {
+        await send({ kind: "done" });
+        return;
+      }
+      installInFlight = true;
+      try {
+        const ideps: InstallDeps = { dataDir: loomDataDir(), run: installRunner };
+        await runInstallPlan(INSTALL_UNITS, ideps, send);
+      } finally {
+        installInFlight = false;
+      }
     }));
   app.get("/favicon.ico", (c) => c.body(null, 204)); // no favicon → quiet 204, not a console 404
 

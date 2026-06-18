@@ -184,7 +184,7 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
                 const cls = s.state === "done" ? "ok" : s.state === "failed" ? "bad" : "warn";
                 const text =
                   s.state === "installing" ? "installing…"
-                    : s.state === "done" ? "done"
+                    : s.state === "done" ? (s.message ? `done — ${s.message}` : "done")
                     : s.state === "skipped" ? (s.message ?? "skipped")
                     : `failed: ${s.message ?? "error"}`;
                 return (

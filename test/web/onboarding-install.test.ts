@@ -55,4 +55,13 @@ describe("GET /api/onboarding/install/stream", () => {
     expect(text).toContain("already installed");
     expect(text).not.toContain('"state":"installing"');
   });
+
+  it("releases the in-flight lock: a second sequential request also runs", async () => {
+    const app = createApi(db, { installRunner: allInstall });
+    const first = await (await app.request("/api/onboarding/install/stream")).text();
+    const second = await (await app.request("/api/onboarding/install/stream")).text();
+    expect(first).toContain("event: done");
+    expect(second).toContain("event: done");
+    expect(second).toContain("event: step"); // not stuck "busy" — the lock was freed
+  });
 });

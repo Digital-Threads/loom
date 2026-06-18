@@ -5,7 +5,7 @@ import type { CmdRunner } from "../../../src/core/install/types.js";
 // Fake runner: `tools` = system tools already on PATH (which probe), `plugins` =
 // plugin ids already present (claude plugin list). `failSh` makes the rustup
 // shell step fail. Every other (install) command succeeds and is recorded.
-function fake(opts: { tools?: string[]; plugins?: string[]; failSh?: boolean } = {}) {
+function fake(opts: { tools?: string[]; plugins?: string[]; failSh?: boolean; failNpm?: boolean; failCargoInstall?: boolean } = {}) {
   const tools = new Set(opts.tools ?? []);
   const plugins = opts.plugins ?? [];
   const calls: string[][] = [];
@@ -13,6 +13,8 @@ function fake(opts: { tools?: string[]; plugins?: string[]; failSh?: boolean } =
     if (cmd === "which" || cmd === "where") return { ok: tools.has(args[0]), stdout: "", stderr: "" };
     if (args.includes("list")) return { ok: true, stdout: plugins.join("\n"), stderr: "" };
     if (opts.failSh && cmd === "sh") return { ok: false, stdout: "", stderr: "rustup: no network" };
+    if (opts.failNpm && cmd === "npm" && args[0] === "install") return { ok: false, stdout: "", stderr: "npm: EACCES" };
+    if (opts.failCargoInstall && cmd === "cargo" && args[0] === "install") return { ok: false, stdout: "", stderr: "crate not found" };
     calls.push([cmd, ...args]);
     return { ok: true, stdout: "", stderr: "" };
   };
@@ -64,4 +66,23 @@ it("the rustup step is a shell pipe (sh -c curl … | sh -s -- -y)", () => {
   expect(cargo.steps[0].cmd).toBe("sh");
   expect(cargo.steps[0].args[0]).toBe("-c");
   expect(cargo.steps[0].args[1]).toContain("sh.rustup.rs");
+});
+
+it("claude install fails -> token-pilot & task-journal skipped (needs claude), not hard-failed", async () => {
+  const { run } = fake({ failNpm: true });
+  const { events, summary } = await plan(run);
+  expect(summary.failed).toEqual(["claude"]);
+  expect(summary.skipped).toEqual(["token-pilot", "task-journal"]);
+  const tp = events.find((e) => e.kind === "step" && e.id === "token-pilot" && e.state === "skipped");
+  expect(tp && "message" in tp ? tp.message : "").toContain("needs claude");
+});
+
+it("partial success (optional cargo step fails) -> done event carries the warning", async () => {
+  // cargo & claude already present, plugins absent -> task-journal installs, but
+  // its optional `cargo install` fails -> ok:true with a warning surfaced in done.
+  const { run } = fake({ tools: ["cargo", "claude"], failCargoInstall: true });
+  const { events, summary } = await plan(run);
+  expect(summary.installed).toContain("task-journal");
+  const done = events.find((e) => e.kind === "step" && e.id === "task-journal" && e.state === "done");
+  expect(done && "message" in done ? done.message : "").toContain("crate not found");
 });
