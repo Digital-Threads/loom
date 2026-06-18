@@ -145,7 +145,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // recallPrior swallows errors → []) silently return nothing on real data.
   // Inject a runner with the correct flag so recall + the graph actually work.
   const recallRunner = (query: string, k: number, projectRoot: string) =>
-    execFileSync("task-journal", ["recall", query, "--json", "--k", String(k)], {
+    // `--` ends option parsing so a query starting with `-` can't smuggle flags
+    // into task-journal (argv injection); the user-controlled value stays last.
+    execFileSync("task-journal", ["recall", "--json", "--k", String(k), "--", query], {
       cwd: projectRoot,
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
