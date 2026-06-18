@@ -50,16 +50,20 @@ function Group({ title, hint, layers, onNav }: { title: string; hint: string; la
           </>
         );
         return section ? (
-          <button
+          // role=button (not <button>) so the block-level layer-* divs stay valid
+          // DOM; the global [tabindex]:focus-visible rule supplies the focus ring.
+          <div
             key={l.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             className="layer-row layer-row-link"
             onClick={() => onNav(section)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNav(section); } }}
             title={`Open ${l.title}`}
             aria-label={`Open ${l.title}`}
           >
             {inner}
-          </button>
+          </div>
         ) : (
           <div key={l.id} className="layer-row">{inner}</div>
         );

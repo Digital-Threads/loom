@@ -17,5 +17,8 @@ export const LAYER_SECTION: Record<string, string> = {
 
 /** Menu section a layer card opens, or undefined when the layer has no section. */
 export function layerSection(id: string): string | undefined {
-  return LAYER_SECTION[id];
+  // hasOwn guard: LAYER_SECTION is a plain object, so a bare LAYER_SECTION[id]
+  // would return inherited Object.prototype members ("toString", "constructor",
+  // …) instead of undefined for unknown ids.
+  return Object.prototype.hasOwnProperty.call(LAYER_SECTION, id) ? LAYER_SECTION[id] : undefined;
 }
