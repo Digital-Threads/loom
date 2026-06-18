@@ -59,10 +59,10 @@ import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-co
 import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, type GitRunner } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
-import { existsSync, statSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, statSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { audit } from "../core/security/audit.js";
-import { join as pathJoin, isAbsolute, dirname } from "node:path";
+import { join as pathJoin, isAbsolute, dirname, resolve as pathResolve } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
@@ -491,22 +491,41 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Drop a finished task's worktree AND its branch, then prune stale git admin
   // records. removeWorktree only removes the worktree dir — the branch leaks
   // unless deleted explicitly. Best-effort: isolate each step.
+  //  - NEVER force-discard uncommitted work: if the worktree has local changes,
+  //    keep it (and its branch) so nothing is lost (removeWorktree uses --force).
+  //  - rmSync fallback reclaims a leftover dir whose git admin entry is already
+  //    gone (git worktree remove can't, but the tree is clean so rm is safe).
   const cleanupTaskWorktree = (repoRoot: string, taskId: string): void => {
+    const wt = worktreePath(taskId);
+    try {
+      if (existsSync(wt) && worktreeGit(["status", "--porcelain"], wt).trim()) return; // dirty → keep
+    } catch { /* status failed (e.g. dir is not a live worktree) → fall through */ }
     try { removeWorktree(repoRoot, taskId, { git: worktreeGit }); } catch { /* best-effort */ }
     try { worktreeGit(["branch", "-D", worktreeBranch(taskId)], repoRoot); } catch { /* best-effort */ }
     try { worktreeGit(["worktree", "prune"], repoRoot); } catch { /* best-effort */ }
+    try { if (existsSync(wt)) rmSync(wt, { recursive: true, force: true }); } catch { /* best-effort */ }
   };
   // Resolve the main repo root for an orphan worktree (its task row is gone) from
   // the worktree's ".git" pointer file: "gitdir: <repo>/.git/worktrees/<id>".
+  // Hardened: resolve a relative pointer against the worktree dir, require the
+  // standard linked-worktree layout, and confirm the result is a real git repo —
+  // so a crafted ".git" can't steer git commands at an arbitrary cwd.
   const repoFromWorktree = (wtDir: string): string | undefined => {
     try {
       const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(pathJoin(wtDir, ".git"), "utf8"));
-      return m ? dirname(dirname(dirname(m[1].trim()))) : undefined;
+      if (!m) return undefined;
+      const gd = m[1].trim();
+      const abs = isAbsolute(gd) ? gd : pathResolve(wtDir, gd);
+      if (!/[/\\]\.git[/\\]worktrees[/\\][^/\\]+$/.test(abs)) return undefined; // unexpected layout
+      const repo = dirname(dirname(dirname(abs)));
+      return isGitRepo(repo) ? repo : undefined; // only a real repo
     } catch { return undefined; }
   };
   // leak-guard: reclaim worktrees + branches left behind by tasks that are done
   // or no longer in the DB (e.g. deleted mid-run), and prune stale admin records.
-  // Called once at server boot (serveApi), not on every createApi (tests).
+  // INVARIANT — call ONLY at server boot (serveApi), never at runtime: it removes
+  // worktrees of done tasks, which is safe only because no run is active at boot.
+  // At runtime it could delete a worktree out from under an in-flight run.
   const sweepLeakedWorktrees = (): void => {
     const base = pathJoin(securityDataDir(), "worktrees");
     let entries: string[];
@@ -1064,6 +1083,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const sid = getTaskSession(db, id).sessionId;
     sessionLauncher.stop?.(sid ?? "");
     streamSinks.delete(id);
+    // Reclaim the task's worktree + branch now (don't leak until the next boot's
+    // leak-guard). Clean-tree guarded inside cleanupTaskWorktree, so an in-progress
+    // task with uncommitted work keeps its worktree.
+    const dt = getTask(db, id);
+    if (dt?.repo && isGitRepo(dt.repo)) cleanupTaskWorktree(dt.repo, id);
     deleteTask(db, id);
     return c.json({ ok: true });
   });

@@ -321,6 +321,39 @@ describe("web api", () => {
     }
   });
 
+  it("DELETE task reclaims its worktree + branch inline", async () => {
+    const repo = join(dir, "repo");
+    mkdirSync(join(repo, ".git"), { recursive: true });
+    createTask(db, { id: "td", title: "Del", repo });
+    const gitCalls: string[] = [];
+    const app2 = createApi(db, { worktreeGit: (args) => { gitCalls.push(args.join(" ")); return ""; } });
+    await app2.request("/api/tasks/td", { method: "DELETE" });
+    expect(gitCalls).toContainEqual(`branch -D ${worktreeBranch("td")}`);
+    expect(getTask(db, "td")).toBeUndefined(); // row gone too
+  });
+
+  it("Done keeps a worktree with uncommitted changes (no force-discard)", async () => {
+    const prevBase = securityDataDir();
+    configureSecurity({ dataDir: () => dir });
+    try {
+      const repo = join(dir, "repo");
+      mkdirSync(join(repo, ".git"), { recursive: true });
+      mkdirSync(join(dir, "worktrees", "tdirty"), { recursive: true }); // its worktree exists
+      createTask(db, { id: "tdirty", title: "Dirty", repo });
+      const gitCalls: string[] = [];
+      // status returns changes → dirty → cleanup must bail before removing anything
+      const app2 = createApi(db, {
+        worktreeGit: (args) => { gitCalls.push(args.join(" ")); return args[0] === "status" ? " M file.ts\n" : ""; },
+      });
+      await app2.request("/api/tasks/tdirty/done/run", { method: "POST" });
+      expect(gitCalls).toContainEqual("status --porcelain"); // checked
+      expect(gitCalls.some((c) => c.startsWith("worktree remove"))).toBe(false); // not removed
+      expect(gitCalls).not.toContainEqual(`branch -D ${worktreeBranch("tdirty")}`); // branch kept
+    } finally {
+      configureSecurity({ dataDir: () => prevBase });
+    }
+  });
+
   // ── connectors MCP (D5) ──
   it("MCP add/list/toggle/test via /api/connectors/mcp (D5)", async () => {
     const app2 = createApi(db, { mcpProbe: () => ({ code: 0 }) });
