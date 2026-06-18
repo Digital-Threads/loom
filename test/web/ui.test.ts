@@ -31,7 +31,8 @@ describe("summarizeCosts", () => {
     ]);
     expect(s.spend).toBe("$0.42");
     expect(s.spendEstimate).toBe(false);
-    expect(s.tokens).toEqual({ used: "600k", saved: "400k", savedPct: 40 });
+    // savedUsd ≈ 400k saved tokens × Opus input $15/Mtok = $6.00.
+    expect(s.tokens).toEqual({ used: "600k", saved: "400k", savedPct: 40, savedUsd: "$6.00" });
     expect(s.empty).toBe(false);
   });
 
@@ -40,7 +41,7 @@ describe("summarizeCosts", () => {
       { source: "token-pilot", metric: "used", value: 1000, exact: 0 },
     ]);
     expect(s.spend).toBeNull();
-    expect(s.tokens).toEqual({ used: "1k", saved: "0", savedPct: 0 });
+    expect(s.tokens).toEqual({ used: "1k", saved: "0", savedPct: 0, savedUsd: null });
     expect(s.tokensEstimate).toBe(true);
   });
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, TokensReport } from "../api";
 import { StateView } from "./StateView";
+import { savedUsdLabel } from "../ui";
 
 // token-pilot usage, attributed to who ran it: per-subscription rollup + per-session
 // breakdown labeled by task. "used" = tokens token-pilot consumed; "saved ≈" = its
@@ -27,14 +28,14 @@ export function Tokens({ client }: { client: LoomClient }) {
         <div className="stat"><div className="grp">Tokens used</div><div className="big">{rep.totals.used.toLocaleString()}</div></div>
         <div className="stat">
           <div className="grp">Saved by token-pilot</div>
-          <div className="big">{rep.totals.saved.toLocaleString()} {rep.totals.saved > 0 ? <span className="stat-sub">≈{pct(rep.totals.used, rep.totals.saved)}%</span> : null}</div>
+          <div className="big">{rep.totals.saved.toLocaleString()} {rep.totals.saved > 0 ? <span className="stat-sub" title={usdHint}>≈{pct(rep.totals.used, rep.totals.saved)}% · {savedUsdLabel(rep.totals.saved)} ≈</span> : null}</div>
         </div>
         <div className="stat"><div className="grp">Sessions</div><div className="big">{rep.bySession.length}</div></div>
       </div>
 
       <h2 style={{ marginTop: 24 }}>By subscription</h2>
       <table className="tbl">
-        <thead><tr><th>Subscription</th><th className="num">Used</th><th className="num">Saved ≈</th><th className="num">Saved %</th></tr></thead>
+        <thead><tr><th>Subscription</th><th className="num">Used</th><th className="num">Saved ≈</th><th className="num">Saved %</th><th className="num">$ saved ≈</th></tr></thead>
         <tbody>
           {rep.byProfile.map((p) => (
             <tr key={p.profile || "(none)"}>
@@ -42,6 +43,7 @@ export function Tokens({ client }: { client: LoomClient }) {
               <td className="num">{p.used.toLocaleString()}</td>
               <td className="num">{p.saved.toLocaleString()}</td>
               <td className="num">{p.used + p.saved > 0 ? `${pct(p.used, p.saved)}%` : "—"}</td>
+              <td className="num">{p.saved > 0 ? formatUsd(savedTokensToUsd(p.saved)) : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -49,7 +51,7 @@ export function Tokens({ client }: { client: LoomClient }) {
 
       <h2 style={{ marginTop: 24 }}>By session</h2>
       <table className="tbl">
-        <thead><tr><th>Session</th><th>Subscription</th><th className="num">Used</th><th className="num">Saved ≈</th><th className="num">Saved %</th></tr></thead>
+        <thead><tr><th>Session</th><th>Subscription</th><th className="num">Used</th><th className="num">Saved ≈</th><th className="num">Saved %</th><th className="num">$ saved ≈</th></tr></thead>
         <tbody>
           {rep.bySession.map((s) => (
             <tr key={s.sessionId}>
@@ -60,6 +62,7 @@ export function Tokens({ client }: { client: LoomClient }) {
               <td className="num">{s.used.toLocaleString()}</td>
               <td className="num">{s.saved.toLocaleString()}</td>
               <td className="num">{s.used + s.saved > 0 ? `${pct(s.used, s.saved)}%` : "—"}</td>
+              <td className="num">{s.saved > 0 ? formatUsd(savedTokensToUsd(s.saved)) : "—"}</td>
             </tr>
           ))}
         </tbody>

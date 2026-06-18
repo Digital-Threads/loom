@@ -1,4 +1,5 @@
 // Small pure UI helpers shared by components (testable without DOM).
+import { savedTokensToUsd } from "./pricing";
 
 export function statusLabel(status: string): string {
   return (
@@ -52,7 +53,7 @@ export interface CostRowLike {
 export interface CostSummary {
   spend: string | null; // real money, e.g. "$0.42"
   spendEstimate: boolean;
-  tokens: { used: string; saved: string; savedPct: number } | null;
+  tokens: { used: string; saved: string; savedPct: number; savedUsd: string | null } | null;
   tokensEstimate: boolean;
   other: { label: string; value: string; estimate: boolean }[];
   empty: boolean;
@@ -72,6 +73,16 @@ function trimZero(n: number, whole: boolean): string {
 export function formatUsd(n: number): string {
   if (!isFinite(n) || n <= 0) return "$0.00";
   return `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
+}
+
+// $ saved label, shared by the per-task bar and the board so they read the same.
+// null → nothing saved (caller shows "—" / hides it). Tiny-but-positive amounts
+// collapse to "<$0.01" instead of a misleading "$0.0000".
+export function savedUsdLabel(savedTokens: number, modelId?: string): string | null {
+  const usd = savedTokensToUsd(savedTokens, modelId);
+  if (usd <= 0) return null;
+  if (usd < 0.01) return "<$0.01";
+  return formatUsd(usd);
 }
 
 export function summarizeCosts(costs: CostRowLike[]): CostSummary {
@@ -97,6 +108,8 @@ export function summarizeCosts(costs: CostRowLike[]): CostSummary {
       used: formatTokens(u),
       saved: formatTokens(s),
       savedPct: total > 0 ? Math.round((s / total) * 100) : 0,
+      // $ saved ≈ saved input tokens valued at the default model's input price.
+      savedUsd: savedUsdLabel(s),
     };
   }
 

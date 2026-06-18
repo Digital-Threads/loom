@@ -23,7 +23,10 @@ export function CostBar({ costs }: { costs: CostRowLike[] }) {
               <b>{s.tokens.used}</b> tokens
               {s.tokensEstimate ? <span className="cost-approx"> ≈</span> : null}
               {s.tokens.savedPct > 0 ? (
-                <span className="cost-saved"> · {s.tokens.saved} saved ({s.tokens.savedPct}%)</span>
+                <span className="cost-saved">
+                  {" · "}{s.tokens.saved} saved ({s.tokens.savedPct}%)
+                  {s.tokens.savedUsd ? <span className="cost-approx" title="Estimated $ saved by token-pilot (saved tokens × input price)"> · {s.tokens.savedUsd} ≈</span> : null}
+                </span>
               ) : null}
             </span>
           ) : null}
