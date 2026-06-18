@@ -273,6 +273,11 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 .rail-profile:hover{border-color:var(--acc)}
 .rail-profile:disabled{opacity:.6;cursor:default}
 .steps{display:flex;flex-direction:column}
+/* always-visible task artifacts (spec / R&D / PR link / history) */
+.rail-artifacts{display:flex;flex-direction:column;gap:2px;margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.rail-art-h{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px 4px}
+.rail-art{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--mut);cursor:pointer;font-size:12px;background:none;border:0;text-align:left;width:100%}
+.rail-art:hover{background:var(--panel2);color:var(--txt)}
 .step{display:flex;align-items:stretch;gap:11px;padding:0;border:0;background:none;width:100%;text-align:left;cursor:pointer;color:var(--mut)}
 .step-rail{display:flex;flex-direction:column;align-items:center;width:22px;flex:0 0 22px}
 .step .st{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;border:1px solid var(--line);background:var(--panel2);z-index:1}

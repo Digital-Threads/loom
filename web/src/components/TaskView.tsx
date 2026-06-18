@@ -357,6 +357,24 @@ export function TaskView({
             </button>
           ))}
         </div>
+        {/* Always-visible artifacts of the task — jump to the stage's output
+            (spec / R&D / the PR link) or open the full history / changes. */}
+        <div className="rail-artifacts">
+          <div className="rail-art-h">Artifacts</div>
+          {detail.stages.some((s) => s.stage_key === "spec") ? (
+            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("spec"); }}>📄 Spec</button>
+          ) : null}
+          {detail.stages.some((s) => s.stage_key === "rd") ? (
+            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("rd"); }}>🔬 R&amp;D</button>
+          ) : null}
+          {detail.stages.some((s) => s.stage_key === "pr") ? (
+            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("pr"); }}>🔗 PR link</button>
+          ) : null}
+          {task.repo ? (
+            <button className="rail-art" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
+          ) : null}
+          <button className="rail-art" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History &amp; journal</button>
+        </div>
       </aside>
 
       <section className="pane">
