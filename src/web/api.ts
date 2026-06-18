@@ -88,6 +88,7 @@ import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
+import { computeLessons, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 import { isValidMarketplaceSource } from "../core/install/install.js";
 import { INSTALL_UNITS, runInstallPlan } from "../core/install/bootstrap.js";
@@ -1509,6 +1510,31 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/knowledge/search", (c) => {
     const q = c.req.query("q") ?? "";
     return c.json({ hits: q ? search(q) : [] });
+  });
+
+  // ─── learning (L8 Slice 0) ──────────────────────────────────────────────────────
+  // Read-only derived view of recurring lessons: review/QA findings that recur
+  // across tasks (file+severity) + explicit user corrections (task-journal). No
+  // store — computed on read from data that already exists.
+  app.get("/api/learning/lessons", (c) => {
+    const minRuns = Number(c.req.query("minRuns")) || 2;
+    const tasks = listTasks(db);
+    const findings: LessonFinding[] = [];
+    for (const t of tasks) {
+      const rr = loadResult<ReviewPayload>(t.id, "review-result");
+      for (const f of rr?.result.findings ?? []) {
+        findings.push({ taskId: t.id, severity: f.severity, message: f.message, file: f.file });
+      }
+    }
+    // Corrections come from task-journal `correction` events (project-scoped).
+    let corrections: LessonCorrection[] = [];
+    const root = tasks.map((t) => journalProjectRoot(t.id)).find((r): r is string => !!r);
+    if (root) {
+      corrections = exportEventsSafe(root)
+        .filter((e) => e.type === "correction")
+        .map((e) => ({ taskId: e.task_id, message: e.text, ts: Date.parse(e.timestamp) || undefined }));
+    }
+    return c.json({ lessons: computeLessons(findings, corrections, { minRuns }) });
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────

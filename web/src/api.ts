@@ -248,6 +248,9 @@ export function createClient(base = "", f: Fetcher = fetch) {
       ),
     search: (q: string) =>
       getJson<{ hits: RecallHit[] }>(`${base}/api/knowledge/search?q=${encodeURIComponent(q)}`, f),
+    // L8 — learning lessons (recurring findings + user corrections)
+    lessons: (minRuns?: number) =>
+      getJson<{ lessons: Lesson[] }>(`${base}/api/learning/lessons${minRuns ? `?minRuns=${minRuns}` : ""}`, f),
     // L12 — dialog stages
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
@@ -456,6 +459,20 @@ export interface RecallHit {
   eventType: string;
   text: string;
   score: number;
+}
+
+// L8 — a recurring lesson (derived view): a review finding that recurs across
+// tasks, or an explicit user correction.
+export interface Lesson {
+  signature: string;
+  kind: "finding" | "correction";
+  severity?: string;
+  file?: string;
+  occurrences: number;
+  taskIds: string[];
+  sampleMessages: string[];
+  firstSeen?: number;
+  lastSeen?: number;
 }
 
 // L7.3 — kind of a reasoning-graph node, derived client-side from recall hits.

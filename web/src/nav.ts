@@ -13,6 +13,7 @@ export const NAV = [
   { key: "connectors", label: "Connectors", icon: "⇄", group: "Connections" },
   { key: "knowledge", label: "Knowledge", icon: "❖", group: "Capabilities" },
   { key: "skills", label: "Skills", icon: "✦" },
+  { key: "learning", label: "Learning", icon: "↻" },
   { key: "layers", label: "Layers", icon: "▤" },
   { key: "timeline", label: "Timeline", icon: "≡", group: "More" },
   { key: "settings", label: "Settings", icon: "⚙" },

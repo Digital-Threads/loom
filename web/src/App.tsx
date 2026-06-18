@@ -10,6 +10,7 @@ import { Memory } from "./components/Memory";
 import { Projects } from "./components/Projects";
 import { Timeline } from "./components/Timeline";
 import { Knowledge } from "./components/Knowledge";
+import { Learning } from "./components/Learning";
 import { Layers } from "./components/Layers";
 import { Skills } from "./components/Skills";
 import { Settings } from "./components/Settings";
@@ -30,6 +31,7 @@ const SECTION_TITLES: Record<string, string> = {
   security: "Security",
   quality: "Quality",
   swarm: "Swarm",
+  learning: "Learning",
   connectors: "Connectors (MCP)",
   knowledge: "Knowledge",
   skills: "Skills",
@@ -49,6 +51,7 @@ const SECTION_DESC: Record<string, string> = {
   security: "Agent sandbox — worktree isolation, command policy, secret scanning, audit.",
   quality: "AI code review (self/ralph/adversarial) + quality checks.",
   swarm: "Multi-agent coordinator — several agents on one task.",
+  learning: "Lessons from recurring review findings and your corrections — what to avoid next time.",
   connectors: "MCP servers passed into agent sessions — add, enable, test.",
   knowledge: "Recall prior reasoning across projects — what was decided or rejected.",
   skills: "Skill library from ~/.claude/skills — open, edit, create new ones via AI.",
@@ -161,6 +164,8 @@ export function App() {
             <Quality client={client} />
           ) : view === "swarm" ? (
             <Swarm client={client} />
+          ) : view === "learning" ? (
+            <Learning client={client} />
           ) : (
             <div className="empty">Section “{SECTION_TITLES[view] ?? view}” — coming soon.</div>
           )}
