@@ -235,8 +235,7 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
   .side-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38}
   .task{flex-direction:column;height:auto}
   .rail{width:auto} .rail .steps{display:flex;overflow:auto;gap:6px}
-  .col{width:84vw;flex:0 0 84vw;max-height:none}
-  .board{height:auto}
+  .col{width:84vw;flex:0 0 84vw}
 }
 
 /* phones: tighten spacing/typography and let the description drop. */
