@@ -819,10 +819,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "advance", "stop-reason", { kind: "none" });
     if (!resume) return c.json({ ok: true });
     const projectId = projectActive()?.projectId ?? "default";
+    const isAutopilot = getTask(db, id)?.run_mode === "autopilot";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
       streamSinks.set(id, ctx.appendOutput);
+      ctx.onInput((data) => { const s = getTaskSession(db, id).sessionId; if (s) sessionLauncher.interject?.(s, data); });
       try {
-        // raw resume of the same conversation under the new subscription
+        if (isAutopilot) {
+          // Autopilot means run end-to-end — after an account switch, continue the
+          // PIPELINE under the new subscription (the session was relocated so the
+          // agent keeps its context), not just a one-shot chat that then needs a
+          // manual Advance.
+          updateTaskStatus(db, id, "running");
+          const res = await advanceTask(db, id, runners, advanceOpts());
+          if (res.reason?.kind === "rate_limit") {
+            const reset = res.reason.resetsAt ? ` (resets ${res.reason.resetsAt})` : "";
+            recordTurn(id, res.stoppedAt ?? "advance", "Rate limit", `Run stopped: ${res.reason.profile ?? "the subscription"} hit its rate limit${reset}. Switch account or wait, then continue.`);
+          }
+          if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+          return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
+        }
+        // manual/gated: raw resume of the same conversation under the new subscription
         await sessionSend(id, "chat", "Continue — продолжай с того места, где остановился.", { raw: true });
         return { outcome: { ok: true } };
       } finally {
