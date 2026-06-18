@@ -9,7 +9,7 @@ import { loadConfig, buildRunParams, loadActiveProfile } from "@digital-threads/
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
-import { enforceFlags, tokenPilotOnPath } from "./enforced-settings.js";
+import { enforceFlags, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
 export interface AimuxLiveLauncherDeps {
@@ -27,6 +27,10 @@ export interface AimuxLiveLauncherDeps {
   /** Write the enabled servers to a run-config file and return its path (or
    *  null if none). Default: the real file-backed writer. Injectable for tests. */
   writeMcpRunConfig?: (servers: McpServer[]) => string | null;
+  /** Spawn the child process. Default: node's child_process spawn. Injectable so
+   *  tests can exercise spawn-time logic (e.g. degraded markers) without a real
+   *  process. */
+  spawnProcess?: typeof spawn;
 }
 
 // manual/gated: normal Claude permissions (approvals surfaced to the Loom UI).
@@ -63,13 +67,23 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   // Preflight: if token-pilot is not on PATH, the enforced --settings hooks fail
   // and the session silently falls back to raw reads. Surface a visible marker
   // once at launcher creation instead of degrading quietly.
-  if (!tokenPilotOnPath()) {
+  const tokenPilotMissing = !tokenPilotOnPath();
+  if (tokenPilotMissing) {
     console.warn("[loom] token-pilot is NOT on PATH — sessions will run WITHOUT enforced token-efficient tools");
   }
+  // Per-session degradations detected at spawn time (MCP not loaded, token-pilot
+  // enforcement missing). The host drains degradedOf(sid) after a send and marks
+  // the task, so a "green" run can't hide that the session ran weaker than asked.
+  const degraded = new Map<string, string[]>();
+  const note = (sid: string, what: string): void => {
+    const list = degraded.get(sid) ?? [];
+    if (!list.includes(what)) { list.push(what); degraded.set(sid, list); }
+  };
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
   const listMcp = deps.listMcp ?? listMcpServers;
   const writeMcp = deps.writeMcpRunConfig ?? writeMcpRunConfig;
+  const spawnProcess = deps.spawnProcess ?? spawn;
   const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools, profile: runProfile }) => {
     const cfg = load();
     // Which subscription runs this session: the task's current profile (per-run,
@@ -96,15 +110,28 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
     try {
       const mcpPath = writeMcp(listMcp());
       if (mcpPath) mcpArgs = ["--mcp-config", mcpPath];
-    } catch { /* best-effort: skip MCP rather than fail the session */ }
+    } catch {
+      // Best-effort: skip MCP rather than fail the session — but record it so the
+      // task shows the servers were not loaded instead of failing green.
+      note(sessionId, "MCP servers not loaded (config write failed)");
+    }
+    // The enforced --settings file could not be written (read-only HOME etc.) or
+    // token-pilot is absent → this session runs without enforced token-efficient
+    // tools. Already logged; also attribute it to the task as a degraded marker.
+    if (enforcedSettingsWriteFailed()) note(sessionId, "token-pilot enforcement settings not written");
+    if (tokenPilotMissing) note(sessionId, "token-pilot not on PATH — session ran without enforced tools");
     const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, ...mcpArgs, ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
     const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
     const wrapped = sandboxOn && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
     // spine env (LOOM_TASK_ID …) so token-pilot / task-journal inside the session
     // attribute their telemetry to this task — exact cost without a separate counter.
-    const child = spawn(wrapped.cli, wrapped.args, { cwd, env: { ...process.env, ...built.env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawnProcess(wrapped.cli, wrapped.args, { cwd, env: { ...process.env, ...built.env, ...spineEnv }, stdio: ["pipe", "pipe", "pipe"] });
     return child as unknown as ProcLike;
   };
-  return createLiveSessionLauncher({ spawn: spawnSession });
+  // Compose the live launcher with a degradedOf reader so the host can drain
+  // per-session degradations after a send (same shape as costOf / denialsOf).
+  return Object.assign(createLiveSessionLauncher({ spawn: spawnSession }), {
+    degradedOf: (sessionId: string): string[] => degraded.get(sessionId) ?? [],
+  });
 }

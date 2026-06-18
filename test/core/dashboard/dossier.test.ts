@@ -65,6 +65,24 @@ describe("renderDossier (L3 task dossier)", () => {
   it("returns just the pack when there is nothing to append", () => {
     expect(renderDossier({ pack: "only history", stages: [], costs: [], attachments: [] })).toBe("only history");
   });
+
+  it("adds a Degraded section listing every reason when degradations are present", () => {
+    const md = renderDossier({
+      pack: "history",
+      stages: [],
+      costs: [],
+      attachments: [],
+      degraded: ["session cost not recorded", "MCP servers not loaded (config write failed)"],
+    });
+    expect(md).toContain("## ⚠ Degraded");
+    expect(md).toContain("session cost not recorded");
+    expect(md).toContain("MCP servers not loaded (config write failed)");
+  });
+
+  it("omits the Degraded section when there are no degradations", () => {
+    expect(renderDossier({ pack: "h", stages: [], costs: [], attachments: [], degraded: [] })).not.toContain("Degraded");
+    expect(renderDossier({ pack: "h", stages: [], costs: [], attachments: [] })).not.toContain("Degraded");
+  });
 });
 
 describe("diffSummary (L3 dossier — Changes)", () => {

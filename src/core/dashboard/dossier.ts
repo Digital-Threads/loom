@@ -17,10 +17,19 @@ export interface DossierInput {
   /** Pre-computed `git diff --stat` summary for the task's branch (from
    *  diffSummary); a Changes section is appended when non-empty. */
   diff?: string;
+  /** Human-readable degradations recorded for the task (cost not recorded,
+   *  journal not snapshotted, MCP not loaded …); a Degraded section is added
+   *  when non-empty so a "green" task can't hide a silent failure. */
+  degraded?: string[];
 }
 
-export function renderDossier({ pack, stages, costs, attachments, diff }: DossierInput): string {
+export function renderDossier({ pack, stages, costs, attachments, diff, degraded }: DossierInput): string {
   const sections: string[] = [];
+
+  if (degraded && degraded.length) {
+    const rows = degraded.map((d) => `- ${d}`);
+    sections.push(`## ⚠ Degraded\n\n${rows.join("\n")}`);
+  }
 
   if (stages.length) {
     const rows = stages.map((s) => {

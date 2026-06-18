@@ -1297,6 +1297,44 @@ describe("web api — fs browse + PR connector", () => {
     expect(detail.costs.some((c) => c.source === "token-pilot")).toBe(true); // used/saved pulled from token-pilot stats
   });
 
+  it("drains launcher spawn-time degradations onto the task after a send (deduped)", async () => {
+    createTask(database, { id: "dg1", title: "Degraded" });
+    const sessionLauncher = {
+      run: async () => ({ text: '{"class":"feature","route":["analysis"]}' }),
+      denialsOf: () => [],
+      degradedOf: () => ["MCP servers not loaded (config write failed)"],
+    };
+    const a = createApi(database, { sessionLauncher });
+    await a.request("/api/tasks/dg1/analysis/run", { method: "POST", body: "{}" });
+    await a.request("/api/tasks/dg1/analysis/run", { method: "POST", body: "{}" }); // twice → must not pile up
+    const detail = (await (await a.request("/api/tasks/dg1")).json()) as { degraded: string[] };
+    expect(detail.degraded).toEqual(["MCP servers not loaded (config write failed)"]);
+  });
+
+  it("records a degraded marker instead of crashing when reading cost/denials throws", async () => {
+    createTask(database, { id: "dg2", title: "Degraded2" });
+    const sessionLauncher = {
+      run: async () => ({ text: '{"class":"feature","route":["analysis"]}' }),
+      costOf: () => { throw new Error("boom"); },
+      denialsOf: () => { throw new Error("boom"); },
+    };
+    const a = createApi(database, { sessionLauncher });
+    const res = await a.request("/api/tasks/dg2/analysis/run", { method: "POST", body: "{}" });
+    expect(res.status).toBe(200); // defensive: the send path never throws
+    const detail = (await (await a.request("/api/tasks/dg2")).json()) as { degraded: string[] };
+    expect(detail.degraded).toContain("session cost not recorded");
+    expect(detail.degraded).toContain("permission denials not recorded");
+  });
+
+  it("GET /api/tasks/:id/dossier shows a Degraded section when the task degraded", async () => {
+    createTask(database, { id: "dg3", title: "Degraded3" });
+    createArtifact(database, { id: "art_dg", taskId: "dg3", stage: "system", kind: "degraded", content: JSON.stringify({ reasons: ["journal snapshot failed"] }), status: "accepted" });
+    const a = createApi(database);
+    const body = (await (await a.request("/api/tasks/dg3/dossier")).json()) as { pack: string };
+    expect(body.pack).toContain("## ⚠ Degraded");
+    expect(body.pack).toContain("journal snapshot failed");
+  });
+
   it("dialog stages run through ONE persistent task session (create → resume)", async () => {
     createTask(database, { id: "sx", title: "Sess" });
     const calls: Array<{ resume: boolean; sessionId: string }> = [];

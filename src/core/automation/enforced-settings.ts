@@ -94,6 +94,13 @@ export function enforceFlags(): string[] {
   return ["--settings", enforcedSettingsPath()];
 }
 
+/** Whether the enforced-settings write has failed (read-only HOME etc.). When
+ *  true, the session runs WITHOUT token-pilot enforcement — already logged once,
+ *  but a launcher reads this to also surface a visible per-task degraded marker. */
+export function enforcedSettingsWriteFailed(): boolean {
+  return warnedWriteFailure;
+}
+
 /** Whether `token-pilot` is on PATH — probed via the same which/where check the
  *  doctor uses. When false, a launched session degrades to raw reads, so the
  *  caller must surface a visible marker rather than fail silently. The run

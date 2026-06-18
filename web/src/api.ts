@@ -67,6 +67,7 @@ export interface TaskDetail {
   steps: StepRow[];
   costs: CostRow[];
   stopReason?: StopReason | null;
+  degraded?: string[]; // silent failures surfaced (cost/journal/MCP/token-pilot); [] when healthy
 }
 
 export type Fetcher = typeof fetch;

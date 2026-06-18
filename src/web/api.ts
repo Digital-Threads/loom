@@ -412,7 +412,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const spent = sid ? sessionLauncher.costOf?.(sid) : undefined;
       recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: sid ?? undefined });
     } catch {
-      /* cost is best-effort */
+      // Defensive as before (never throws) — but no longer silent: surface it.
+      markDegraded(id, "session cost not recorded");
     }
   };
   // manual/gated: agent may freely read/edit in the worktree + run git; anything
@@ -428,7 +429,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const denials = sid ? sessionLauncher.denialsOf?.(sid) ?? [] : [];
       if (denials.length) saveResult(id, "permissions", "permission-denials", { denials });
     } catch {
-      /* best-effort */
+      // Defensive as before (never throws) — but no longer silent: surface it.
+      markDegraded(id, "permission denials not recorded");
     }
   };
   // Send a stage instruction into the task's ONE session (tests inject a one-shot
@@ -455,6 +457,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
     recordSessionCost(id, repoRoot);
     recordDenials(id);
+    // Drain any spawn-time degradations the launcher recorded for this session
+    // (MCP not loaded, token-pilot enforcement missing) onto the task — same
+    // post-send readout as cost/denials. Best-effort: never break the send path.
+    try {
+      const sid = getTaskSession(db, id).sessionId;
+      for (const what of sid ? sessionLauncher.degradedOf?.(sid) ?? [] : []) markDegraded(id, what);
+    } catch { /* best-effort */ }
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
     // Secret scan on the NORMAL execution path (not just the experimental
     // sandbox): flag leaked credentials in the agent's output so the Security
@@ -632,6 +641,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // the agent recorded nothing. We mark it explicitly so History shows "no
   // journal" instead of a blank, and so empty tasks are no longer invisible.
   const JOURNAL_STATUS_KIND = "journal-status";
+  // A task that finished/ran but where something silently degraded underneath
+  // (cost not recorded, journal not snapshotted, MCP not loaded, token-pilot
+  // enforcement missing). Marked explicitly so a "green" task can't hide it.
+  const DEGRADED_KIND = "degraded";
   // Loom tasks whose journal we already guaranteed this server session — taskCwd
   // runs on every stage, so this in-memory guard keeps ensureJournalTask from
   // re-querying the journal CLI once a task is known-handled.
@@ -663,6 +676,22 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       saveResult(id, "memory", JOURNAL_STATUS_KIND, { state: "none", reason });
     } catch { /* best-effort */ }
   };
+  /** Record that something silently degraded for this task (cost not recorded,
+   *  journal not snapshotted, MCP not loaded, token-pilot enforcement missing …)
+   *  so a "green" finish can't hide a real failure. Accumulates a de-duped list
+   *  of human-readable reasons, surfaced on the task card + in the dossier.
+   *  Best-effort: the visibility mechanism must never itself throw. */
+  const markDegraded = (id: string, what: string): void => {
+    try {
+      const prev = loadResult<{ reasons?: string[] }>(id, DEGRADED_KIND);
+      const reasons = prev?.reasons ?? [];
+      if (reasons.includes(what)) return; // already noted → don't accumulate duplicates
+      saveResult(id, "system", DEGRADED_KIND, { reasons: [...reasons, what] });
+    } catch { /* best-effort */ }
+  };
+  /** Load the degraded reasons recorded for a task ("" list when healthy). */
+  const degradedReasons = (id: string): string[] =>
+    loadResult<{ reasons?: string[] }>(id, DEGRADED_KIND)?.reasons ?? [];
   /** Guarantee a journal exists for a git task at START (worktree creation),
    *  independent of whether the agent called task_create. Idempotent: a
    *  per-session guard plus a check for an existing journal task keep repeat
@@ -732,7 +761,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       saveResult(id, "memory", JOURNAL_SNAPSHOT_KIND, { events, story: boardTaskStory(root) });
       for (const t of tasksFromEvents(events)) bindExternal(root, t.id, `loom:${id}`);
     } catch {
-      /* journal snapshot is best-effort */
+      // Defensive as before (never throws) — but no longer silent: surface it.
+      markDegraded(id, "journal snapshot failed");
     }
   };
   /** Park a task: flip it to "waiting" and snapshot its journal NOW (before any
@@ -1124,6 +1154,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       steps: getSteps(db, id),
       costs: getCosts(db, id),
       stopReason: stop && stop.kind !== "none" ? stop : null, // why the task last stopped (e.g. rate_limit)
+      degraded: degradedReasons(id), // what silently degraded (cost/journal/MCP/token-pilot), [] when healthy
     });
   });
 
@@ -1444,6 +1475,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         costs: getCosts(db, id),
         attachments: getAttachments(db, id),
         diff,
+        degraded: degradedReasons(id),
       }),
     });
   });

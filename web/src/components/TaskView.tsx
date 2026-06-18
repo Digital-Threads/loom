@@ -435,6 +435,11 @@ export function TaskView({
               {detail.stopReason.spent != null ? ` (spent $${detail.stopReason.spent.toFixed(2)})` : ""}. Raise the limit in Settings or ▶▶ Advance to continue.
             </div>
           ) : null}
+          {detail.degraded && detail.degraded.length ? (
+            <div className="banner banner-warn" role="status">
+              ⚠ Degraded: {detail.degraded.join("; ")}. The task ran but something silently failed — see History for details.
+            </div>
+          ) : null}
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={fixFindings} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />

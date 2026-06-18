@@ -74,6 +74,10 @@ export interface SessionControl {
   interject(sessionId: string, text: string): boolean;
   /** Stop a session's process (e.g. on task done). */
   stop(sessionId: string): void;
+  /** Human-readable degradations detected for a session at spawn time (MCP not
+   *  loaded, token-pilot enforcement missing). Optional: only launchers that can
+   *  degrade (the aimux launcher) provide it; the bare live launcher does not. */
+  degradedOf?(sessionId: string): string[];
 }
 
 /** A SessionLauncher backed by long-lived processes (one per sessionId). */
