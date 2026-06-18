@@ -41,6 +41,21 @@ describe("runPr (L14.1)", () => {
     expect(calls.some((c) => c[0] === "gh" && c[1] === "pr" && c[2] === "create")).toBe(true);
   });
 
+  it("targets the repo's default branch (origin/HEAD), not a hardcoded 'main', when no base is given", async () => {
+    const calls: string[][] = [];
+    const sh = async (cmd: string, args: string[]) => {
+      calls.push([cmd, ...args]);
+      if (cmd === "git" && args[0] === "symbolic-ref") return { code: 0, stdout: "origin/master\n" };
+      return { code: 0, stdout: cmd === "gh" && args[0] === "pr" ? "https://github.com/x/y/pull/9\n" : "" };
+    };
+    const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo", describe: () => "BODY" });
+    expect(r.created).toBe(true);
+    const create = calls.find((c) => c[0] === "gh" && c[1] === "pr" && c[2] === "create");
+    expect(create).toBeDefined();
+    const baseIdx = create!.indexOf("--base");
+    expect(create![baseIdx + 1]).toBe("master");
+  });
+
   it("reports a clear error (not created) when gh is missing", async () => {
     const sh = async (cmd: string) => ({ code: cmd === "gh" ? 1 : 0, stdout: cmd === "gh" ? "gh: command not found" : "" });
     const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });

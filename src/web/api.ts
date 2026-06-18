@@ -1075,7 +1075,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         connector: true,
         repoRoot: t.repo,
         branch: opts.branch ?? worktreeBranch(id),
-        base: typeof body.base === "string" ? body.base : opts.base ?? t.branch ?? "main",
+        // No base → runPr detects the repo's default branch (origin/HEAD).
+        // (t.branch is the task's HEAD branch, never the PR base.)
+        base: typeof body.base === "string" ? body.base : opts.base,
         sh: opts.sh ?? realSh,
       };
     }

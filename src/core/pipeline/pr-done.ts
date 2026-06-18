@@ -43,6 +43,19 @@ export async function prConnectorStatus(sh: Sh, repoRoot: string): Promise<{ gh:
   return { gh, remote };
 }
 
+/** The branch a PR should target: origin's default branch (origin/HEAD), else a
+ *  local master/main, else "main". Hardcoding "main" made `gh pr create --base
+ *  main` fail with "Base ref must be a branch" on repos whose default is master. */
+export async function defaultBranch(sh: Sh, repoRoot: string): Promise<string> {
+  const head = await sh("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repoRoot);
+  const named = head.code === 0 ? head.stdout.trim().replace(/^origin\//, "") : "";
+  if (named) return named;
+  for (const b of ["master", "main"]) {
+    if ((await sh("git", ["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${b}`], repoRoot)).code === 0) return b;
+  }
+  return "main";
+}
+
 /** L14.1 — produce the PR description artifact; optionally create the PR. The
  *  connector path is best-effort but NEVER silent: every failure (missing gh,
  *  no remote, push/`gh pr create` non-zero) comes back as `error` for the UI.
@@ -61,7 +74,7 @@ export async function runPr(db: Database.Database, taskId: string, opts: PrOptio
   if (!gh) return { description, created: false, connector: true, error: "GitHub CLI (gh) is not installed or not on PATH — install gh and run `gh auth login`." };
   if (!remote) return { description, created: false, connector: true, error: "This repo has no `origin` remote — add a GitHub remote before opening a PR." };
 
-  const base = opts.base ?? "main";
+  const base = opts.base ?? (await defaultBranch(opts.sh, opts.repoRoot));
   const push = await opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
   if (push.code !== 0) {
     return { description, created: false, connector: true, error: `git push failed:\n${push.stdout.trim() || "(no output)"}` };
