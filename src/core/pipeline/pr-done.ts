@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
 import { createArtifact, latestArtifact } from "../store/artifacts.js";
-import { getTask } from "../store/db.js";
+import { getTask, updateStageStatus } from "../store/db.js";
 import { makeEvent } from "../spine/event.js";
 import { appendLoomEvent } from "../spine/event-bus.js";
 
@@ -104,6 +104,10 @@ export function runDone(db: Database.Database, taskId: string, opts: DoneOptions
     /* journal close is best-effort */
   }
   db.prepare("UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ?").run(Date.now(), taskId);
+  // The task is finished — close out the tail stages too, else the task screen
+  // shows pr "active" / done "pending" forever even though the task is done.
+  updateStageStatus(db, taskId, "pr", "done");
+  updateStageStatus(db, taskId, "done", "done");
   appendLoomEvent(
     opts.projectId,
     makeEvent({ ts: Date.now(), source: "loom", projectId: opts.projectId, taskId, type: "task.done" }),

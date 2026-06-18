@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openStore, createTask, getTask } from "../../../src/core/store/db.js";
+import { openStore, createTask, getTask, getStages } from "../../../src/core/store/db.js";
 import { createArtifact } from "../../../src/core/store/artifacts.js";
 import { runPr, runDone } from "../../../src/core/pipeline/pr-done.js";
 import { loadLoomEvents } from "../../../src/core/spine/event-bus.js";
@@ -64,5 +64,12 @@ describe("runDone (L14.2)", () => {
     expect(closed).toBe(true);
     expect(getTask(db, "t1")?.status).toBe("done");
     expect(loadLoomEvents("p1").some((e) => e.type === "task.done")).toBe(true);
+  });
+
+  it("marks the pr and done stages done so the task screen isn't left mid-pipeline", () => {
+    runDone(db, "t1", { projectId: "p1" });
+    const stages = Object.fromEntries(getStages(db, "t1").map((s) => [s.stage_key, s.status]));
+    expect(stages.pr).toBe("done");
+    expect(stages.done).toBe("done");
   });
 });
