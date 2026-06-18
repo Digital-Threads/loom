@@ -2,7 +2,7 @@
 // Tauri sidecar) talk to. Read endpoints first; mutations land in later slices.
 // The db is injected so the API is testable with a seeded in-memory store.
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
@@ -87,6 +87,7 @@ import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/re
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
+import { isValidMarketplaceSource } from "../core/install/install.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -134,6 +135,8 @@ export interface ApiDeps {
   importDrafts?: (opts?: ImportOptions) => TaskDraft[];
   /** Environment prerequisite check (default: which/where probe of REQUIRED_TOOLS). */
   prereqs?: () => PrereqReport;
+  /** Run a `claude plugin …` CLI call (default: execFile "claude", args). Override for tests. */
+  claudePlugin?: (args: string[]) => Promise<{ code: number; stdout: string }>;
 }
 
 // Claude's config dir for an aimux profile: the source profile inherits the
@@ -142,6 +145,58 @@ export interface ApiDeps {
 const defaultClaudeDir = process.env.CLAUDE_CONFIG_DIR || pathJoin(homedir(), ".claude");
 function profileConfigDir(p: { is_source?: boolean; path: string }): string {
   return p.is_source ? defaultClaudeDir : expandHome(p.path);
+}
+
+// A Claude plugin row for the Connectors UI. Parsed from `claude plugin list`.
+interface PluginEntry { name: string; version?: string; enabled: boolean }
+
+// Defensive parse of `claude plugin list` — the CLI output format is not
+// guaranteed, so this never throws: an unexpected/empty line yields no row and
+// a prose line (e.g. "No plugins installed") is skipped (no version, no status).
+function parsePluginList(stdout: string): PluginEntry[] {
+  const out: PluginEntry[] = [];
+  for (const line of String(stdout ?? "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const tokens = trimmed.split(/\s+/);
+    const name = tokens[0];
+    if (!name || name.startsWith("-")) continue;
+    // A version token (e.g. "1.2.0"/"v2") is the strong signal of a data row.
+    // Header lines ("NAME VERSION ENABLED") and prose ("No plugins installed")
+    // carry none, so they are skipped — no phantom rows.
+    const version = tokens.slice(1).find((t) => /^v?\d+\./.test(t));
+    if (!version) continue;
+    // Enabled unless an explicit disabled/off marker is present.
+    const enabled = !/\b(disabled|off)\b/.test(trimmed.toLowerCase());
+    out.push({ name, version, enabled });
+  }
+  return out;
+}
+
+// Defensive parse of `claude plugin marketplace list`. A marketplace id is a
+// single bare token (e.g. "owner/repo"); multi-word lines are prose/headers/
+// errors ("No marketplaces configured", "claude: command not found") and are
+// skipped, as are tokens with non-id characters — no phantom entries.
+function parseMarketplaceList(stdout: string): string[] {
+  const out: string[] = [];
+  for (const line of String(stdout ?? "").split(/\r?\n/)) {
+    const tokens = line.trim().split(/\s+/).filter(Boolean);
+    if (tokens.length !== 1) continue; // prose / headers have multiple tokens
+    const name = tokens[0];
+    if (/^[A-Za-z0-9][\w.@/-]*$/.test(name)) out.push(name);
+  }
+  return out;
+}
+
+// Hardening for a plugin ref passed to the claude CLI: `name` or `name@marketplace`,
+// safe charset, never flag-shaped. Combined with `--` and execFile (no shell) this
+// rules out flag- and shell-injection.
+function isSafePluginRef(name: string): boolean {
+  return (
+    typeof name === "string" &&
+    !name.startsWith("-") &&
+    /^[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?$/.test(name)
+  );
 }
 /** Make a task's session resumable under `profileName` by copying its transcript
  *  into that profile's config dir (best-effort) — so a mid-task account switch
@@ -436,6 +491,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { code: 1 };
     }
   };
+  // Run a `claude plugin …` CLI call. Async (execFile, never blocks the loop)
+  // with a 120s timeout: marketplace add / install are network calls that can be
+  // slow, but a hung or interactive prompt (no TTY/stdin) must not pin a child
+  // process and a dangling request forever — the timeout kills the child.
+  const claudePlugin =
+    deps.claudePlugin ??
+    ((args: string[]) =>
+      new Promise<{ code: number; stdout: string }>((resolve) => {
+        execFile(
+          "claude",
+          args,
+          { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 120_000 },
+          (e, out, errOut) => {
+            if (!e) return resolve({ code: 0, stdout: out });
+            const err = e as { code?: number | string };
+            const combined =
+              `${out ?? ""}${errOut ?? ""}` || (err.code === "ENOENT" ? "claude: command not found" : "");
+            resolve({ code: typeof err.code === "number" ? err.code : 1, stdout: combined });
+          },
+        );
+      }));
   /** A persisted per-stage flow config (the Quality view's editable QA checks),
    *  used as the column default for resolveFlow. undefined → built-in defaults. */
   const storedFlow = (stage: string): { passes: string[] } | undefined => {
@@ -1406,6 +1482,66 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       created += 1;
     }
     return c.json({ created, skipped });
+  });
+
+  // ─── connectors: Claude plugins ───────────────────────────────────────────────
+  // Thin wrappers over the same `claude plugin …` CLI the install recipes run.
+  // Every handler is defensive: a CLI failure becomes { ok:false, error } and
+  // never throws out of the route.
+  app.get("/api/connectors/plugins", async (c) => {
+    try {
+      const r = await claudePlugin(["plugin", "list"]);
+      return c.json({ plugins: parsePluginList(r.stdout) });
+    } catch {
+      return c.json({ plugins: [] });
+    }
+  });
+  app.post("/api/connectors/plugins", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: unknown };
+    const name = typeof b.name === "string" ? b.name.trim() : "";
+    if (!isSafePluginRef(name)) return c.json({ error: "invalid plugin name" }, 400);
+    try {
+      const r = await claudePlugin(["plugin", "install", "--", name]);
+      return r.code === 0 ? c.json({ ok: true }) : c.json({ ok: false, error: r.stdout || "install failed" });
+    } catch (e) {
+      return c.json({ ok: false, error: String(e) });
+    }
+  });
+  // update / uninstall / enable / disable all share the same shape: validate the
+  // :name, run `claude plugin <verb> -- <name>`, map the exit code to ok/error.
+  const pluginAction = (verb: string) => async (c: Context) => {
+    const name = c.req.param("name") ?? "";
+    if (!isSafePluginRef(name)) return c.json({ error: "invalid plugin name" }, 400);
+    try {
+      const r = await claudePlugin(["plugin", verb, "--", name]);
+      return r.code === 0 ? c.json({ ok: true }) : c.json({ ok: false, error: r.stdout || `${verb} failed` });
+    } catch (e) {
+      return c.json({ ok: false, error: String(e) });
+    }
+  };
+  app.post("/api/connectors/plugins/:name/update", pluginAction("update"));
+  app.post("/api/connectors/plugins/:name/uninstall", pluginAction("uninstall"));
+  app.post("/api/connectors/plugins/:name/enable", pluginAction("enable"));
+  app.post("/api/connectors/plugins/:name/disable", pluginAction("disable"));
+  app.get("/api/connectors/marketplaces", async (c) => {
+    try {
+      const r = await claudePlugin(["plugin", "marketplace", "list"]);
+      return c.json({ marketplaces: parseMarketplaceList(r.stdout) });
+    } catch {
+      return c.json({ marketplaces: [] });
+    }
+  });
+  app.post("/api/connectors/marketplaces", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { source?: unknown };
+    const source = typeof b.source === "string" ? b.source.trim() : "";
+    // Reuse the sanitizeSynthRecipe hardening: reject flag-shaped / invalid sources.
+    if (!isValidMarketplaceSource(source)) return c.json({ error: "invalid source" }, 400);
+    try {
+      const r = await claudePlugin(["plugin", "marketplace", "add", "--", source]);
+      return r.code === 0 ? c.json({ ok: true }) : c.json({ ok: false, error: r.stdout || "add failed" });
+    } catch (e) {
+      return c.json({ ok: false, error: String(e) });
+    }
   });
 
   // ─── settings / attachments (D6) ──────────────────────────────────────────────

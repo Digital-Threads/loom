@@ -320,6 +320,87 @@ describe("web api", () => {
     expect(r.connectors.find((m) => m.id === "github")?.needsRepo).toBe(true);
   });
 
+  // ── connectors: Claude plugins ──
+  it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status)", async () => {
+    const app2 = createApi(db, {
+      claudePlugin: () => Promise.resolve({ code: 0, stdout: "my-plugin 1.2.0 enabled\nother 2.0.0 disabled\nNo trailing prose" }),
+    });
+    const r = (await (await app2.request("/api/connectors/plugins")).json()) as {
+      plugins: { name: string; version?: string; enabled: boolean }[];
+    };
+    expect(r.plugins).toEqual([
+      { name: "my-plugin", version: "1.2.0", enabled: true },
+      { name: "other", version: "2.0.0", enabled: false },
+    ]);
+  });
+
+  it("POST /api/connectors/plugins installs name@marketplace via the CLI", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    const res = await app2.request("/api/connectors/plugins", { method: "POST", body: JSON.stringify({ name: "foo@bar" }) });
+    expect(await res.json()).toMatchObject({ ok: true });
+    expect(calls).toContainEqual(["plugin", "install", "--", "foo@bar"]);
+  });
+
+  it("update/uninstall/enable/disable call `claude plugin <verb> -- <name>`", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    for (const verb of ["update", "uninstall", "enable", "disable"]) {
+      await app2.request(`/api/connectors/plugins/p/${verb}`, { method: "POST" });
+    }
+    expect(calls).toEqual([
+      ["plugin", "update", "--", "p"],
+      ["plugin", "uninstall", "--", "p"],
+      ["plugin", "enable", "--", "p"],
+      ["plugin", "disable", "--", "p"],
+    ]);
+  });
+
+  it("rejects a flag-shaped plugin name without calling the CLI (400)", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    const res = await app2.request("/api/connectors/plugins", { method: "POST", body: JSON.stringify({ name: "-rf" }) });
+    expect(res.status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+
+  it("POST /api/connectors/marketplaces adds a valid source; rejects an invalid one (400)", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    const ok = await app2.request("/api/connectors/marketplaces", { method: "POST", body: JSON.stringify({ source: "octo/repo" }) });
+    expect(await ok.json()).toMatchObject({ ok: true });
+    expect(calls).toContainEqual(["plugin", "marketplace", "add", "--", "octo/repo"]);
+    const bad = await app2.request("/api/connectors/marketplaces", { method: "POST", body: JSON.stringify({ source: "--evil" }) });
+    expect(bad.status).toBe(400);
+    expect(calls).toHaveLength(1); // CLI not called for the invalid source
+  });
+
+  it("GET /api/connectors/marketplaces parses the list", async () => {
+    const app2 = createApi(db, { claudePlugin: () => Promise.resolve({ code: 0, stdout: "acme/store\nother/market\n" }) });
+    const r = (await (await app2.request("/api/connectors/marketplaces")).json()) as { marketplaces: string[] };
+    expect(r.marketplaces).toEqual(["acme/store", "other/market"]);
+  });
+
+  it("maps a failing CLI call to { ok:false, error } without throwing", async () => {
+    const app2 = createApi(db, { claudePlugin: () => Promise.resolve({ code: 1, stdout: "boom" }) });
+    const res = await app2.request("/api/connectors/plugins", { method: "POST", body: JSON.stringify({ name: "foo@bar" }) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: false, error: "boom" });
+  });
+
+  it("plugin/marketplace list parsers skip header & prose lines (no phantom rows)", async () => {
+    const appP = createApi(db, {
+      claudePlugin: () => Promise.resolve({ code: 0, stdout: "NAME VERSION ENABLED\nNo plugins installed" }),
+    });
+    const p = (await (await appP.request("/api/connectors/plugins")).json()) as { plugins: unknown[] };
+    expect(p.plugins).toEqual([]);
+    const appM = createApi(db, {
+      claudePlugin: () => Promise.resolve({ code: 1, stdout: "No marketplaces configured\nclaude: command not found" }),
+    });
+    const m = (await (await appM.request("/api/connectors/marketplaces")).json()) as { marketplaces: unknown[] };
+    expect(m.marketplaces).toEqual([]);
+  });
+
   it("POST /api/connectors/import passes connector + repo to importDrafts (D5.5)", async () => {
     let seen: { connector?: string; repo?: string } | undefined;
     const app2 = createApi(db, {

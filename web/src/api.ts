@@ -341,6 +341,23 @@ export function createClient(base = "", f: Fetcher = fetch) {
     listConnectors: () => getJson<{ connectors: ConnectorMeta[] }>(`${base}/api/connectors`, f).then((d) => d.connectors),
     importTracker: (opts?: { connector?: string; repo?: string }) =>
       postJson<{ created: number }>(`${base}/api/connectors/import`, opts ?? {}, f),
+    // Connectors — Claude plugins (thin wrappers over the `claude plugin …` CLI).
+    pluginList: () =>
+      getJson<{ plugins: PluginEntry[] }>(`${base}/api/connectors/plugins`, f).then((d) => d.plugins),
+    pluginInstall: (name: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/plugins`, { name }, f),
+    pluginUpdate: (name: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/plugins/${encodeURIComponent(name)}/update`, {}, f),
+    pluginUninstall: (name: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/plugins/${encodeURIComponent(name)}/uninstall`, {}, f),
+    pluginEnable: (name: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/plugins/${encodeURIComponent(name)}/enable`, {}, f),
+    pluginDisable: (name: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/plugins/${encodeURIComponent(name)}/disable`, {}, f),
+    marketplaceList: () =>
+      getJson<{ marketplaces: string[] }>(`${base}/api/connectors/marketplaces`, f).then((d) => d.marketplaces),
+    marketplaceAdd: (source: string) =>
+      postJson<{ ok?: boolean; error?: string }>(`${base}/api/connectors/marketplaces`, { source }, f),
     // D6 — settings / attachments
     settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
     saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),
@@ -403,6 +420,11 @@ export interface McpServer {
   env?: Record<string, string>;
   transport?: McpTransport;
   url?: string;
+  enabled: boolean;
+}
+export interface PluginEntry {
+  name: string;
+  version?: string;
   enabled: boolean;
 }
 

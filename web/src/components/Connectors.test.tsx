@@ -14,6 +14,14 @@ function mkClient(over: Partial<Record<keyof LoomClient, unknown>> = {}) {
       { id: "beads", label: "beads", needsRepo: false },
       { id: "github", label: "GitHub Issues", needsRepo: true },
     ]),
+    pluginList: () => Promise.resolve([]),
+    marketplaceList: () => Promise.resolve([]),
+    pluginInstall: () => Promise.resolve({ ok: true }),
+    pluginUpdate: () => Promise.resolve({ ok: true }),
+    pluginUninstall: () => Promise.resolve({ ok: true }),
+    pluginEnable: () => Promise.resolve({ ok: true }),
+    pluginDisable: () => Promise.resolve({ ok: true }),
+    marketplaceAdd: () => Promise.resolve({ ok: true }),
     ...over,
   } as unknown as LoomClient;
 }
@@ -109,5 +117,73 @@ describe("Connectors add form — args/env + remote", () => {
     await user.type(screen.getByPlaceholderText("url (e.g. https://host/mcp)"), "https://host/mcp");
     await user.click(screen.getByRole("button", { name: "Add MCP" }));
     expect(calls).toEqual([{ id: "api", transport: "http", url: "https://host/mcp" }]);
+  });
+});
+
+describe("Connectors — Claude plugins", () => {
+  it("lists installed plugins with version and on/off chip", async () => {
+    const client = mkClient({
+      mcpList: () => Promise.resolve([]),
+      pluginList: () => Promise.resolve([
+        { name: "my-plugin", version: "1.2.0", enabled: true },
+        { name: "other", version: "2.0.0", enabled: false },
+      ]),
+    });
+    render(<Connectors client={client} />);
+    expect(await screen.findByText("my-plugin")).toBeInTheDocument();
+    expect(screen.getByText("1.2.0")).toBeInTheDocument();
+    expect(screen.getByText("other")).toBeInTheDocument();
+  });
+
+  it("shows the empty state when no plugins are installed", async () => {
+    render(<Connectors client={mkClient({ mcpList: () => Promise.resolve([]) })} />);
+    expect(await screen.findByText("No plugins installed.")).toBeInTheDocument();
+  });
+
+  it("sends the typed ref to pluginInstall", async () => {
+    const user = userEvent.setup();
+    const calls: unknown[] = [];
+    const client = mkClient({
+      mcpList: () => Promise.resolve([]),
+      pluginInstall: (n: unknown) => { calls.push(n); return Promise.resolve({ ok: true }); },
+    });
+    render(<Connectors client={client} />);
+    await screen.findByText("No plugins installed.");
+    await user.type(screen.getByPlaceholderText("plugin (name@marketplace)"), "foo@bar");
+    await user.click(screen.getByRole("button", { name: "Install" }));
+    expect(calls).toEqual(["foo@bar"]);
+  });
+
+  it("dispatches update / disable / remove for an installed plugin", async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    const client = mkClient({
+      mcpList: () => Promise.resolve([]),
+      pluginList: () => Promise.resolve([{ name: "p", version: "1.0.0", enabled: true }]),
+      pluginUpdate: (n: unknown) => { calls.push(`update:${n}`); return Promise.resolve({ ok: true }); },
+      pluginDisable: (n: unknown) => { calls.push(`disable:${n}`); return Promise.resolve({ ok: true }); },
+      pluginUninstall: (n: unknown) => { calls.push(`remove:${n}`); return Promise.resolve({ ok: true }); },
+    });
+    render(<Connectors client={client} />);
+    await screen.findByText("p");
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Disable" }));
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    expect(calls).toEqual(["update:p", "disable:p", "remove:p"]);
+  });
+
+  it("sends the marketplace source to marketplaceAdd and lists marketplaces", async () => {
+    const user = userEvent.setup();
+    const calls: unknown[] = [];
+    const client = mkClient({
+      mcpList: () => Promise.resolve([]),
+      marketplaceList: () => Promise.resolve(["acme/store"]),
+      marketplaceAdd: (s: unknown) => { calls.push(s); return Promise.resolve({ ok: true }); },
+    });
+    render(<Connectors client={client} />);
+    expect(await screen.findByText("acme/store")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("marketplace source (owner/repo or url)"), "octo/repo");
+    await user.click(screen.getByRole("button", { name: "Add marketplace" }));
+    expect(calls).toEqual(["octo/repo"]);
   });
 });

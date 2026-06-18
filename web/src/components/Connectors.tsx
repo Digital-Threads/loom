@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ConnectorMeta, LoomClient, McpServer, McpTransport } from "../api";
+import type { ConnectorMeta, LoomClient, McpServer, McpTransport, PluginEntry } from "../api";
 import { StateView } from "./StateView";
 import { Select } from "./Select";
 import { toast } from "../toast";
@@ -58,10 +58,48 @@ export function Connectors({ client }: { client: LoomClient }) {
   const [repo, setRepo] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [plugins, setPlugins] = useState<PluginEntry[]>([]);
+  const [marketplaces, setMarketplaces] = useState<string[]>([]);
+  const [pluginName, setPluginName] = useState("");
+  const [marketplaceSrc, setMarketplaceSrc] = useState("");
+  const [pluginsLoaded, setPluginsLoaded] = useState(false);
 
   function refresh() { client.mcpList().then(setServers).catch((e) => setErr(String(e))).finally(() => setLoading(false)); }
   useEffect(refresh, [client]);
   useEffect(() => { client.listConnectors().then(setConnectors).catch(() => {}); }, [client]);
+
+  function refreshPlugins() { client.pluginList().then(setPlugins).catch(() => {}).finally(() => setPluginsLoaded(true)); }
+  function refreshMarketplaces() { client.marketplaceList().then(setMarketplaces).catch(() => {}); }
+  useEffect(refreshPlugins, [client]);
+  useEffect(refreshMarketplaces, [client]);
+
+  // A plugin op returns { ok?, error? }; surface the error as a toast and refresh.
+  // Returns true on success so callers can clear inputs only when it worked.
+  async function runPluginOp(p: Promise<{ ok?: boolean; error?: string }>, okMsg: string): Promise<boolean> {
+    try {
+      const r = await p;
+      if (r.error) { toast.error(r.error); return false; }
+      toast.success(okMsg);
+      refreshPlugins();
+      return true;
+    } catch (e) { toast.error(String(e)); return false; }
+  }
+  async function installPlugin() {
+    const name = pluginName.trim();
+    if (!name) return;
+    if (await runPluginOp(client.pluginInstall(name), `Installing ${name}`)) setPluginName("");
+  }
+  async function addMarketplace() {
+    const src = marketplaceSrc.trim();
+    if (!src) return;
+    try {
+      const r = await client.marketplaceAdd(src);
+      if (r.error) { toast.error(r.error); return; }
+      toast.success("Marketplace added");
+      setMarketplaceSrc("");
+      refreshMarketplaces();
+    } catch (e) { toast.error(String(e)); }
+  }
 
   const selected = connectors.find((m) => m.id === connector);
   const needsRepo = selected?.needsRepo ?? false;
@@ -191,6 +229,41 @@ export function Connectors({ client }: { client: LoomClient }) {
               </tr>
               );
             })}
+          </tbody>
+        </table>
+      )}
+
+      <h3 style={{ marginTop: 24 }}>Plugins</h3>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <input className="inp" placeholder="plugin (name@marketplace)" value={pluginName} onChange={(e) => setPluginName(e.target.value)} />
+        <button className="btn acc" onClick={installPlugin}>Install</button>
+        <input className="inp" placeholder="marketplace source (owner/repo or url)" value={marketplaceSrc} onChange={(e) => setMarketplaceSrc(e.target.value)} />
+        <button className="btn" onClick={addMarketplace}>Add marketplace</button>
+      </div>
+      {marketplaces.length > 0 ? (
+        <div className="crumb" style={{ marginTop: 8 }}>
+          Marketplaces: {marketplaces.map((m) => <span key={m} className="chip" style={{ marginLeft: 6 }}>{m}</span>)}
+        </div>
+      ) : null}
+      {!pluginsLoaded ? (
+        <StateView kind="loading" />
+      ) : plugins.length === 0 ? (
+        <StateView kind="empty" msg="No plugins installed." />
+      ) : (
+        <table className="tbl" style={{ marginTop: 16 }}>
+          <thead><tr><th>Plugin</th><th>Version</th><th></th></tr></thead>
+          <tbody>
+            {plugins.map((p) => (
+              <tr key={p.name}>
+                <td>{p.name}{p.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
+                <td className="crumb">{p.version ?? "—"}</td>
+                <td>
+                  <button className="btn" onClick={() => runPluginOp(client.pluginUpdate(p.name), `Updating ${p.name}`)}>Update</button>
+                  <button className="btn" onClick={() => runPluginOp(p.enabled ? client.pluginDisable(p.name) : client.pluginEnable(p.name), p.enabled ? `Disabling ${p.name}` : `Enabling ${p.name}`)}>{p.enabled ? "Disable" : "Enable"}</button>
+                  <button className="btn" onClick={() => runPluginOp(client.pluginUninstall(p.name), `Removing ${p.name}`)}>Remove</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}
