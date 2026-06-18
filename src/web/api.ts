@@ -53,7 +53,7 @@ import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { scanSecrets } from "../core/security/secrets.js";
@@ -140,8 +140,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Scope recall/search to the ACTIVE project (resolved per call), not the
   // server's cwd — otherwise task-journal looks in the wrong repo and recall
   // always returns 0 (loom-g2qf).
+  // The bundled recall runner passes `--limit`, but the installed task-journal
+  // CLI renamed that flag to `--k` — the mismatch makes recall throw and (since
+  // recallPrior swallows errors → []) silently return nothing on real data.
+  // Inject a runner with the correct flag so recall + the graph actually work.
+  const recallRunner = (query: string, k: number, projectRoot: string) =>
+    execFileSync("task-journal", ["recall", query, "--json", "--k", String(k)], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
   const recall =
-    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query));
+    deps.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query, { run: recallRunner }));
   const search =
     deps.search ?? ((query: string) => askSearch(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query));
   // In production, review runs through the task's session (stageAgentFor) so the

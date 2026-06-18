@@ -77,6 +77,19 @@ describe("web api client", () => {
     expect((await c.memoryTask("tj-1")).decisions).toEqual([1]);
   });
 
+  it("recall() unwraps decisions/rejections; search() unwraps hits; knowledgeGraph() returns nodes/edges (L7)", async () => {
+    const c = createClient("", fakeFetch({
+      "/api/knowledge/recall?q=axum": { hits: [], decisions: [{ taskId: "t1", eventType: "decision", text: "use axum", score: 1 }], rejections: [] },
+      "/api/knowledge/search?q=axum": { hits: [{ taskId: "t2", eventType: "finding", text: "axum tuned", score: 0.5 }] },
+      "/api/knowledge/graph?q=axum": { nodes: [{ id: "n1", kind: "decision", taskId: "t1", label: "use axum" }], edges: [] },
+    }));
+    expect((await c.recall("axum")).decisions[0].text).toBe("use axum");
+    expect((await c.search("axum")).hits[0].taskId).toBe("t2");
+    const g = await c.knowledgeGraph("axum");
+    expect(g.nodes[0].kind).toBe("decision");
+    expect(g.edges).toEqual([]);
+  });
+
   it("projects()/addProject()/setActiveProject() (D3)", async () => {
     const c = createClient(
       "",

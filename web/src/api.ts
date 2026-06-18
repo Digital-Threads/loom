@@ -235,8 +235,10 @@ export function createClient(base = "", f: Fetcher = fetch) {
         `${base}/api/knowledge/recall?q=${encodeURIComponent(q)}`,
         f,
       ),
+    search: (q: string) =>
+      getJson<{ hits: RecallHit[] }>(`${base}/api/knowledge/search?q=${encodeURIComponent(q)}`, f),
     knowledgeGraph: (q: string) =>
-      getJson<{ nodes: unknown[]; edges: unknown[] }>(`${base}/api/knowledge/graph?q=${encodeURIComponent(q)}`, f),
+      getJson<KnowledgeGraph>(`${base}/api/knowledge/graph?q=${encodeURIComponent(q)}`, f),
     // L12 — dialog stages
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
@@ -365,6 +367,13 @@ export interface RecallHit {
   text: string;
   score: number;
 }
+
+// L7.3 — problem→solution graph derived from recall hits (mirror of the
+// @digital-threads/loom-knowledge shapes the server returns).
+export type GraphNodeKind = "decision" | "rejection" | "other";
+export interface GraphNode { id: string; kind: GraphNodeKind; taskId: string; label: string }
+export interface GraphEdge { from: string; to: string }
+export interface KnowledgeGraph { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export interface TimelineEvent {
   ts: number;

@@ -176,6 +176,16 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .pane .ph{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pane .pb{padding:16px;overflow:auto;flex:1}
 .kv{display:flex;gap:8px;margin:5px 0;flex-wrap:wrap}.kv b{color:var(--mut);min-width:120px;font-weight:500}
+/* knowledge reasoning graph: one row per task, chain of coloured nodes */
+.kg-group{display:flex;gap:10px;align-items:baseline;margin:7px 0;flex-wrap:wrap}
+.kg-task{color:var(--mut);min-width:120px;font-weight:500}
+.kg-chain{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.kg-link{display:inline-flex;gap:4px;align-items:center}
+.kg-arrow{color:var(--fg-faint)}
+.kg-node{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-card);color:var(--txt);font-size:12px}
+.kg-node.decision{border-color:var(--sev-info);color:var(--sev-info)}
+.kg-node.rejection{border-color:var(--sev-warn);color:var(--sev-warn)}
+.kg-node.other{border-color:var(--line);color:var(--mut)}
 /* timeline event row: time | type | meta — scannable, not a wall of text */
 .tl-row{display:grid;grid-template-columns:84px 130px 1fr;gap:10px;align-items:baseline;padding:5px 6px;border-radius:6px;font-size:13px}
 .tl-row:hover{background:var(--panel2)}
