@@ -411,8 +411,8 @@ export function TaskView({
                   <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ Advance</button>
                 </>
               ) : null}
-              {task.status === "running" ? (
-                <button className="btn stop sm" title="Stop the running task" onClick={async () => { await client.stopTask(taskId); refreshAndFollow(); onChanged?.(); }}>⏹ Stop</button>
+              {runId || task.status === "running" ? (
+                <button className="btn stop sm" title="Stop the running agent" onClick={async () => { await client.stopTask(taskId); setRunId(null); refreshAndFollow(); onChanged?.(); }}>⏹ Stop</button>
               ) : null}
               {task.repo ? (
                 <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>

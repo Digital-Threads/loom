@@ -369,6 +369,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     // than an ambiguous park. Cleared by the next non-limited turn (latest wins).
     const rl = detectRateLimit(text);
     saveResult(id, stage, "stop-reason", rl.hit ? { kind: "rate_limit", resetsAt: rl.resetsAt ?? null, profile: t?.profile ?? null } : { kind: "none" });
+    // Trust the REAL outcome over the probe: the limits probe only reads the 5h
+    // window header and can say "allowed" while the account is actually blocked
+    // (a separate session limit). On a real hit, mark the profile rejected in the
+    // cache so Accounts + auto-fallback don't treat it as healthy.
+    if (rl.hit && t?.profile) markProfileRateLimited(t.profile);
     return text;
   };
   const stageAgentFor = (id: string, stage: string): StageAgent => (prompt: string) => sessionSend(id, stage, prompt);
@@ -789,10 +794,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.post("/api/tasks/:id/stop", (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
-    const run = rm.list().find((r) => r.taskId === id && r.status === "running");
-    if (run) rm.stop(run.runId);
+    // Stop every run for the task (not only the first "running" one) + kill the
+    // live agent process, so a stop is final.
+    for (const run of rm.list().filter((r) => r.taskId === id && r.status === "running")) rm.stop(run.runId);
     const sid = getTaskSession(db, id).sessionId;
     sessionLauncher.stop?.(sid ?? "");
+    // Reflect the stop and prevent anything from auto-resuming it (the rate-limit
+    // auto-fallback only acts on a "rate_limit" reason, so "stopped" is skipped).
+    if (getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+    saveResult(id, "advance", "stop-reason", { kind: "stopped" });
+    recordTurn(id, "advance", "Stopped", "Stopped by the user.");
     return c.json({ ok: true });
   });
 
@@ -939,6 +950,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // would exhaust the browser's per-host connection pool and freeze the page).
   // A single in-flight promise per profile coalesces concurrent requests.
   const limitsCache = new Map<string, { at: number; value: unknown; inflight?: Promise<unknown> }>();
+  // Override the cached probe for a profile that just hit a real rate limit, so
+  // the Accounts view and auto-fallback see it as rejected rather than trusting a
+  // lagging "allowed" reading.
+  function markProfileRateLimited(profile: string): void {
+    const prev = (limitsCache.get(profile)?.value ?? null) as Record<string, unknown> | null;
+    limitsCache.set(profile, { at: Date.now(), value: { ...(prev ?? {}), profile, status: "rejected", fiveHourPct: 100 } });
+  }
   const LIMITS_TTL = 60_000;
   const limitsFor = async (name: string, cfg: ReturnType<typeof loadConfig>): Promise<unknown> => {
     const now = Date.now();
