@@ -85,6 +85,11 @@ The three bundled adapters live in `src/core/plugins/{aimux,token-pilot,task-jou
 
 The one-way rule is the core invariant: plugins have zero dependency on Loom and keep working standalone. Loom is just one consumer of their public interfaces. Exact task↔token correlation works by a shared Claude Code session id that the plugins already emit — Loom joins on it, it does not push any identifier into the tools.
 
+## Reliability
+
+- **Rate-limit recovery** — when a subscription hits its usage limit, Loom switches the task to another account that still has headroom and continues the *same* session there, so no context is lost. If you don't pick a replacement yourself, an auto-fallback does it after a short grace window; when no account has headroom, the task is parked honestly instead of pretending to switch.
+- **Stop** — stops the agent reliably and never resumes it automatically; restarting is always an explicit action.
+
 ## Stack
 
 TypeScript, [Ink](https://github.com/vadimdemedes/ink) 7 (React in the terminal), Bun for build and run, Vitest for tests. Node ≥ 22.
