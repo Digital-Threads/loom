@@ -630,7 +630,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
       snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
-      void snapshotDiff(id); // and freeze the git diff --stat before the branch is merged + deleted
+      await snapshotDiff(id); // and freeze the git diff --stat before the branch is merged + deleted
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
       if (sid) sessionLauncher.stop?.(sid);
@@ -1247,11 +1247,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // ─── filesystem browse (folder pickers) ───────────────────────────────────────
   app.get("/api/fs/list", (c) => c.json(browseDir(c.req.query("path"))));
-  app.post("/api/tasks/:id/done/run", (c) => {
+  app.post("/api/tasks/:id/done/run", async (c) => {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     runDone(db, id, { projectId: resolveProjectId(c), closeTask: () => deps.closeTask?.(id) });
     snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
+    await snapshotDiff(id); // freeze the git diff --stat before the branch is merged + deleted
     recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
     return c.json({ ok: true });
   });
