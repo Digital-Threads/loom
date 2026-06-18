@@ -115,6 +115,10 @@ describe("web api client", () => {
     expect(createClient("/base").runStreamUrl("run_x")).toBe("/base/api/runs/run_x/stream");
   });
 
+  it("installMissingStreamUrl builds the auto-installer SSE path (D2.2)", () => {
+    expect(createClient("/base").installMissingStreamUrl()).toBe("/base/api/onboarding/install/stream");
+  });
+
   it("moveTask() posts the target stage and returns the new current", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
     const fetchSpy = (async (input: RequestInfo | URL, init?: RequestInit) => {

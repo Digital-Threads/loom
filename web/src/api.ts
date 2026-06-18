@@ -186,6 +186,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     workspace: () => getJson<WorkspaceData>(`${base}/api/workspace`, f),
     // D2.2 — first-run environment check: which required CLIs are on PATH.
     doctor: () => getJson<PrereqReport>(`${base}/api/doctor`, f),
+    // D2.2 — SSE URL for the auto-installer; the wizard opens an EventSource on it.
+    installMissingStreamUrl: () => `${base}/api/onboarding/install/stream`,
     accountsHealth: () =>
       postJson<{ health: HealthRow[] }>(`${base}/api/accounts/health`, {}, f).then((d) => d.health),
     setActive: (profileId: string) =>

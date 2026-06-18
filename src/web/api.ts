@@ -88,6 +88,10 @@ import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 import { isValidMarketplaceSource } from "../core/install/install.js";
+import { INSTALL_UNITS, runInstallPlan } from "../core/install/bootstrap.js";
+import { makeShellRunner } from "../core/install/shell-runner.js";
+import type { CmdRunner, InstallDeps } from "../core/install/types.js";
+import { loomDataDir } from "../core/paths.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -137,6 +141,8 @@ export interface ApiDeps {
   prereqs?: () => PrereqReport;
   /** Run a `claude plugin …` CLI call (default: execFile "claude", args). Override for tests. */
   claudePlugin?: (args: string[]) => Promise<{ code: number; stdout: string }>;
+  /** Command runner for the onboarding auto-installer (default: makeShellRunner — long timeout + shell). */
+  installRunner?: CmdRunner;
 }
 
 // Claude's config dir for an aimux profile: the source profile inherits the
@@ -219,6 +225,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
   const doctorReport = deps.prereqs ?? (() => checkPrerequisites());
+  const installRunner = deps.installRunner ?? makeShellRunner();
   const memoryTask =
     deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
   const projectsList = deps.listProjects ?? (() => listProjects());
@@ -813,6 +820,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // D2.2 — first-run environment check: are the required CLIs on PATH? Wraps the
   // core prereqs probe so the onboarding wizard can show a status without a terminal.
   app.get("/api/doctor", (c) => c.json(doctorReport()));
+  // D2.2 — auto-install missing deps/plugins, streaming per-step progress over
+  // SSE so the wizard can install everything (cargo, claude, bundled plugins)
+  // without a terminal. Idempotent: detect() skips anything already present.
+  app.get("/api/onboarding/install/stream", (c) =>
+    streamSSE(c, async (stream) => {
+      const ideps: InstallDeps = { dataDir: loomDataDir(), run: installRunner };
+      await runInstallPlan(INSTALL_UNITS, ideps, async (e) => {
+        await stream.writeSSE({ event: e.kind, data: JSON.stringify(e) });
+      });
+    }));
   app.get("/favicon.ico", (c) => c.body(null, 204)); // no favicon → quiet 204, not a console 404
 
   // The 3 core modules' aggregated workspace. ?project=<id> loads a specific

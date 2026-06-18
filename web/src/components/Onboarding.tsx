@@ -16,6 +16,23 @@ function isHealthy(h?: HealthRow): boolean {
   return (h.broken?.length ?? 0) + (h.missing?.length ?? 0) + (h.conflicts?.length ?? 0) === 0;
 }
 
+// Short "why" per required tool, shown next to its status so the user knows what
+// each one is for (the doctor hint is the install pointer, this is the purpose).
+const TOOL_WHY: Record<string, string> = {
+  node: "JavaScript runtime Loom itself runs on.",
+  npm: "Installs the Claude Code CLI and Node packages.",
+  cargo: "Builds the Task Journal binary that stores your task memory.",
+  claude: "Runs the AI agent that powers every task in Loom.",
+};
+
+// A single progress row streamed from the auto-installer.
+interface InstallStep {
+  id: string;
+  title: string;
+  state: "installing" | "done" | "skipped" | "failed";
+  message?: string;
+}
+
 export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () => void }) {
   const [report, setReport] = useState<PrereqReport | null>(null);
   const [subs, setSubs] = useState<{ name: string }[]>([]);
@@ -29,6 +46,9 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
   const [busy, setBusy] = useState(false);
   const [subMsg, setSubMsg] = useState<string | null>(null);
   const [projErr, setProjErr] = useState<string | null>(null);
+
+  const [installing, setInstalling] = useState(false);
+  const [steps, setSteps] = useState<InstallStep[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +104,36 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
     }
   }
 
+  // Auto-install missing tools/plugins over SSE, updating one row per unit as it
+  // streams. Idempotent on the server; on "done" we re-check the environment so
+  // the status chips above refresh. Errors surface per-row, never crash the page.
+  function installMissing() {
+    setInstalling(true);
+    setSteps([]);
+    const es = new EventSource(client.installMissingStreamUrl());
+    const upsert = (s: InstallStep) =>
+      setSteps((prev) => {
+        const i = prev.findIndex((p) => p.id === s.id);
+        if (i === -1) return [...prev, s];
+        const next = prev.slice();
+        next[i] = s;
+        return next;
+      });
+    es.addEventListener("step", (ev) => {
+      const e = JSON.parse((ev as MessageEvent).data) as InstallStep;
+      upsert(e);
+    });
+    es.addEventListener("done", () => {
+      es.close();
+      setInstalling(false);
+      void load();
+    });
+    es.onerror = () => {
+      es.close();
+      setInstalling(false);
+    };
+  }
+
   if (loading) {
     return <div className="panel" style={{ maxWidth: 560 }}><StateView kind="loading" msg="Checking your environment…" /></div>;
   }
@@ -98,9 +148,8 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
     );
   }
 
-  // Only non-optional tools block the main (prebuilt-binary) path; optional ones
-  // (e.g. cargo, build-from-source only) are shown but never flagged as blocking.
-  const requiredMissing = report ? report.tools.filter((t) => !t.optional && !t.found) : [];
+  // Anything missing (incl. optional cargo) can be auto-installed → show the button.
+  const anyMissing = report ? report.tools.some((t) => !t.found) : false;
 
   return (
     <div className="panel" style={{ maxWidth: 560 }}>
@@ -117,14 +166,36 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
               <div key={t.name} className="row" style={{ gap: 8, marginTop: 4 }}>
                 <span className={`chip ${cls}`}>{label}</span>
                 <span>{t.name}</span>
-                {!t.found ? <span className="muted">— {t.hint}</span> : null}
+                {TOOL_WHY[t.name] ? <span className="muted">— {TOOL_WHY[t.name]}</span> : null}
               </div>
             );
           })}
-          {requiredMissing.length ? (
-            <p className="muted" style={{ marginTop: 6 }}>
-              Install the missing tool{requiredMissing.length > 1 ? "s" : ""} above, then click Retry.
-            </p>
+          {anyMissing ? (
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button className="btn acc" disabled={installing} onClick={installMissing}>
+                {installing ? "Installing…" : "Install missing"}
+              </button>
+              <span className="muted">Installs the missing tools and bundled plugins for you — no terminal.</span>
+            </div>
+          ) : null}
+          {steps.length ? (
+            <div style={{ marginTop: 8 }}>
+              {steps.map((s) => {
+                const cls = s.state === "done" ? "ok" : s.state === "failed" ? "bad" : "warn";
+                const text =
+                  s.state === "installing" ? "installing…"
+                    : s.state === "done" ? "done"
+                    : s.state === "skipped" ? (s.message ?? "skipped")
+                    : `failed: ${s.message ?? "error"}`;
+                return (
+                  <div key={s.id} className="row" style={{ gap: 8, marginTop: 4 }}>
+                    <span className={`chip ${cls}`}>{s.state}</span>
+                    <span>{s.title}</span>
+                    <span className="muted">— {text}</span>
+                  </div>
+                );
+              })}
+            </div>
           ) : null}
         </div>
       ) : (

@@ -1,0 +1,126 @@
+import type { DetectSpec, RecipeStep, InstallRecipe } from "../plugins/contract.js";
+import type { InstallDeps } from "./types.js";
+import type { RecipeCtx } from "./recipe.js";
+import { detect, runRecipe } from "./recipe.js";
+import { validateManifest } from "../plugins/manifest.js";
+import tokenPilotManifest from "../plugins/token-pilot/plugin.json" with { type: "json" };
+import taskJournalManifest from "../plugins/task-journal/plugin.json" with { type: "json" };
+
+// One thing the onboarding auto-installer can install: a system tool (cargo,
+// claude) or a bundled plugin (token-pilot, task-journal). `why` is shown in the
+// UI so the user understands what each piece is for. `requires` lists unit ids
+// that must be present first (a plugin that needs cargo/claude).
+export interface InstallUnit {
+  id: string;
+  title: string;
+  why: string;
+  detect: DetectSpec;
+  steps: RecipeStep[];
+  requires?: string[];
+}
+
+// Pull a bundled plugin's install recipe straight from its plugin.json — the
+// single source of truth, so we never duplicate the steps here.
+function pluginRecipe(raw: unknown): InstallRecipe {
+  const v = validateManifest(raw);
+  if (!v.ok || !v.manifest.install) throw new Error("invalid bundled plugin manifest");
+  return v.manifest.install;
+}
+
+const tokenPilot = pluginRecipe(tokenPilotManifest);
+const taskJournal = pluginRecipe(taskJournalManifest);
+
+// Ordered: system tools first (they are prerequisites), then the plugins that
+// build on them. task-journal needs both cargo (its binary) and claude (plugin).
+export const INSTALL_UNITS: InstallUnit[] = [
+  {
+    id: "cargo",
+    title: "Rust toolchain (cargo)",
+    why: "Builds the Task Journal binary that stores your task memory.",
+    detect: { probe: { cmd: "which", args: ["cargo"] } },
+    // rustup's official one-liner; -y runs it non-interactively. Needs a shell
+    // for the pipe, hence `sh -c` (makeShellRunner executes it as a pipe).
+    steps: [{ cmd: "sh", args: ["-c", "curl https://sh.rustup.rs -sSf | sh -s -- -y"] }],
+  },
+  {
+    id: "claude",
+    title: "Claude Code CLI",
+    why: "Runs the AI agent that powers every task in Loom.",
+    detect: { probe: { cmd: "which", args: ["claude"] } },
+    steps: [{ cmd: "npm", args: ["install", "-g", "@anthropic-ai/claude-code"] }],
+  },
+  {
+    id: "token-pilot",
+    title: "Token Pilot",
+    why: "Token-efficient code reading so the agent uses far fewer tokens.",
+    detect: tokenPilot.detect,
+    steps: tokenPilot.install,
+  },
+  {
+    id: "task-journal",
+    title: "Task Journal",
+    why: "Persistent task memory that survives across sessions.",
+    detect: taskJournal.detect,
+    steps: taskJournal.install,
+    requires: ["cargo", "claude"],
+  },
+];
+
+// One progress event emitted as the plan runs. The SSE route forwards these to
+// the browser; tests collect them to assert the sequence.
+export type InstallEvent =
+  | { kind: "step"; id: string; title: string; why: string; state: "installing" }
+  | { kind: "step"; id: string; title: string; state: "done" | "skipped" | "failed"; message?: string }
+  | { kind: "done"; installed: string[]; failed: string[]; skipped: string[] };
+
+export interface InstallSummary { installed: string[]; failed: string[]; skipped: string[]; }
+
+// Keep error text short and free of newlines so a failed step reads as one line.
+function trimErr(msg?: string): string {
+  const s = (msg ?? "install failed").replace(/\s+/g, " ").trim();
+  return s.length > 300 ? `…${s.slice(-300)}` : s;
+}
+
+// Runs the units in order. Idempotent: detect() before each — already-present
+// units are skipped, not reinstalled. A unit whose prerequisites are not yet
+// available is skipped with a "needs X" reason. A failed step is reported but
+// does NOT stop the run (independent units still install). Never throws.
+export async function runInstallPlan(
+  units: InstallUnit[],
+  deps: InstallDeps,
+  emit: (e: InstallEvent) => void | Promise<void>,
+  ctx: RecipeCtx = { scope: "user" },
+): Promise<InstallSummary> {
+  const available = new Set<string>();
+  const installed: string[] = [];
+  const failed: string[] = [];
+  const skipped: string[] = [];
+
+  for (const u of units) {
+    if (detect(u.detect, deps).installed) {
+      available.add(u.id);
+      skipped.push(u.id);
+      await emit({ kind: "step", id: u.id, title: u.title, state: "skipped", message: "already installed" });
+      continue;
+    }
+    const missingReq = (u.requires ?? []).filter((r) => !available.has(r));
+    if (missingReq.length) {
+      skipped.push(u.id);
+      await emit({ kind: "step", id: u.id, title: u.title, state: "skipped", message: `needs ${missingReq.join(", ")}` });
+      continue;
+    }
+    await emit({ kind: "step", id: u.id, title: u.title, why: u.why, state: "installing" });
+    const res = runRecipe(u.steps, ctx, deps);
+    if (res.ok) {
+      available.add(u.id);
+      installed.push(u.id);
+      await emit({ kind: "step", id: u.id, title: u.title, state: "done", message: res.warning });
+    } else {
+      failed.push(u.id);
+      await emit({ kind: "step", id: u.id, title: u.title, state: "failed", message: trimErr(res.error) });
+    }
+  }
+
+  await emit({ kind: "done", installed, failed, skipped });
+  return { installed, failed, skipped };
+}
