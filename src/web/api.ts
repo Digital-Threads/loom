@@ -1356,13 +1356,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     let skipped = 0;
     for (const d of drafts) {
       // Idempotent: a draft already imported (same external item) is skipped so
-      // re-running import never duplicates tasks. Drafts without an external id
+      // re-running import never duplicates tasks. An empty id is treated as no
+      // ref (no dedup, external_ref stays NULL); drafts without an external id
       // are created as before.
-      if (d.externalId && findTaskByExternalRef(db, d.externalId)) {
+      const ref = d.externalId ? d.externalId : undefined;
+      if (ref && findTaskByExternalRef(db, ref)) {
         skipped += 1;
         continue;
       }
-      createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description, externalRef: d.externalId });
+      createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description, externalRef: ref });
       created += 1;
     }
     return c.json({ created, skipped });

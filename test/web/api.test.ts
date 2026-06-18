@@ -303,6 +303,14 @@ describe("web api", () => {
     expect(r2).toMatchObject({ created: 0, skipped: 2 });
   });
 
+  it("POST /api/connectors/import treats an empty externalId as no ref (not deduped)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "No id", externalId: "" }] });
+    const a = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number; skipped: number };
+    const b = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number; skipped: number };
+    expect(a).toMatchObject({ created: 1, skipped: 0 });
+    expect(b).toMatchObject({ created: 1, skipped: 0 });
+  });
+
   // ── settings / attachments (D6) ──
   it("settings round-trip via /api/settings (D6)", async () => {
     const app2 = createApi(db);

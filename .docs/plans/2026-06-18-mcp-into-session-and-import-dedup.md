@@ -55,15 +55,20 @@
 
 ## 3. Решение
 
-### 3.1 MCP → сессия
-- В `AimuxLiveLauncherDeps` добавить инъектируемый `listMcp?: () => McpServer[]` (default = реальный `listMcp`).
-- В `spawnSession`: взять `listMcp().filter(s => s.enabled)`. Если пусто → ничего не добавлять.
-- Иначе собрать объект `{ mcpServers: { [id]: { command, args? } } }`, сериализовать в JSON,
-  добавить в `extraArgs` пару `["--mcp-config", json]` **после** `ENFORCE_FLAGS`.
-- JSON передаётся одним argv-элементом (защита от смуглинга, как у `--allowedTools=`).
+### 3.1 MCP → сессия (файловый конфиг)
+- В `mcp.ts`: `mcpRunConfig(servers)` — чистый сборщик: только enabled + валидный
+  (непустая строка) `command`, `args` фильтруются до строк; возвращает
+  `{ mcpServers: { [id]: { command, args? } } }` или `null`, если нечего добавлять.
+- В `mcp.ts`: `writeMcpRunConfig(servers, file?)` — пишет конфиг в файл
+  (`~/.loom/mcp.run.json`) и возвращает путь, либо `null`.
+- В `AimuxLiveLauncherDeps`: инъектируемые `listMcp` и `writeMcpRunConfig` (default — реальные).
+- В `spawnSession`: `const path = writeMcp(listMcp())`; если путь есть →
+  `["--mcp-config", path]` **после** `ENFORCE_FLAGS` (best-effort, ошибка записи не валит сессию).
 
-**Альтернатива (отклонена):** писать временный файл `mcp.json` и давать путь. Отклонено —
-нужен per-spawn lifecycle/очистка; инлайн-JSON проще и `claude` его принимает.
+**Почему файл, а не инлайн-JSON (пересмотрено после ревью):** файл (а) не упирается в
+лимит длины argv (ARG_MAX/E2BIG) при большом реестре — иначе падал бы весь spawn, включая
+token-pilot; (б) работает независимо от того, принимает ли CLI инлайн-JSON. Поля реестра
+валидируются в `mcpRunConfig`, т.к. `~/.loom/mcp.json` редактируем вручную.
 
 ### 3.2 Дедуп импорта
 - `TaskDraft` += необязательное поле `externalId?: string` (аддитивно).

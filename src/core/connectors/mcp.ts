@@ -67,6 +67,43 @@ export function removeMcp(id: string, file: string = mcpFile()): void {
   write(file, data);
 }
 
+/** Path of the generated run-config handed to the agent via `--mcp-config`. */
+export function mcpRunConfigFile(): string {
+  return join(loomDataDir(), "mcp.run.json");
+}
+
+/** Build the Claude `--mcp-config` payload from the registry: only enabled
+ *  servers with a valid (non-empty string) command. The registry file is
+ *  user-editable, so every field is validated here — a malformed entry is
+ *  dropped rather than written out as a broken server. Returns null when there
+ *  is nothing to inject (zero behaviour change). */
+export function mcpRunConfig(
+  servers: McpServer[],
+): { mcpServers: Record<string, { command: string; args?: string[] }> } | null {
+  const mcpServers: Record<string, { command: string; args?: string[] }> = {};
+  for (const s of servers) {
+    if (!s || !s.enabled) continue;
+    if (typeof s.id !== "string" || !s.id) continue;
+    if (typeof s.command !== "string" || !s.command) continue;
+    const args = Array.isArray(s.args) ? s.args.filter((a) => typeof a === "string") : undefined;
+    mcpServers[s.id] = args && args.length ? { command: s.command, args } : { command: s.command };
+  }
+  return Object.keys(mcpServers).length ? { mcpServers } : null;
+}
+
+/** Write the run-config to a file and return its path (passed to the agent as
+ *  `--mcp-config <path>`). A FILE — not inline JSON — so a large registry can
+ *  never blow the argv length limit (E2BIG) and take down the whole spawn, and
+ *  so it works regardless of whether the CLI accepts inline JSON. Returns null
+ *  when there is nothing to inject. */
+export function writeMcpRunConfig(servers: McpServer[], file: string = mcpRunConfigFile()): string | null {
+  const cfg = mcpRunConfig(servers);
+  if (!cfg) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(cfg, null, 2), "utf8");
+  return file;
+}
+
 export type McpProbe = (command: string, args: string[]) => { code: number };
 
 /** Test an MCP server is reachable: probe `command --help` (injectable). */

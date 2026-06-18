@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listMcp, addMcp, toggleMcp, removeMcp, testMcp } from "../../../src/core/connectors/mcp.js";
+import { listMcp, addMcp, toggleMcp, removeMcp, testMcp, mcpRunConfig, writeMcpRunConfig, type McpServer } from "../../../src/core/connectors/mcp.js";
+
+const srv = (over: Partial<McpServer>): McpServer => ({ id: "x", command: "cmd", enabled: true, ...over });
 
 let dir: string;
 let file: string;
@@ -31,5 +33,37 @@ describe("MCP registry (D5.2)", () => {
     expect(testMcp("ok", { file, probe: () => ({ code: 0 }) }).ok).toBe(true);
     expect(testMcp("ok", { file, probe: () => ({ code: 1 }) }).ok).toBe(false);
     expect(testMcp("ghost", { file, probe: () => ({ code: 0 }) }).ok).toBe(false);
+  });
+});
+
+describe("mcpRunConfig — payload for the agent's --mcp-config", () => {
+  it("keeps only enabled servers with a valid command", () => {
+    const cfg = mcpRunConfig([
+      srv({ id: "fs", command: "mcp-fs", args: ["--root", "/w"] }),
+      srv({ id: "off", command: "nope", enabled: false }),
+      srv({ id: "bad", command: "" as unknown as string }),
+    ]);
+    expect(Object.keys(cfg!.mcpServers)).toEqual(["fs"]);
+    expect(cfg!.mcpServers.fs).toEqual({ command: "mcp-fs", args: ["--root", "/w"] });
+  });
+  it("omits args when the server has none, and drops non-string args", () => {
+    const cfg = mcpRunConfig([srv({ id: "a", command: "c", args: ["ok", 1 as unknown as string] })]);
+    expect(cfg!.mcpServers.a).toEqual({ command: "c", args: ["ok"] });
+  });
+  it("returns null when nothing is enabled/valid (zero behaviour change)", () => {
+    expect(mcpRunConfig([])).toBeNull();
+    expect(mcpRunConfig([srv({ enabled: false })])).toBeNull();
+  });
+});
+
+describe("writeMcpRunConfig — file-backed config (no argv blowup)", () => {
+  it("writes the config to a file and returns its path", () => {
+    const out = join(dir, "mcp.run.json");
+    const p = writeMcpRunConfig([srv({ id: "fs", command: "mcp-fs" })], out);
+    expect(p).toBe(out);
+    expect(JSON.parse(readFileSync(out, "utf8"))).toEqual({ mcpServers: { fs: { command: "mcp-fs" } } });
+  });
+  it("returns null and writes nothing when there is nothing to inject", () => {
+    expect(writeMcpRunConfig([], join(dir, "none.json"))).toBeNull();
   });
 });
