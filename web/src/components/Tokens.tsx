@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, TokensReport } from "../api";
 import { StateView } from "./StateView";
-import { savedUsdLabel } from "../ui";
+import { savedUsdLabel, formatUsd } from "../ui";
+import { savedTokensToUsd } from "../pricing";
 
 // token-pilot usage, attributed to who ran it: per-subscription rollup + per-session
 // breakdown labeled by task. "used" = tokens token-pilot consumed; "saved ≈" = its
@@ -28,7 +29,7 @@ export function Tokens({ client }: { client: LoomClient }) {
         <div className="stat"><div className="grp">Tokens used</div><div className="big">{rep.totals.used.toLocaleString()}</div></div>
         <div className="stat">
           <div className="grp">Saved by token-pilot</div>
-          <div className="big">{rep.totals.saved.toLocaleString()} {rep.totals.saved > 0 ? <span className="stat-sub" title={usdHint}>≈{pct(rep.totals.used, rep.totals.saved)}% · {savedUsdLabel(rep.totals.saved)} ≈</span> : null}</div>
+          <div className="big">{rep.totals.saved.toLocaleString()} {rep.totals.saved > 0 ? <span className="stat-sub" title="Estimated $ value of the saved tokens, priced at the default model's input rate">≈{pct(rep.totals.used, rep.totals.saved)}% · {savedUsdLabel(rep.totals.saved)} ≈</span> : null}</div>
         </div>
         <div className="stat"><div className="grp">Sessions</div><div className="big">{rep.bySession.length}</div></div>
       </div>
