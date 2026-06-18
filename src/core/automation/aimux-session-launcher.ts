@@ -5,7 +5,7 @@
 // output (same graceful fallback as before).
 
 import { spawn } from "node:child_process";
-import { loadConfig, buildRunParams, loadActiveProfile, getProfile } from "@digital-threads/aimux/core";
+import { loadConfig, buildRunParams, loadActiveProfile } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
@@ -73,13 +73,11 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
       : allowedTools && allowedTools.length
         ? [`--allowedTools=${allowedTools.join(",")}`]
         : [];
-    // A non-source profile runs under its own CLAUDE_CONFIG_DIR, which doesn't
-    // carry the task-journal plugin — inject our modules' MCP so the agent always
-    // has the journal. The source profile (~/.claude) already loads it as a
-    // plugin, so skip there to avoid a duplicate server.
-    const isSource = (() => { try { return !!getProfile(cfg, profile).is_source; } catch { return false; } })();
-    const mcpArgs = isSource ? [] : ["--mcp-config", enforcedMcpPath()];
-    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, ...mcpArgs, ...permArgs, ...sessionArgs] });
+    // Guarantee our modules' MCP (task-journal) in EVERY session, whatever the
+    // profile or per-project plugin-enablement state — so the agent can always
+    // write the journal. Harmless where the plugin already loads (a distinct
+    // server name, same storage backend).
+    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, "--mcp-config", enforcedMcpPath(), ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
     const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
     const wrapped = sandboxOn && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;
