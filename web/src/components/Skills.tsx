@@ -100,41 +100,89 @@ export function Skills({ client }: { client: LoomClient }) {
         )}
       </div>
 
-      {creating ? <CreateSkill client={client} profiles={profiles} onClose={() => setCreating(false)} onCreated={(name) => { setCreating(false); reload().then(() => open(name)); }} /> : null}
+      {creating ? <CreateSkill client={client} profiles={profiles} onClose={() => { setCreating(false); reload(); }} onCreated={(name) => { setCreating(false); reload().then(() => open(name)); }} /> : null}
     </div>
   );
 }
 
+// A skill name becomes a filesystem path on the server, so it must be a plain
+// slug — mirror the backend's check (and confirm the SKILL.md actually has the
+// expected frontmatter) so we never open an obviously-broken result.
+const VALID_SKILL_NAME = /^[A-Za-z0-9._-]+$/;
+function validateGenerated(name: string, content: string): string | null {
+  if (!VALID_SKILL_NAME.test(name) || name.startsWith("-") || name.includes("..")) {
+    return "The agent returned an invalid skill name.";
+  }
+  const fm = splitFrontmatter(content);
+  if (!fm.description.trim()) return "The generated SKILL.md has no description in its frontmatter.";
+  if (!fm.body.trim()) return "The generated SKILL.md has no body.";
+  return null;
+}
+
+// Two-phase create dialog: describe what the skill should do → the agent writes a
+// SKILL.md → preview the result before opening it. The generate endpoint already
+// saves the file server-side, so "Open" just reveals it and "Regenerate" runs again.
 function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomClient; profiles: string[]; onClose: () => void; onCreated: (name: string) => void }) {
   const [desc, setDesc] = useState("");
   const [profile, setProfile] = useState(profiles[0] ?? "");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ name: string; content: string } | null>(null);
+
   function generate() {
-    if (!desc.trim()) return;
-    setBusy(true);
+    if (busy || !desc.trim()) return;
+    setBusy(true); setError(null); setResult(null);
     client.skillGenerate(desc, profile || undefined)
-      .then((r) => onCreated(r.name))
-      .catch((e) => toast.error(`Couldn't create the skill: ${e}`))
+      .then((r) => {
+        const bad = validateGenerated(r.name, r.content);
+        if (bad) setError(bad);
+        else setResult(r);
+      })
+      .catch((e) => setError(`Couldn't create the skill: ${e}`))
       .finally(() => setBusy(false));
   }
+
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
-        <div className="modal-h">Create skill (AI)</div>
+        <div className="modal-h">{result ? "New skill — preview" : "Create skill (AI)"}</div>
         <div className="modal-b">
-          <textarea className="skills-editor" style={{ height: 120 }} placeholder="Describe what the skill should do — the agent writes a standards-compliant SKILL.md…" value={desc} onChange={(e) => setDesc(e.target.value)} />
-          {profiles.length > 0 ? (
-            <div style={{ marginTop: 8 }}>
-              <span className="muted" style={{ marginRight: 6 }}>Account:</span>
-              <Select size="sm" value={profile} onChange={(e) => setProfile(e.target.value)}>
-                {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
-              </Select>
-            </div>
-          ) : null}
+          {result ? (() => {
+            const fm = splitFrontmatter(result.content);
+            return (
+              <>
+                <div className="skills-sub"><b>{result.name}</b>{fm.invocable ? <span className="skill-inv">invocable</span> : null}</div>
+                {fm.description ? <div className="skills-sub">{fm.description}</div> : null}
+                <div className="skills-md"><Markdown text={fm.body} /></div>
+              </>
+            );
+          })() : (
+            <>
+              <textarea className="skills-editor" style={{ height: 120 }} placeholder="Describe what the skill should do — the agent writes a standards-compliant SKILL.md…" value={desc} disabled={busy} onChange={(e) => setDesc(e.target.value)} />
+              {profiles.length > 0 ? (
+                <div style={{ marginTop: 8 }}>
+                  <span className="muted" style={{ marginRight: 6 }}>Account:</span>
+                  <Select size="sm" value={profile} disabled={busy} onChange={(e) => setProfile(e.target.value)}>
+                    {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+                </div>
+              ) : null}
+            </>
+          )}
+          {error ? <div className="state-err" style={{ marginTop: 10 }}>{error}</div> : null}
         </div>
         <div className="modal-f">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? "Generating…" : "Create"}</button>
+          {result ? (
+            <>
+              <button className="btn" disabled={busy} onClick={generate}>{busy ? "Generating…" : "Regenerate"}</button>
+              <button className="btn acc" onClick={() => onCreated(result.name)}>Open</button>
+            </>
+          ) : (
+            <>
+              <button className="btn" onClick={onClose}>Cancel</button>
+              <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? "Generating…" : "Create"}</button>
+            </>
+          )}
         </div>
       </div>
     </div>
