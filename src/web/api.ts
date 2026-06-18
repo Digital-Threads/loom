@@ -11,7 +11,7 @@ import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../c
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
-import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
+import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, openTask, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
@@ -383,7 +383,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // stage), so the live process edits in isolation. Non-git repos use the repo.
   const taskCwd = (id: string): string | undefined => {
     const t = getTask(db, id);
-    if (t?.repo && isGitRepo(t.repo)) return ensureWorktree(t.repo, id).path;
+    if (t?.repo && isGitRepo(t.repo)) {
+      const path = ensureWorktree(t.repo, id).path;
+      ensureJournalTask(id); // worktree now exists → guarantee a journal, independent of the agent
+      return path;
+    }
     return t?.repo || undefined;
   };
   // The DEDICATED task-journal project the agent wrote to: a git task's own
@@ -504,6 +508,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try { worktreeGit(["branch", "-D", worktreeBranch(taskId)], repoRoot); } catch { /* best-effort */ }
     try { worktreeGit(["worktree", "prune"], repoRoot); } catch { /* best-effort */ }
     try { if (existsSync(wt)) rmSync(wt, { recursive: true, force: true }); } catch { /* best-effort */ }
+    journalEnsured.delete(taskId); // worktree removed → a re-run must re-bootstrap its journal
   };
   // Resolve the main repo root for an orphan worktree (its task row is gone) from
   // the worktree's ".git" pointer file: "gitdir: <repo>/.git/worktrees/<id>".
@@ -623,39 +628,123 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // deletion — but to be safe we ALSO snapshot it at Done. Reads prefer the live
   // journal and fall back to the snapshot when the worktree is gone.
   const JOURNAL_SNAPSHOT_KIND = "journal-snapshot";
+  // A task whose journal is absent — non-git (no 1:1 journal project) or git but
+  // the agent recorded nothing. We mark it explicitly so History shows "no
+  // journal" instead of a blank, and so empty tasks are no longer invisible.
+  const JOURNAL_STATUS_KIND = "journal-status";
+  // Loom tasks whose journal we already guaranteed this server session — taskCwd
+  // runs on every stage, so this in-memory guard keeps ensureJournalTask from
+  // re-querying the journal CLI once a task is known-handled.
+  const journalEnsured = new Set<string>();
+  // Is the task-journal CLI actually reachable? Probed once and cached. We need
+  // this to tell "the agent recorded nothing" (empty journal) apart from "the CLI
+  // is missing, so we simply can't read it" — otherwise every git task would be
+  // mislabelled "no journal" on a host without the CLI.
+  let tjReachable: boolean | undefined;
+  const tjAvailable = (): boolean => {
+    if (tjReachable === undefined) {
+      try { execFileSync("task-journal", ["--version"], { stdio: "ignore" }); tjReachable = true; }
+      catch { tjReachable = false; }
+    }
+    return tjReachable;
+  };
+  // A leading "-" makes task-journal's CLI parse a title/goal as a flag, not a
+  // value (argv injection). Strip leading dashes/space; fall back to the id when
+  // nothing readable is left.
+  const safeCliArg = (s: string, fallback: string): string => s.replace(/^[-\s]+/, "").trim() || fallback;
+  /** Persist an explicit "this task has no reasoning journal" marker so reads can
+   *  surface it. reason: "non-git" (no 1:1 journal project) | "empty" (git but
+   *  the agent recorded nothing). De-duped (a repeat park with the same reason is
+   *  a no-op) so repeated parks don't pile up identical artifacts. Best-effort. */
+  const markNoJournal = (id: string, reason: "non-git" | "empty"): void => {
+    try {
+      const prev = loadResult<{ state?: string; reason?: string }>(id, JOURNAL_STATUS_KIND);
+      if (prev?.state === "none" && prev.reason === reason) return; // already marked → don't accumulate
+      saveResult(id, "memory", JOURNAL_STATUS_KIND, { state: "none", reason });
+    } catch { /* best-effort */ }
+  };
+  /** Guarantee a journal exists for a git task at START (worktree creation),
+   *  independent of whether the agent called task_create. Idempotent: a
+   *  per-session guard plus a check for an existing journal task keep repeat
+   *  stage runs from creating duplicates (the guard is cleared when the worktree
+   *  is cleaned, so a re-run re-bootstraps). Non-git tasks have no 1:1 journal
+   *  project, so they are skipped here (marked "no journal" at snapshot time).
+   *  Best-effort: a journal-CLI failure must never block the task. */
+  const ensureJournalTask = (id: string): void => {
+    if (journalEnsured.has(id)) return;
+    try {
+      const root = journalProjectRoot(id);
+      if (!root) { journalEnsured.add(id); return; } // non-git → no dedicated journal project
+      const t = getTask(db, id);
+      const existing = tasksFromEvents(exportEventsSafe(root));
+      if (existing.length) {
+        // Agent (or a prior call) already opened a journal task → just bind it.
+        for (const jt of existing) bindExternal(root, jt.id, `loom:${id}`);
+      } else {
+        const jid = openTask(root, safeCliArg(t?.title || id, id), safeCliArg(t?.description || t?.title || id, id));
+        if (jid) bindExternal(root, jid, `loom:${id}`);
+      }
+      journalEnsured.add(id);
+    } catch {
+      /* journal bootstrap is best-effort */
+    }
+  };
   /** A board task's story as Markdown. Prefer task-journal's OWN `export-pr`
    *  narrative (Summary / Changes / Why / Verification / Affected) while the
    *  worktree exists; then the Done-time snapshot of that story (survives the
-   *  worktree's deletion); finally a raw-event render as a universal fallback
-   *  (export --project still works after the dir is gone). */
+   *  worktree's deletion); then a raw-event render as a universal fallback
+   *  (export --project still works after the dir is gone); finally an explicit
+   *  "no journal" marker when one was recorded. */
   const boardJournalPack = (id: string): string => {
     const root = journalProjectRoot(id);
-    if (!root) return "";
-    if (existsSync(worktreePath(id))) {
-      const story = boardTaskStory(root); // task-journal's native export-pr
-      if (story.trim()) return story;
+    if (root) {
+      if (existsSync(worktreePath(id))) {
+        const story = boardTaskStory(root); // task-journal's native export-pr
+        if (story.trim()) return story;
+      }
+      const snap = loadResult<{ events?: TjEvent[]; story?: string }>(id, JOURNAL_SNAPSHOT_KIND);
+      if (snap?.story?.trim()) return snap.story;
+      const live = boardTaskJournal(root);
+      if (live.trim()) return live;
+      const rendered = snap?.events ? renderJournalFromEvents(snap.events) : "";
+      if (rendered.trim()) return rendered;
     }
-    const snap = loadResult<{ events?: TjEvent[]; story?: string }>(id, JOURNAL_SNAPSHOT_KIND);
-    if (snap?.story?.trim()) return snap.story;
-    const live = boardTaskJournal(root);
-    if (live.trim()) return live;
-    return snap?.events ? renderJournalFromEvents(snap.events) : "";
+    // Nothing to show — surface the explicit "no journal" marker if we recorded one.
+    const status = loadResult<{ state?: string; reason?: string }>(id, JOURNAL_STATUS_KIND);
+    if (status?.state === "none") {
+      return `No reasoning journal was recorded for this task (${status.reason === "non-git" ? "non-git task" : "agent recorded nothing"}).`;
+    }
+    return "";
   };
   /** Persist the agent's story + journal and bind it to loom:<id> (best-effort).
-   *  Called at Done while the worktree still exists, so both the readable
-   *  export-pr story and the raw events outlive cleanup. No-op for non-git
-   *  tasks, which have no dedicated 1:1 journal project. */
+   *  Called at Done AND at every park/terminal transition while the worktree
+   *  still exists, so both the readable export-pr story and the raw events
+   *  outlive cleanup. A task with no journal is marked explicitly (non-git, or
+   *  git-but-empty) rather than silently skipped. */
   const snapshotJournal = (id: string): void => {
     try {
       const root = journalProjectRoot(id);
-      if (!root) return; // only a git worktree is 1:1 with the board task
+      if (!root) { markNoJournal(id, "non-git"); return; } // only a git worktree is 1:1 with the board task
       const events = exportEventsSafe(root);
-      if (!events.length) return;
+      // Empty AND the CLI is reachable → the agent genuinely recorded nothing.
+      // If the CLI is unreachable we can't tell, so we don't assert "no journal".
+      if (!events.length) { if (tjAvailable()) markNoJournal(id, "empty"); return; }
       saveResult(id, "memory", JOURNAL_SNAPSHOT_KIND, { events, story: boardTaskStory(root) });
       for (const t of tasksFromEvents(events)) bindExternal(root, t.id, `loom:${id}`);
     } catch {
       /* journal snapshot is best-effort */
     }
+  };
+  /** Park a task: flip it to "waiting" and snapshot its journal NOW (before any
+   *  worktree cleanup), unless it already finished. Single chokepoint for every
+   *  terminal/park transition (rate-limit, cost-cap, stop, auto-fallback) so the
+   *  journal is never lost when a task stops short of Done. Returns false if the
+   *  task was already done (no-op). */
+  const parkIfNotDone = (id: string): boolean => {
+    if (getTask(db, id)?.status === "done") return false;
+    updateTaskStatus(db, id, "waiting");
+    snapshotJournal(id);
+    return true;
   };
   const DIFF_SNAPSHOT_KIND = "diff-snapshot";
   /** Snapshot the task's `git diff --stat` at Done, while the worktree branch
@@ -1104,7 +1193,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     sessionLauncher.stop?.(sid ?? "");
     // Reflect the stop and prevent anything from auto-resuming it (the rate-limit
     // auto-fallback only acts on a "rate_limit" reason, so "stopped" is skipped).
-    if (getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+    parkIfNotDone(id); // snapshot the journal before the run ends, unless already done
     saveResult(id, "advance", "stop-reason", { kind: "stopped" });
     recordTurn(id, "advance", "Stopped", "Stopped by the user.");
     return c.json({ ok: true });
@@ -1150,7 +1239,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
             const reset = res.reason.resetsAt ? ` (resets ${res.reason.resetsAt})` : "";
             recordTurn(id, res.stoppedAt ?? "advance", "Rate limit", `Run stopped: ${res.reason.profile ?? "the subscription"} hit its rate limit${reset}. Switch account or wait, then continue.`);
           }
-          if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+          if (res.stoppedAt) parkIfNotDone(id);
           return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
         }
         // manual/gated: raw resume of the same conversation under the new subscription
@@ -1422,7 +1511,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           recordTurn(id, res.stoppedAt ?? "advance", "Rate limit", `Run stopped: ${res.reason.profile ?? "the subscription"} hit its rate limit${reset}. Switch account or wait, then continue.`);
         }
         // Parked (not done) → reflect "waiting / needs you", not a misleading "running".
-        if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+        if (res.stoppedAt) parkIfNotDone(id);
         return { outcome: { ok: true }, ran: res.ran, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {
         streamSinks.delete(id);
@@ -1436,7 +1525,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     updateTaskStatus(db, id, "running");
     const res = await runAndAdvance(db, id, runners, advanceOpts());
     // Parked (not done) → "waiting / needs you" instead of a misleading "running".
-    if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+    if (res.stoppedAt) parkIfNotDone(id);
     return c.json(res);
   });
 
@@ -2051,7 +2140,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       try {
         updateTaskStatus(db, id, "running");
         const res = await advanceTask(db, id, runners, advanceOpts());
-        if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+        if (res.stoppedAt) parkIfNotDone(id);
         return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
       } finally {
         streamSinks.delete(id);
