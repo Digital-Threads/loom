@@ -52,6 +52,10 @@ export function serveApi(opts: ServeOptions = {}) {
   const api = createApi(db);
   app.route("/", api);
 
+  // leak-guard: at boot, reclaim worktrees/branches left behind by done or
+  // deleted tasks (and prune stale git admin records).
+  (api as { sweepLeakedWorktrees?: () => void }).sweepLeakedWorktrees?.();
+
   // Auto-fallback timer: periodically move tasks parked on a rate limit to a
   // subscription that still has headroom, so autopilot recovers without a human.
   // unref so it never keeps the process alive on its own.

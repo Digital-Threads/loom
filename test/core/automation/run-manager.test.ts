@@ -78,6 +78,46 @@ describe("run-manager (L4.3)", () => {
   });
 });
 
+describe("run-manager stop guarantees live-session kill", () => {
+  // keep a run live until released, so stop() acts on a "running" record
+  function liveRun(rm: ReturnType<typeof createRunManager>) {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const runId = rm.start({ projectId: "p1", taskId: "t1", toBus: false }, async () => { await gate; return 0; });
+    return { runId, release };
+  }
+
+  it("stop always invokes stopLive with the run record (kills the live process)", async () => {
+    const killed: string[] = [];
+    const rm = createRunManager(undefined, { stopLive: (rec) => killed.push(rec.taskId!) });
+    const { runId, release } = liveRun(rm);
+    expect(rm.stop(runId)).toBe(true);
+    expect(killed).toEqual(["t1"]); // stopLive ran exactly once
+    expect(rm.get(runId)!.status).toBe("failed");
+    release();
+    await rm.wait(runId);
+  });
+
+  it("does not invoke stopLive for an unknown or already-settled run", async () => {
+    let calls = 0;
+    const rm = createRunManager(undefined, { stopLive: () => { calls += 1; } });
+    expect(rm.stop("run_deadbeefdeadbeef")).toBe(false);
+    const runId = rm.start({ projectId: "p1", toBus: false }, async () => 0);
+    await rm.wait(runId); // settled
+    expect(rm.stop(runId)).toBe(false);
+    expect(calls).toBe(0);
+  });
+
+  it("survives a throwing stopLive (best-effort) and still stops the run", async () => {
+    const rm = createRunManager(undefined, { stopLive: () => { throw new Error("kill failed"); } });
+    const { runId, release } = liveRun(rm);
+    expect(rm.stop(runId)).toBe(true);
+    expect(rm.get(runId)!.status).toBe("failed");
+    release();
+    await rm.wait(runId);
+  });
+});
+
 describe("retryingExecutor (L4.8)", () => {
   function flaky(failTimes: number): StepExecutor & { attempts: number } {
     let attempts = 0;

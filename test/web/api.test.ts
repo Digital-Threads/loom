@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, symlinkSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openStore, createTask, getTask } from "../../src/core/store/db.js";
+import { openStore, createTask, getTask, updateTaskStatus } from "../../src/core/store/db.js";
+import { configureSecurity, securityDataDir, worktreeBranch } from "../../src/core/security/sandbox.js";
 import { setSetting } from "../../src/core/store/settings.js";
 import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
@@ -265,6 +266,59 @@ describe("web api", () => {
     const done = await (await app2.request("/api/tasks/t1/done/run", { method: "POST" })).json();
     expect(done).toEqual({ ok: true });
     expect(closed).toBe(true);
+  });
+
+  // ── worktree/branch cleanup at Done + leak-guard ──
+  it("Done removes the task's worktree AND deletes its branch", async () => {
+    const repo = join(dir, "repo");
+    mkdirSync(join(repo, ".git"), { recursive: true }); // make isGitRepo(repo) true
+    createTask(db, { id: "tw", title: "With repo", repo });
+    const gitCalls: string[] = [];
+    const app2 = createApi(db, { worktreeGit: (args) => { gitCalls.push(args.join(" ")); return ""; } });
+    const done = await (await app2.request("/api/tasks/tw/done/run", { method: "POST" })).json();
+    expect(done).toEqual({ ok: true });
+    expect(gitCalls).toContainEqual(`branch -D ${worktreeBranch("tw")}`); // branch deleted
+    expect(gitCalls.some((c) => c.startsWith("worktree remove --force"))).toBe(true); // worktree removed
+    expect(gitCalls).toContain("worktree prune"); // stale admin records pruned
+  });
+
+  it("Done does not touch git for a non-git task", async () => {
+    createTask(db, { id: "tn", title: "No repo" }); // no repo → no worktree
+    const gitCalls: string[] = [];
+    const app2 = createApi(db, { worktreeGit: (args) => { gitCalls.push(args.join(" ")); return ""; } });
+    await app2.request("/api/tasks/tn/done/run", { method: "POST" });
+    expect(gitCalls).toEqual([]);
+  });
+
+  it("leak-guard sweeps done/orphan worktrees, keeps active ones", () => {
+    const prevBase = securityDataDir();
+    configureSecurity({ dataDir: () => dir }); // worktree base → temp dir
+    try {
+      const repo = join(dir, "repo");
+      mkdirSync(join(repo, ".git"), { recursive: true });
+      const base = join(dir, "worktrees");
+      // a done task with a leftover worktree → must be cleaned
+      createTask(db, { id: "wt-done", title: "Done", repo });
+      updateTaskStatus(db, "wt-done", "done");
+      mkdirSync(join(base, "wt-done"), { recursive: true });
+      // an active task → its worktree must be kept
+      createTask(db, { id: "wt-live", title: "Live", repo });
+      updateTaskStatus(db, "wt-live", "running");
+      mkdirSync(join(base, "wt-live"), { recursive: true });
+      // an orphan worktree (no task row) → repo resolved from its .git pointer
+      mkdirSync(join(base, "wt-orphan"), { recursive: true });
+      writeFileSync(join(base, "wt-orphan", ".git"), `gitdir: ${repo}/.git/worktrees/wt-orphan\n`);
+
+      const gitCalls: string[] = [];
+      const app2 = createApi(db, { worktreeGit: (args) => { gitCalls.push(args.join(" ")); return ""; } });
+      (app2 as unknown as { sweepLeakedWorktrees: () => void }).sweepLeakedWorktrees();
+
+      expect(gitCalls).toContainEqual(`branch -D ${worktreeBranch("wt-done")}`); // done → cleaned
+      expect(gitCalls).toContainEqual(`branch -D ${worktreeBranch("wt-orphan")}`); // orphan → cleaned
+      expect(gitCalls).not.toContainEqual(`branch -D ${worktreeBranch("wt-live")}`); // active → kept
+    } finally {
+      configureSecurity({ dataDir: () => prevBase }); // restore base for other tests
+    }
   });
 
   // ── connectors MCP (D5) ──

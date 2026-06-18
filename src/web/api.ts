@@ -56,13 +56,13 @@ import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from ".
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
-import { worktreeBranch, ensureWorktree, worktreePath } from "../core/security/sandbox.js";
+import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, type GitRunner } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
-import { existsSync, statSync, readFileSync } from "node:fs";
+import { existsSync, statSync, readFileSync, readdirSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { audit } from "../core/security/audit.js";
-import { join as pathJoin, isAbsolute } from "node:path";
+import { join as pathJoin, isAbsolute, dirname } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
@@ -144,6 +144,8 @@ export interface ApiDeps {
   claudePlugin?: (args: string[]) => Promise<{ code: number; stdout: string }>;
   /** Command runner for the onboarding auto-installer (default: makeShellRunner — long timeout + shell). */
   installRunner?: CmdRunner;
+  /** Git runner for worktree/branch cleanup (default: sync `git`). Override for tests. */
+  worktreeGit?: GitRunner;
 }
 
 // Claude's config dir for an aimux profile: the source profile inherits the
@@ -482,6 +484,44 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return (t?.description || t?.title || id) + attachmentsPrompt(db, id);
   };
   const isGitRepo = (p: string) => existsSync(pathJoin(p, ".git"));
+  // Worktree/branch cleanup git runner (sync). Each cleanup step is best-effort so
+  // a git failure never blocks task completion or boot.
+  const worktreeGit: GitRunner =
+    deps.worktreeGit ?? ((args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+  // Drop a finished task's worktree AND its branch, then prune stale git admin
+  // records. removeWorktree only removes the worktree dir — the branch leaks
+  // unless deleted explicitly. Best-effort: isolate each step.
+  const cleanupTaskWorktree = (repoRoot: string, taskId: string): void => {
+    try { removeWorktree(repoRoot, taskId, { git: worktreeGit }); } catch { /* best-effort */ }
+    try { worktreeGit(["branch", "-D", worktreeBranch(taskId)], repoRoot); } catch { /* best-effort */ }
+    try { worktreeGit(["worktree", "prune"], repoRoot); } catch { /* best-effort */ }
+  };
+  // Resolve the main repo root for an orphan worktree (its task row is gone) from
+  // the worktree's ".git" pointer file: "gitdir: <repo>/.git/worktrees/<id>".
+  const repoFromWorktree = (wtDir: string): string | undefined => {
+    try {
+      const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(pathJoin(wtDir, ".git"), "utf8"));
+      return m ? dirname(dirname(dirname(m[1].trim()))) : undefined;
+    } catch { return undefined; }
+  };
+  // leak-guard: reclaim worktrees + branches left behind by tasks that are done
+  // or no longer in the DB (e.g. deleted mid-run), and prune stale admin records.
+  // Called once at server boot (serveApi), not on every createApi (tests).
+  const sweepLeakedWorktrees = (): void => {
+    const base = pathJoin(securityDataDir(), "worktrees");
+    let entries: string[];
+    try { entries = readdirSync(base); } catch { return; } // no worktrees dir → nothing to sweep
+    for (const taskId of entries) {
+      const t = getTask(db, taskId);
+      if (t && t.status !== "done") continue; // active task → keep its worktree
+      const repo = t?.repo ?? repoFromWorktree(pathJoin(base, taskId));
+      if (repo) cleanupTaskWorktree(repo, taskId);
+    }
+    // prune stale admin entries (dirs removed by hand) across every known repo.
+    for (const repo of new Set(listTasks(db).map((t) => t.repo).filter((r): r is string => !!r))) {
+      try { worktreeGit(["worktree", "prune"], repo); } catch { /* best-effort */ }
+    }
+  };
   const realSh: Sh = (cmd, args, cwd) =>
     new Promise((resolve) => {
       // async (execFile, not execFileSync): git push / gh create are network calls
@@ -769,6 +809,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
       if (sid) sessionLauncher.stop?.(sid);
+      // History is snapshotted (journal + diff) above → drop the worktree + branch
+      // so they don't leak. Only for git tasks with a real repo.
+      const dt = getTask(db, id);
+      if (dt?.repo && isGitRepo(dt.repo)) cleanupTaskWorktree(dt.repo, id);
       return { ok: true };
     },
   };
@@ -802,6 +846,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       },
       settle: (rec) => {
         if (rec.taskId) completeRun(db, rec.runId, rec.status === "done" ? 0 : 1, rec.output.join("\n"), rec.error);
+      },
+    }, {
+      // Guarantee a stop always kills the live agent process (else status flips but
+      // Claude keeps running + billing). Resolve the session from the task.
+      stopLive: (rec) => {
+        if (!rec.taskId) return;
+        const sid = getTaskSession(db, rec.taskId).sessionId;
+        if (sid) sessionLauncher.stop?.(sid);
       },
     });
   // Run a single stage in the background, streaming the live session's output to
@@ -1407,6 +1459,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
     await snapshotDiff(id); // freeze the git diff --stat before the branch is merged + deleted
     recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
+    // History snapshotted → drop the worktree + branch so they don't leak.
+    const dt = getTask(db, id);
+    if (dt?.repo && isGitRepo(dt.repo)) cleanupTaskWorktree(dt.repo, id);
     return c.json({ ok: true });
   });
 
@@ -1998,6 +2053,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     }
   }
   (app as Hono & { autoFallbackTick?: () => Promise<void> }).autoFallbackTick = autoFallbackTick;
+  (app as Hono & { sweepLeakedWorktrees?: () => void }).sweepLeakedWorktrees = sweepLeakedWorktrees;
 
   return app;
 }

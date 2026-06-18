@@ -60,10 +60,11 @@ export interface RunManager {
   /** Inject stdin into a live run (loom-isd.13). Returns false if the run is
    *  unknown or never registered an input handler. */
   sendInput(runId: string, data: string): boolean;
-  /** Stop a running run: mark it terminal and drop its input handler. Returns
-   *  false if the run is unknown or already settled. The real work is halted by
-   *  killing the live session process (sessionLauncher.stop); this makes the run
-   *  record honest immediately (board / SSE / active-run stop seeing it run). */
+  /** Stop a running run: mark it terminal, drop its input handler, and ALWAYS
+   *  kill the live session process via the wired stopLive hook. Returns false if
+   *  the run is unknown or already settled. Killing the process is guaranteed by
+   *  stop itself (not left to each caller), so a stopped run never leaves a live
+   *  Claude process running + billing. */
   stop(runId: string): boolean;
 }
 
@@ -71,7 +72,15 @@ function newRunId(): string {
   return `run_${randomBytes(8).toString("hex")}`;
 }
 
-export function createRunManager(persist?: RunPersist): RunManager {
+/** Extra wiring for the manager. `stopLive` is called inside stop() whenever a
+ *  run is halted, so killing the live agent process is guaranteed by stop itself
+ *  (not left to each caller) — otherwise a stopped run flips status but the Claude
+ *  process keeps running and billing. */
+export interface RunManagerOptions {
+  stopLive?: (rec: RunRecord) => void;
+}
+
+export function createRunManager(persist?: RunPersist, opts?: RunManagerOptions): RunManager {
   const runs = new Map<string, RunRecord>();
   const settled = new Map<string, Promise<RunRecord>>();
   const inputHandlers = new Map<string, (data: string) => void>();
@@ -131,6 +140,9 @@ export function createRunManager(persist?: RunPersist): RunManager {
       rec.status = "failed";
       rec.error = "stopped by user";
       inputHandlers.delete(runId);
+      // Always kill the live session — guarantee no orphaned Claude process keeps
+      // billing after a stop. Best-effort: a failing hook must not break stop.
+      try { opts?.stopLive?.(rec); } catch { /* best-effort */ }
       return true;
     },
     sendInput: (runId, data) => {
