@@ -6,12 +6,24 @@ Today Loom ships with three layers: **aimux** (AI-CLI accounts and sessions), **
 
 ## Install
 
+**Prerequisite: [Bun](https://bun.sh).** Loom's server runs on the Bun runtime
+(`Bun.serve`), so Bun must be installed even if you install Loom with npm.
+
 ```bash
-npm install -g @digital-threads/loom
+bun i -g @digital-threads/loom     # or: npm i -g @digital-threads/loom
 loom
 ```
 
-`loom` with no arguments starts the TUI. Move between tabs with `←` / `→`, quit with `q`. On a clean start the **Catalog** tab is active so you can install plugins right away.
+`loom` with no arguments starts the app — the local API and the web UI — and
+opens the dashboard in your browser. Stop it with `Ctrl+C`.
+
+Flags:
+
+```bash
+loom serve --port 4400             # listen on a specific port
+loom serve --no-open               # start without opening a browser
+loom serve --project /path/to/repo # run against another project directory
+```
 
 From source (development) — clone the repo, then:
 
@@ -36,7 +48,8 @@ Each installed tool (aimux / Token Pilot / Task Journal) also contributes its ow
 ## Command line
 
 ```bash
-loom                                  # start the TUI
+loom                                  # start the app (API + web UI), opens the browser
+loom serve [--port N] [--no-open] [--project <dir>]
 loom plugin list                      # what's installed
 loom plugin add <source> --yes        # install (npm package, git ref, or local path)
 loom plugin remove <name>             # remove
@@ -77,6 +90,37 @@ The one-way rule is the core invariant: plugins have zero dependency on Loom and
 TypeScript, [Ink](https://github.com/vadimdemedes/ink) 7 (React in the terminal), Bun for build and run, Vitest for tests. Node ≥ 22.
 
 ```bash
-bun run build      # tsc + copy plugin manifests into dist/
+bun run build      # check:ds + tsc + build web + copy plugin manifests into dist/
 bunx vitest run    # tests
 ```
+
+## Publishing (maintainers)
+
+Loom depends on five sibling layers — `@digital-threads/aimux`,
+`@digital-threads/loom-knowledge`, `@digital-threads/loom-swarm`,
+`@digital-threads/loom-quality`, `@digital-threads/loom-security`. Locally they
+resolve through `file:../…`; the published package depends on them by their
+registry versions instead.
+
+The swap is automatic: `prepack` rewrites every `file:..` dependency to the
+**version of the layer currently installed** (read from its
+`node_modules/…/package.json`, so the versions stay in lock-step — there is no
+hardcoded version list to keep in sync), and `postpack` restores the `file:../`
+development manifest. The committed `package.json` always stays on `file:../`.
+
+**Publish with `npm publish`**, not `bun publish` — the swap relies on the
+`prepack`/`postpack` lifecycle hooks, and npm runs them reliably. Use `bun
+publish` only if you have confirmed it runs those hooks.
+
+Order to publish a release:
+
+1. Publish the five layers first, then install them so `loom-host` resolves the
+   exact versions to pin (publishing from the dev monorepo, where they are
+   linked, already satisfies this).
+2. Then `npm publish` from `loom-host`.
+
+Verify the tarball before publishing: run `bun run build` first (a bare
+`npm pack` does **not** rebuild — only `npm publish` triggers the build via
+`prepublishOnly`), then `npm pack --dry-run`. It must list `dist/`, `web/dist/`,
+and `README.md`, and the sibling deps in the packed `package.json` must be
+versions, not `file:../`.

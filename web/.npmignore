@@ -1,0 +1,6 @@
+# The built UI (web/dist) MUST ship in the npm package — the server serves it.
+# web/.gitignore excludes `dist` (build output, not committed). npm uses THIS
+# file instead of .gitignore for this directory, and it deliberately does not
+# list `dist`, so the built UI is kept in the published tarball.
+node_modules
+*.tsbuildinfo
