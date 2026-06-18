@@ -134,7 +134,7 @@ export function App() {
               onChanged={() => setReload((r) => r + 1)}
             />
           ) : view === "board" ? (
-            <Board key={reload} client={client} onOpen={setTaskId} projects={projects} projectFilter={boardProject} />
+            <Board key={reload} client={client} onOpen={setTaskId} onNew={() => setShowNew(true)} projects={projects} projectFilter={boardProject} />
           ) : view === "projects" ? (
             <Projects client={client} onSwitched={() => setReload((r) => r + 1)} />
           ) : view === "accounts" ? (

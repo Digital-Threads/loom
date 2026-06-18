@@ -9,11 +9,13 @@ import { toast } from "../toast";
 export function Board({
   client,
   onOpen,
+  onNew,
   projects = [],
   projectFilter = "",
 }: {
   client: LoomClient;
   onOpen: (id: string) => void;
+  onNew?: () => void; // open the "new task" flow from the board's empty state
   projects?: ProjectEntry[];
   projectFilter?: string; // "" = all
 }) {
@@ -33,6 +35,20 @@ export function Board({
 
   const projName = (id: string) => projects.find((p) => p.projectId === id)?.name;
   const visible = (card: { projectId: string }) => !projectFilter || card.projectId === projectFilter;
+
+  // Whole-board empty state: with no task in any column there is nothing to drag,
+  // so a row of empty columns reads as broken. Show one clear empty state instead.
+  // Distinguish "no tasks at all" from "none under the current project filter".
+  if (!cols.some((c) => c.cards.some(visible))) {
+    const anyTask = cols.some((c) => c.cards.length > 0);
+    return (
+      <StateView
+        kind="empty"
+        msg={anyTask ? "No tasks in this project yet." : "No tasks yet. Create one to get started."}
+        action={onNew ? <button className="btn acc" onClick={onNew}>+ New task</button> : undefined}
+      />
+    );
+  }
 
   // DnD: drag a card onto a column → move the task to that stage AND start it.
   // The drag IS the approval: the agent runs the dropped stage right away in the
@@ -169,7 +185,7 @@ export function Board({
                 </div>
               ))
             ) : (
-              <div className="skip">—</div>
+              <div className="dropzone">Drop a task here</div>
             )}
           </div>
         </div>
