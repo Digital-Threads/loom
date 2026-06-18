@@ -20,6 +20,7 @@ export const CREATE_TABLES = `
     description TEXT,
     profile     TEXT,                           -- current aimux subscription this task's session runs under (mutable; switched mid-session via --resume)
     project_id  TEXT,                           -- which registered project (cross-project board); backfilled to the home project
+    external_ref TEXT,                          -- source tracker item id (e.g. bd issue id) — anchors idempotent import
     session_id      TEXT,                       -- the task's persistent Claude session (one session per task)
     session_started INTEGER NOT NULL DEFAULT 0, -- 0 = session not yet created (next call uses --session-id), 1 = resume
     created_at  INTEGER NOT NULL,

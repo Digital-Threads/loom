@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
@@ -1353,11 +1353,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     // AgentRuntime whose connectors rely on `this` keeps its binding.
     const drafts = deps.importDrafts ? deps.importDrafts() : runtime.connectors.importDrafts();
     let created = 0;
+    let skipped = 0;
     for (const d of drafts) {
-      createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description });
+      // Idempotent: a draft already imported (same external item) is skipped so
+      // re-running import never duplicates tasks. Drafts without an external id
+      // are created as before.
+      if (d.externalId && findTaskByExternalRef(db, d.externalId)) {
+        skipped += 1;
+        continue;
+      }
+      createTask(db, { id: `t-${randomUUID().slice(0, 8)}`, title: d.title, description: d.description, externalRef: d.externalId });
       created += 1;
     }
-    return c.json({ created });
+    return c.json({ created, skipped });
   });
 
   // ─── settings / attachments (D6) ──────────────────────────────────────────────

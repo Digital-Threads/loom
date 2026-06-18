@@ -48,6 +48,7 @@ const ENSURE_COLUMNS: Record<string, Array<{ name: string; ddl: string }>> = {
     { name: "session_started", ddl: "session_started INTEGER NOT NULL DEFAULT 0" },
     { name: "profile", ddl: "profile TEXT" },
     { name: "project_id", ddl: "project_id TEXT" },
+    { name: "external_ref", ddl: "external_ref TEXT" },
   ],
 };
 
@@ -99,6 +100,7 @@ export interface TaskRow {
   description: string | null;
   profile: string | null;
   project_id: string | null;
+  external_ref: string | null;
   session_id: string | null;
   session_started: number;
   created_at: number;
@@ -115,6 +117,8 @@ export interface CreateTaskInput {
   description?: string;
   profile?: string;
   projectId?: string;
+  /** External tracker item id (e.g. bd issue id) — anchors idempotent import. */
+  externalRef?: string;
 }
 
 export const STAGE_KEYS = [
@@ -133,8 +137,8 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
   const now = Date.now();
   const route = input.route ?? STAGE_KEYS.slice();
   db.prepare(
-    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, profile, project_id, created_at, updated_at)
-     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, title, status, run_mode, route, repo, branch, description, profile, project_id, external_ref, created_at, updated_at)
+     VALUES (?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.id,
     input.title,
@@ -145,6 +149,7 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
     input.description ?? null,
     input.profile ?? null,
     input.projectId ?? null,
+    input.externalRef ?? null,
     now,
     now,
   );
@@ -164,6 +169,12 @@ export function createTask(db: Database.Database, input: CreateTaskInput): TaskR
 
 export function getTask(db: Database.Database, id: string): TaskRow | undefined {
   return db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as TaskRow | undefined;
+}
+
+/** Find a task previously imported from the given external tracker item, if any.
+ *  Anchors idempotent import — a draft whose externalId already has a task is skipped. */
+export function findTaskByExternalRef(db: Database.Database, ref: string): TaskRow | undefined {
+  return db.prepare("SELECT * FROM tasks WHERE external_ref = ?").get(ref) as TaskRow | undefined;
 }
 
 export function listTasks(db: Database.Database): TaskRow[] {

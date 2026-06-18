@@ -11,4 +11,10 @@ describe("beadsConnector (D5.4)", () => {
   it("returns [] on bad output", () => {
     expect(beadsConnector({ run: () => "not json" }).import()).toEqual([]);
   });
+  it("carries the issue id as externalId (idempotent import anchor)", () => {
+    const c = beadsConnector({ run: () => JSON.stringify([{ id: "bd-7", title: "Fix" }, { title: "NoId" }]) });
+    const drafts = c.import();
+    expect(drafts[0].externalId).toBe("bd-7");
+    expect(drafts[1].externalId).toBeUndefined();
+  });
 });

@@ -10,6 +10,7 @@ import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
 import { enforcedSettingsPath } from "./enforced-settings.js";
+import { listMcp as listMcpServers, type McpServer } from "../connectors/mcp.js";
 
 export interface AimuxLiveLauncherDeps {
   loadConfig?: typeof loadConfig;
@@ -20,6 +21,21 @@ export interface AimuxLiveLauncherDeps {
    *  worktree/cwd) when a backend is available. Off by default. A function is
    *  resolved per spawn so a Settings toggle takes effect on the next run. */
   sandbox?: boolean | (() => boolean);
+  /** Source of the user's MCP registry (default: the real ~/.loom/mcp.json).
+   *  Injectable for tests. */
+  listMcp?: () => McpServer[];
+}
+
+/** Build the `--mcp-config <json>` pair from the enabled MCP servers, so the
+ *  agent session actually receives the servers the user registered. Disabled
+ *  servers and an empty registry yield no flag (zero behaviour change). The
+ *  JSON is one argv element — it can never be re-read as a flag. */
+export function mcpConfigArgs(servers: McpServer[]): string[] {
+  const enabled = servers.filter((s) => s.enabled);
+  if (enabled.length === 0) return [];
+  const mcpServers: Record<string, { command: string; args?: string[] }> = {};
+  for (const s of enabled) mcpServers[s.id] = s.args && s.args.length ? { command: s.command, args: s.args } : { command: s.command };
+  return ["--mcp-config", JSON.stringify({ mcpServers })];
 }
 
 // manual/gated: normal Claude permissions (approvals surfaced to the Loom UI).
@@ -55,6 +71,7 @@ function emptyProc(): ProcLike {
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
+  const listMcp = deps.listMcp ?? listMcpServers;
   const spawnSession: SpawnSession = ({ sessionId, resume, cwd, env: spineEnv, bypassPermissions, allowedTools, profile: runProfile }) => {
     const cfg = load();
     // Which subscription runs this session: the task's current profile (per-run,
@@ -72,7 +89,10 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
       : allowedTools && allowedTools.length
         ? [`--allowedTools=${allowedTools.join(",")}`]
         : [];
-    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, ...permArgs, ...sessionArgs] });
+    // The user's enabled MCP servers, passed additively after the enforced
+    // token-pilot --settings (independent flag — injection is not affected).
+    const mcpArgs = mcpConfigArgs(listMcp());
+    const built = build(cfg, profile, { model: deps.model, extraArgs: [...STREAM_FLAGS, ...ENFORCE_FLAGS, ...mcpArgs, ...permArgs, ...sessionArgs] });
     // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd) when enabled.
     const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
     const wrapped = sandboxOn && cwd ? wrapCommand(detectSandbox(), built.cli, built.args, cwd) : built;

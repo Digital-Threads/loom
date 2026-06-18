@@ -14,6 +14,7 @@ import {
   setStageGate,
   setTaskSession,
   getTaskSession,
+  findTaskByExternalRef,
 } from "../../../src/core/store/db.js";
 import type Database from "better-sqlite3";
 
@@ -147,6 +148,13 @@ describe("core-store", () => {
     );
     deleteTask(db, "d2");
     expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("perm.allow.d2")).toBeUndefined();
+  });
+
+  it("stores external_ref and finds the task by it (idempotent import anchor)", () => {
+    createTask(db, { id: "imp1", title: "From tracker", externalRef: "bd-42" });
+    expect(getTask(db, "imp1")!.external_ref).toBe("bd-42");
+    expect(findTaskByExternalRef(db, "bd-42")!.id).toBe("imp1");
+    expect(findTaskByExternalRef(db, "bd-999")).toBeUndefined();
   });
 
   // Invariant: deleteTask must wipe every table that has a task_id column. If a

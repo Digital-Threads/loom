@@ -295,6 +295,14 @@ describe("web api", () => {
     expect(r.created).toBe(2);
   });
 
+  it("POST /api/connectors/import is idempotent by externalId (no duplicates)", async () => {
+    const app2 = createApi(db, { importDrafts: () => [{ title: "Issue 1", externalId: "bd-1" }, { title: "Issue 2", externalId: "bd-2" }] });
+    const r1 = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number; skipped: number };
+    expect(r1).toMatchObject({ created: 2, skipped: 0 });
+    const r2 = (await (await app2.request("/api/connectors/import", { method: "POST" })).json()) as { created: number; skipped: number };
+    expect(r2).toMatchObject({ created: 0, skipped: 2 });
+  });
+
   // ── settings / attachments (D6) ──
   it("settings round-trip via /api/settings (D6)", async () => {
     const app2 = createApi(db);

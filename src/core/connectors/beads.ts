@@ -23,7 +23,8 @@ export function beadsConnector(opts: { run?: BdRunner } = {}): Connector {
         const i = raw as Record<string, unknown>;
         const title = typeof i.title === "string" ? i.title : "";
         if (!title) continue;
-        out.push({ title, description: typeof i.description === "string" ? i.description : undefined });
+        const externalId = typeof i.id === "string" ? i.id : undefined;
+        out.push({ title, description: typeof i.description === "string" ? i.description : undefined, externalId });
       }
       return out;
     },

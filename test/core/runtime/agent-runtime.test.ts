@@ -87,7 +87,7 @@ describe("AgentRuntime seam", () => {
     const app = createApi(db, { runtime });
     const res = await app.request("/api/connectors/import", { method: "POST" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ created: 1 });
+    expect(await res.json()).toEqual({ created: 1, skipped: 0 });
     expect(calls.importDrafts).toBe(1);
   });
 
