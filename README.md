@@ -1,8 +1,10 @@
 # Loom
 
-One terminal screen for the AI-development tools that normally live apart. Loom is a local control center: install plugins from a single catalog, see every layer on one dashboard, and manage them in place. Each plugin is self-contained and works without Loom — the dependency is one-way: Loom reads and orchestrates the plugins, the plugins know nothing about Loom.
+**Give Loom a task; it runs that task through a real engineering pipeline — analysis → brainstorm → spec → plan → code → review → QA → PR — driving an AI agent through every stage in an isolated sandbox, and shows the whole thing on a board.** You watch, or let it run on autopilot and review the PR it produces.
 
-Today Loom ships with three layers: **aimux** (AI-CLI accounts and sessions), **Token Pilot** (token savings on code reading), and **Task Journal** (the reasoning behind your work — hypotheses, decisions, findings). The platform is built to grow: new layers slot in as new adapters.
+Under the board, Loom is also a local control center for the AI-development tools that normally live apart: install plugins and MCP servers from one place, see every layer on one dashboard, and manage them in-app. Each layer is self-contained and works without Loom — the dependency is one-way: Loom reads and orchestrates the layers, the layers know nothing about Loom.
+
+The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits), **Token Pilot** (60–80% token savings on code reading), **Task Journal** (the reasoning behind your work — decisions, rejections, findings), plus the standalone **Knowledge / Swarm / Quality / Security** layers. New layers slot in as new adapters.
 
 ## Install
 
@@ -16,6 +18,12 @@ loom
 
 `loom` with no arguments starts the app — the local API and the web UI — and
 opens the dashboard in your browser. Stop it with `Ctrl+C`.
+
+**First run sets itself up.** The onboarding screen checks your prerequisites
+(the `claude` CLI, `cargo`) and offers a one-click **Install missing** that pulls
+in the rest — Token Pilot and Task Journal (and `cargo`/Rust if needed) — so you
+don't have to install dependencies by hand. Bun is the one prerequisite you bring
+yourself (above).
 
 Flags:
 
@@ -35,15 +43,15 @@ bun run start
 
 ## What it shows
 
-- **Overview** — a summary across every active layer.
-- **Catalog** — install / remove / update plugins from one place.
-- **Tasks & Tokens** — how many tokens a given task cost. Where Loom can tie spend to a task exactly (by a shared session id) it marks it `exact`; where it can only estimate by time, `≈ estimate`.
-- **Timeline** — a unified chronology of events across all layers.
-- **Config** — `loom config doctor` surfaced in the UI: what's installed, whether external tools are present, config conflicts.
-- **Settings** — edit plugin settings (e.g. Token Pilot hook mode and thresholds).
-- **Plugins** — manage installed plugins.
+- **Board** — your tasks as pipeline stages. Drag a card onto a stage to run it; cards show live status (running / waiting / done / failed) and project.
+- **Memory** — the readable story of each task: what it was, what was decided and why, what was verified, and the real **cost in $** plus the **$ saved** by Token Pilot.
+- **Connectors** — install Claude plugins and MCP servers, and import issues from a tracker (beads / GitHub) into board tasks.
+- **Knowledge / Skills / Layers** — recall prior reasoning; a library of agent skills; the catalog of layers and their status.
+- **Accounts / Tokens** — subscriptions and rate limits; token usage and savings, attributed per task and per account (marked `exact` when tied to a session id, `≈ estimate` otherwise).
+- **Security / Quality / Swarm** — command policy + secret-scan + audit; configurable Review/QA runners; multi-attempt coordination.
+- **Timeline / Settings / Projects** — a unified event chronology; settings; multi-project management.
 
-Each installed tool (aimux / Token Pilot / Task Journal) also contributes its own tab. If a tool isn't installed, its tab is simply empty and the rest keep working.
+Each layer is self-contained: if a tool isn't installed, its section is simply empty and the rest keep working.
 
 ## Command line
 
@@ -101,31 +109,13 @@ bunx vitest run    # tests
 
 ## Publishing (maintainers)
 
-Loom depends on five sibling layers — `@digital-threads/aimux`,
-`@digital-threads/loom-knowledge`, `@digital-threads/loom-swarm`,
-`@digital-threads/loom-quality`, `@digital-threads/loom-security`. Locally they
-resolve through `file:../…`; the published package depends on them by their
-registry versions instead.
+The full release map — every package and plugin, which registry it goes to
+(npm / crates.io / Claude marketplace), its version, the exact publish command,
+and the dependency-correct order — lives in **[PUBLISHING.md](./PUBLISHING.md)**.
 
-The swap is automatic: `prepack` rewrites every `file:..` dependency to the
-**version of the layer currently installed** (read from its
-`node_modules/…/package.json`, so the versions stay in lock-step — there is no
-hardcoded version list to keep in sync), and `postpack` restores the `file:../`
-development manifest. The committed `package.json` always stays on `file:../`.
-
-**Publish with `npm publish`**, not `bun publish` — the swap relies on the
-`prepack`/`postpack` lifecycle hooks, and npm runs them reliably. Use `bun
-publish` only if you have confirmed it runs those hooks.
-
-Order to publish a release:
-
-1. Publish the five layers first, then install them so `loom-host` resolves the
-   exact versions to pin (publishing from the dev monorepo, where they are
-   linked, already satisfies this).
-2. Then `npm publish` from `loom-host`.
-
-Verify the tarball before publishing: run `bun run build` first (a bare
-`npm pack` does **not** rebuild — only `npm publish` triggers the build via
-`prepublishOnly`), then `npm pack --dry-run`. It must list `dist/`, `web/dist/`,
-and `README.md`, and the sibling deps in the packed `package.json` must be
-versions, not `file:../`.
+In short: `loom` depends on five sibling layers (`@digital-threads/aimux` +
+`loom-knowledge` / `-swarm` / `-quality` / `-security`) via `file:../` locally;
+`prepack` swaps those to registry versions for the tarball and `postpack`
+restores them. **Publish the layers first, then `npm publish` from `loom-host`**
+— use `npm publish` (not `bun publish`), since the swap relies on the
+`prepack`/`postpack` hooks.
