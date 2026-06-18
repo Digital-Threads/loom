@@ -48,10 +48,10 @@ export function Settings({ client }: { client: LoomClient }) {
               e.target.value = String(capped);
               save("cost.capUsd", capped);
             }} />
-          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = no limit (default)</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>0 = no limit (default)</span>
         </span>
       </div>
-      <div className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
         Useful with Anthropic API-key billing (pay-per-token) — caps spend per task; autopilot stops when reached. On a flat-rate subscription, leave 0.
       </div>
       <div className="kv">
@@ -64,7 +64,7 @@ export function Settings({ client }: { client: LoomClient }) {
           <button className={`btn ${sandbox ? "acc" : ""}`} onClick={() => save("sandbox.enabled", !sandbox)}>{sandbox ? "on" : "off"}</button>
         </span>
       </div>
-      <div className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
         Confines agent writes to the task worktree (bubblewrap / sandbox-exec). Requires the tool installed; verify in your environment.
       </div>
     </div>

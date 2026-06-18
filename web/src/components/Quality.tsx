@@ -38,7 +38,7 @@ export function Quality({ client }: { client: LoomClient }) {
         AI code review + quality checks. Standalone package <code>@digital-threads/loom-quality</code>.
       </p>
 
-      <h2>Review pipeline <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(fixed; findings accumulate → one fix)</span></h2>
+      <h2>Review pipeline <span className="muted" style={{ fontSize: "var(--fs-xs)", fontWeight: 400 }}>(fixed; findings accumulate → one fix)</span></h2>
       <ul className="finding-list">
         {REVIEWERS.map((r) => (
           <li key={r.key} className="finding sev-info">
@@ -48,7 +48,7 @@ export function Quality({ client }: { client: LoomClient }) {
         ))}
       </ul>
 
-      <h2>QA checks <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(click to toggle)</span></h2>
+      <h2>QA checks <span className="muted" style={{ fontSize: "var(--fs-xs)", fontWeight: 400 }}>(click to toggle)</span></h2>
       {!qa ? <StateView kind="loading" /> : (
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           {QA_OPTIONS.map((o) => {
@@ -61,7 +61,7 @@ export function Quality({ client }: { client: LoomClient }) {
           })}
         </div>
       )}
-      <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Applies to the QA stage of new runs. Empty → default (tests + build).</p>
+      <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 8 }}>Applies to the QA stage of new runs. Empty → default (tests + build).</p>
     </div>
   );
 }

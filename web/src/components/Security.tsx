@@ -49,7 +49,7 @@ export function Security({ client }: { client: LoomClient }) {
             onClick={() => { const v = !sandbox; setSandbox(v); client.saveSetting("sandbox.enabled", v).catch(() => setSandbox(!v)); }}>
             {sandbox === null ? "…" : sandbox ? "on" : "off"}
           </button>
-          <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Confines agent writes to the worktree (bubblewrap / sandbox-exec).</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>Confines agent writes to the worktree (bubblewrap / sandbox-exec).</span>
         </span>
       </div>
 
@@ -58,7 +58,7 @@ export function Security({ client }: { client: LoomClient }) {
         <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">secrets found</div></div>
         <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">worktree events</div></div>
       </div>
-      <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>
         Secret scanning runs on every agent turn. Command-blocking and worktree events require the OS sandbox (above) — those counters stay 0 until it's enabled.
       </div>
 

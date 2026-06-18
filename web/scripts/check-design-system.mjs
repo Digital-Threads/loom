@@ -60,6 +60,11 @@ function lint(file, ext) {
     if (/font-family\s*:/.test(line) && !/var\(--(?:font|sans|mono|display)/.test(line)) {
       violations.push(`${at}  hardcoded font-family — use var(--font-…)`);
     }
+    // Components must not inline a hardcoded font size; use a var(--fs-…) token
+    // (e.g. fontSize: "var(--fs-xs)"). Spacing is left to existing house style.
+    if (ext === ".tsx" && /fontSize\s*:\s*-?\d/.test(line)) {
+      violations.push(`${at}  inline hardcoded fontSize — use var(--fs-…)`);
+    }
   });
 }
 

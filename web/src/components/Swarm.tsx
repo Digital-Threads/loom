@@ -26,7 +26,7 @@ export function Swarm(_props: { client: LoomClient }) {
           </li>
         ))}
       </ul>
-      <p className="muted" style={{ fontSize: 12 }}>
+      <p className="muted" style={{ fontSize: "var(--fs-xs)" }}>
         Stateless utility — no live state or dashboard: swarm runs ephemerally inside a task. A panel will appear once swarm grows background runs.
       </p>
     </div>

@@ -84,7 +84,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
                 <td className="num">{p.saved.toLocaleString()}{p.saved > 0 ? <span className="crumb"> ({pct(p.used, p.saved)}%)</span> : null}</td>
                 <td className="acct-act-cell">
                   <div className="acct-actions">
-                    {p.active ? <span className="muted" style={{ fontSize: 12 }}>default</span>
+                    {p.active ? <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>default</span>
                       : <button className="btn sm" disabled={busy} onClick={() => setDefault(p.projectId)}>Set default</button>}
                     {!p.active ? (
                       <button className="btn sm icon-bad" disabled={busy} aria-label={`Remove project ${p.name}`} title="Remove this project from Loom" onClick={() => remove(p.projectId, p.name)}>✕</button>

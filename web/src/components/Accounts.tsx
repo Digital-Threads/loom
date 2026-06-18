@@ -143,7 +143,7 @@ export function Accounts({ client }: { client: LoomClient }) {
                       <button className="btn acc sm" disabled={busy} title="Sign in to this subscription" onClick={() => setAuthProfile(s.name)}>Authorize</button>
                     ) : null}
                     {active
-                      ? <span className="muted" style={{ fontSize: 12 }}>in use</span>
+                      ? <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>in use</span>
                       : <button className="btn sm" disabled={busy} onClick={() => setActive(s.name)}>Set active</button>}
                     {!s.isSource && !active ? (
                       <button className="btn sm icon-bad" disabled={busy} aria-label={`Remove subscription ${s.name}`} title="Remove this subscription" onClick={() => { setRemoving(s.name); setRemoveInput(""); }}>✕</button>
@@ -162,7 +162,7 @@ export function Accounts({ client }: { client: LoomClient }) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-h" style={{ color: "var(--bad)" }}>Remove "{removing}"?</div>
             <div className="modal-b">
-              <p style={{ margin: "0 0 12px", fontSize: 13 }}>
+              <p style={{ margin: "0 0 12px", fontSize: "var(--fs-sm)" }}>
                 This removes the profile entry from aimux config. Credentials on disk are not deleted.
                 Type <b>{removing}</b> to confirm:
               </p>
@@ -177,7 +177,7 @@ export function Accounts({ client }: { client: LoomClient }) {
       ) : null}
 
       <h2 style={{ marginTop: 24 }}>Sessions <span className="n">{ws.sessions.length}</span></h2>
-      <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginBottom: 10 }}>
         Claude conversations aimux is tracking (one per task run), grouped by the profile that ran them.
       </div>
       {ws.sessions.length ? (
