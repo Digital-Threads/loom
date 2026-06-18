@@ -142,7 +142,7 @@ export function App() {
           ) : view === "tokens" ? (
             <Tokens client={client} />
           ) : view === "memory" ? (
-            <Memory client={client} />
+            <Memory client={client} projects={projects} />
           ) : view === "timeline" ? (
             <Timeline client={client} />
           ) : view === "knowledge" ? (
