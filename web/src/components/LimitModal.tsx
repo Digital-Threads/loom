@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 
 // Shown when the task's current subscription is near its rate limit. Lets the
 // user switch to another account (the conversation resumes under it); if they
@@ -42,11 +43,11 @@ export function LimitModal({
           {profiles.length ? (
             <label className="fld">
               <span>Switch to</span>
-              <select value={pick} onChange={(e) => setPick(e.target.value)}>
+              <Select block value={pick} onChange={(e) => setPick(e.target.value)}>
                 {profiles.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           ) : (
             <div className="muted">No other subscription available — add one in Accounts.</div>

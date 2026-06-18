@@ -18,6 +18,7 @@ import { Security } from "./components/Security";
 import { Quality } from "./components/Quality";
 import { Swarm } from "./components/Swarm";
 import { Onboarding } from "./components/Onboarding";
+import { Select } from "./components/Select";
 import { Toaster } from "./components/Toaster";
 
 const SECTION_TITLES: Record<string, string> = {
@@ -115,10 +116,10 @@ export function App() {
           {view === "board" && !inTask ? (
             <div className="right">
               {projects.length > 1 ? (
-                <select className="inp" value={boardProject} onChange={(e) => setBoardProject(e.target.value)} title="Filter the board by project">
+                <Select value={boardProject} onChange={(e) => setBoardProject(e.target.value)} title="Filter the board by project">
                   <option value="">All projects</option>
                   {projects.map((p) => <option key={p.projectId} value={p.projectId}>{p.name}</option>)}
-                </select>
+                </Select>
               ) : null}
               <button className="btn acc" onClick={() => setShowNew(true)}>+ New</button>
             </div>

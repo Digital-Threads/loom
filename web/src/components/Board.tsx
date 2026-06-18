@@ -3,6 +3,7 @@ import { type LoomClient, type BoardColumn, type ProjectEntry, STAGE_LABELS } fr
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 import { toast } from "../toast";
 
 export function Board({
@@ -150,8 +151,10 @@ export function Board({
                       <span className="chip proj">{projName(card.projectId)}</span>
                     ) : null}
                   </div>
-                  <select
-                    className="card-move"
+                  <Select
+                    block
+                    size="sm"
+                    wrapClassName="card-move"
                     aria-label="Move to stage"
                     value=""
                     onClick={(e) => e.stopPropagation()}
@@ -162,7 +165,7 @@ export function Board({
                     {cols.map((c) => (
                       <option key={c.stageKey} value={c.stageKey}>{STAGE_LABELS[c.stageKey] ?? c.stageKey}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               ))
             ) : (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, ProjectEntry } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 
 export function NewTaskModal({
   client,
@@ -88,17 +89,18 @@ export function NewTaskModal({
           <label className="fld">
             <span>Repository</span>
             <div className="fld-row" style={{ gap: 8 }}>
-              <select
+              <Select
+                block
+                wrapStyle={{ flex: 1 }}
                 value={repoInList ? repo : "__custom__"}
                 onChange={(e) => e.target.value !== "__custom__" && setRepo(e.target.value)}
-                style={{ flex: 1 }}
               >
                 {projects.map((p) => (
                   <option key={p.projectId} value={p.root}>{p.name} — {p.root}</option>
                 ))}
                 {!repoInList && repo ? <option value="__custom__">{repo}</option> : null}
                 {projects.length === 0 ? <option value="">no projects — browse…</option> : null}
-              </select>
+              </Select>
               <button type="button" className="btn" onClick={() => setPicking(true)}>Browse…</button>
             </div>
             {repoWarning ? <span className="fld-warn">⚠ {repoWarning}</span> : null}
@@ -113,20 +115,20 @@ export function NewTaskModal({
           </label>
           <label className="fld">
             <span>Run mode</span>
-            <select value={runMode} onChange={(e) => setRunMode(e.target.value)}>
+            <Select block value={runMode} onChange={(e) => setRunMode(e.target.value)}>
               <option value="manual">Manual — run each stage yourself</option>
               <option value="gated">Gated — auto-run, stop at approval gates</option>
               <option value="autopilot">Autopilot — run end-to-end</option>
-            </select>
+            </Select>
           </label>
           {profiles.length ? (
             <label className="fld">
               <span>Account</span>
-              <select value={profile} onChange={(e) => setProfile(e.target.value)}>
+              <Select block value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {profiles.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
-              </select>
+              </Select>
               <span className="fld-hint">Subscription this task runs under. You can switch it any time while it runs.</span>
             </label>
           ) : null}

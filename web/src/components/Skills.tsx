@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, SkillMeta } from "../api";
 import { StateView } from "./StateView";
 import { Markdown } from "./Markdown";
+import { Select } from "./Select";
 import { toast } from "../toast";
 
 // Split a SKILL.md into its frontmatter fields + body, so the viewer shows a
@@ -125,9 +126,9 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
           {profiles.length > 0 ? (
             <div style={{ marginTop: 8 }}>
               <span className="muted" style={{ marginRight: 6 }}>Account:</span>
-              <select className="inp" value={profile} onChange={(e) => setProfile(e.target.value)}>
+              <Select size="sm" value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </Select>
             </div>
           ) : null}
         </div>

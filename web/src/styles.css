@@ -93,11 +93,25 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .tbl th.num,.tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
 .tbl td.num{font-family:var(--mono);color:var(--txt)}
 /* text input shared by sections (matches the workspace input) */
-.inp,.fld input,.fld select,.fld textarea{background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);padding:9px 11px;font:inherit;font-size:13px;outline:none;transition:border-color var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
+.inp,.fld input,.fld select:not(.lm-select),.fld textarea{background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--txt);padding:9px 11px;font:inherit;font-size:13px;outline:none;transition:border-color var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
 .inp{min-width:180px}
-.inp:hover,.fld input:hover,.fld select:hover,.fld textarea:hover{border-color:var(--line-strong)}
-.inp:focus,.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--filament-400);box-shadow:0 0 0 3px var(--filament-glow)}
+.inp:hover,.fld input:hover,.fld select:not(.lm-select):hover,.fld textarea:hover{border-color:var(--line-strong)}
+.inp:focus,.fld input:focus,.fld select:not(.lm-select):focus,.fld textarea:focus{border-color:var(--filament-400);box-shadow:0 0 0 3px var(--filament-glow)}
 .inp::placeholder,.fld input::placeholder,.fld textarea::placeholder{color:var(--fg-faint)}
+/* DS Select (forms/Select): native <select> with appearance:none + chevron affordance */
+.lm-select-wrap{position:relative;display:inline-flex;align-items:center}
+.lm-select-wrap.block{display:flex;width:100%}
+.lm-select{appearance:none;-webkit-appearance:none;width:100%;background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--fg);font-family:var(--font-sans);font-size:13px;padding:8px 30px 8px 11px;outline:none;cursor:pointer;transition:border-color var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
+.lm-select:hover{border-color:var(--line-strong)}
+.lm-select:focus{border-color:var(--filament-400);box-shadow:0 0 0 3px var(--filament-glow)}
+.lm-select[disabled]{opacity:.55;cursor:default}
+.lm-select.sm{font-size:12px;padding:6px 26px 6px 9px;border-radius:var(--r-xs)}
+.lm-select-chev{position:absolute;right:10px;pointer-events:none;color:var(--fg-dim);font-size:10px}
+/* the open option popup is OS-rendered — theme it dark so it stops showing as a
+   white/blue OS list; applies to every <select>, DS or legacy */
+select option,.lm-select option{background:var(--surface-card);color:var(--fg)}
+select option:disabled,.lm-select option:disabled{color:var(--fg-faint)}
+select option:checked,.lm-select option:checked{background:var(--panel2);color:var(--fg)}
 /* tables */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;font-weight:600;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--line)}
@@ -137,7 +151,7 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .card.done::before{background:var(--done);opacity:.7}
 .card.wait::before{background:var(--wait);opacity:.85}
 /* Keyboard alternative to drag-drop: pick a stage to move + run the card. */
-.card-move{margin-top:8px;width:100%;font-size:11px;padding:3px 4px;background:var(--panel);color:var(--mut);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.lm-select-wrap.card-move{margin-top:8px}
 .card:hover{border-color:var(--line-strong);transform:translateY(-1px);box-shadow:var(--elev-2)}
 .card.run{box-shadow:0 0 0 1px rgba(239,177,78,.18)}
 .card-del{position:absolute;top:6px;right:6px;border:0;background:transparent;cursor:pointer;font-size:13px;line-height:1;padding:2px;border-radius:var(--r2);opacity:0;transition:.12s}
@@ -224,8 +238,8 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .modal-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end}
 .fld{display:flex;flex-direction:column;gap:5px}
 .fld span{font-size:12px;color:var(--mut)}
-.fld input,.fld textarea,.fld select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:9px 11px;font:inherit;outline:none}
-.fld input:focus,.fld textarea:focus,.fld select:focus{border-color:var(--acc)}
+.fld input,.fld textarea,.fld select:not(.lm-select){background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:9px 11px;font:inherit;outline:none}
+.fld input:focus,.fld textarea:focus,.fld select:not(.lm-select):focus{border-color:var(--acc)}
 .fld-row{display:flex;gap:12px}.fld-row .fld{flex:1}
 .modal-err{color:var(--bad);font-size:12px}
 .btn:disabled{opacity:.5;cursor:default}
