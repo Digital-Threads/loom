@@ -198,8 +198,12 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 .pane .ph{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pane .pb{padding:16px;overflow:auto;flex:1}
 .kv{display:flex;gap:8px;margin:5px 0;flex-wrap:wrap}.kv b{color:var(--mut);min-width:120px;font-weight:500}
+/* knowledge hits list: denser rows with hairline separators, scoped to the panel */
+.knowledge .kv{margin:2px 0;padding:3px 0;border-bottom:1px solid var(--line-soft);font-size:13px;line-height:1.45}
+.knowledge .kv:last-child{border-bottom:0}
+.knowledge .kv.warn b{color:var(--sev-warn)}
 /* knowledge reasoning graph: one row per task, chain of coloured nodes */
-.kg-group{display:flex;gap:10px;align-items:baseline;margin:7px 0;flex-wrap:wrap}
+.kg-group{display:flex;gap:10px;align-items:baseline;margin:4px 0;flex-wrap:wrap}
 .kg-task{color:var(--mut);min-width:120px;font-weight:500}
 .kg-chain{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .kg-link{display:inline-flex;gap:4px;align-items:center}

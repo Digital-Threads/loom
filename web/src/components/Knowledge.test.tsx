@@ -2,12 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Knowledge } from "./Knowledge";
-import type { LoomClient, KnowledgeGraph } from "../api";
+import type { LoomClient } from "../api";
 
 function mkClient(over: Partial<LoomClient> = {}) {
   return {
     recall: vi.fn(() => Promise.resolve({ hits: [], decisions: [], rejections: [] })),
-    knowledgeGraph: vi.fn(() => Promise.resolve({ nodes: [], edges: [] } as KnowledgeGraph)),
     search: vi.fn(() => Promise.resolve({ hits: [] })),
     ...over,
   } as unknown as LoomClient;

@@ -68,7 +68,7 @@ export function Knowledge({ client }: { client: LoomClient }) {
   const nothing = decisions.length === 0 && rejections.length === 0 && hits.length === 0 && similarUnique.length === 0;
 
   return (
-    <div className="panel">
+    <div className="panel knowledge">
       <div className="row" style={{ gap: 8 }}>
         <input
           className="inp"
