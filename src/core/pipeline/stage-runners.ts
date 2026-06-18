@@ -177,6 +177,20 @@ export interface AutoBrainstormResult {
   note?: string;
 }
 
+/** Detect the blocker sentinel in an auto-answer and return its reason (or null
+ *  when not blocked). Matches the BLOCKED marker case-insensitively as the start
+ *  of ANY line, but only when it stands alone or is followed by a separator
+ *  (— : -). Line-anchored + separator-gated so a real blocker phrased on its own
+ *  line still parks, while a normal assumption that merely begins with the word
+ *  "blocked …" (e.g. "Blocked tasks are retried") does NOT false-park. */
+function blockerNote(reply: string): string | null {
+  for (const line of reply.split("\n")) {
+    const m = line.trim().match(/^BLOCKED\b\s*(?:[—:-]\s*(.*))?$/i);
+    if (m) return (m[1] ?? "").trim() || "blocked on a question that can't be resolved from context";
+  }
+  return null;
+}
+
 /** Autopilot brainstorm: the agent asks itself clarifying questions (reusing the
  *  manual brainstormPrompt) and answers them from the task + analysis, logging
  *  accepted assumptions to task-journal. It parks (blocked) only on a genuine
@@ -191,10 +205,8 @@ export async function runAutoBrainstorm(
     const question = await brainstormTurn(db, taskId, agent);
     if (question.startsWith(BRAINSTORM_READY)) break; // enough context to write the spec
     const answer = (await agent(autoAnswerPrompt(ctx.spec, ctx.analysis, question))).trim();
-    if (answer.startsWith(BRAINSTORM_BLOCKED)) {
-      const note = answer.slice(BRAINSTORM_BLOCKED.length).replace(/^[\s—-]+/, "").trim() || "blocked on a question that can't be resolved from context";
-      return { blocked: true, note };
-    }
+    const note = blockerNote(answer);
+    if (note) return { blocked: true, note };
     // the auto-answer lands as the "user" turn, so the next question sees it in
     // history and summarizeBrainstorm / the manual transcript both pick it up.
     appendChatMessage(db, { id: id("msg"), taskId, stage: "brainstorm", role: "user", content: answer });

@@ -80,9 +80,10 @@ describe("L12.2b autopilot brainstorm (runAutoBrainstorm)", () => {
     expect(latestArtifact(db, "t1", "brainstorm-summary")?.content).toBe("BRIEF");
   });
 
-  it("parks (blocked) on a genuine blocker without summarising", async () => {
+  it("parks (blocked) on a genuine blocker, case-insensitively, without summarising", async () => {
     const agent = async (prompt: string) => {
-      if (prompt.includes("AUTOPILOT")) return "BLOCKED — missing external contract";
+      // lowercase + a preamble line above the marker — still detected
+      if (prompt.includes("AUTOPILOT")) return "I cannot resolve this.\nblocked: missing external contract";
       if (prompt.includes("Summarise this brainstorm")) return "BRIEF";
       return "question 1?";
     };
@@ -90,6 +91,18 @@ describe("L12.2b autopilot brainstorm (runAutoBrainstorm)", () => {
     expect(res.blocked).toBe(true);
     expect(res.note).toContain("missing external contract");
     expect(latestArtifact(db, "t1", "brainstorm-summary")).toBeUndefined(); // not summarised on a park
+  });
+
+  it("does NOT false-park when an answer merely begins with the word 'Blocked'", async () => {
+    let q = 0;
+    const agent = async (prompt: string) => {
+      if (prompt.includes("Summarise this brainstorm")) return "BRIEF";
+      if (prompt.includes("AUTOPILOT")) return "Blocked tasks are retried automatically"; // an assumption, not the sentinel
+      return ++q <= 1 ? "question 1?" : "READY — clear";
+    };
+    const res = await runAutoBrainstorm(db, "t1", agent, ctx);
+    expect(res.blocked).toBe(false); // separator-gated marker → no false park
+    expect(latestArtifact(db, "t1", "brainstorm-summary")?.content).toBe("BRIEF");
   });
 
   it("caps the loop when the agent never says READY, then still summarises", async () => {
