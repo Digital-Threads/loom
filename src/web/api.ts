@@ -12,7 +12,9 @@ import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } f
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail, taskPack, taskPackByLoomId } from "../core/plugins/task-journal/adapter.js";
-import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome } from "@digital-threads/aimux/core";
+import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
+import { homedir } from "node:os";
+import { relocateSession } from "../core/automation/session-relocate.js";
 import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
@@ -117,6 +119,28 @@ export interface ApiDeps {
   mcpProbe?: McpProbe;
   /** Tracker import drafts (default: beads connector). */
   importDrafts?: () => TaskDraft[];
+}
+
+// Claude's config dir for an aimux profile: the source profile inherits the
+// default ~/.claude; every other profile has its own dir (where aimux points
+// CLAUDE_CONFIG_DIR). Used to relocate a session across accounts on switch.
+const defaultClaudeDir = process.env.CLAUDE_CONFIG_DIR || pathJoin(homedir(), ".claude");
+function profileConfigDir(p: { is_source?: boolean; path: string }): string {
+  return p.is_source ? defaultClaudeDir : expandHome(p.path);
+}
+/** Make a task's session resumable under `profileName` by copying its transcript
+ *  into that profile's config dir (best-effort) — so a mid-task account switch
+ *  resumes the SAME conversation under the new subscription instead of falling
+ *  back to the old account. */
+function relocateSessionForProfile(profileName: string, sessionId: string): void {
+  try {
+    const cfg = loadConfig();
+    if (!cfg) return;
+    const dirs = [defaultClaudeDir, ...Object.values(cfg.profiles).map(profileConfigDir)];
+    relocateSession(sessionId, dirs, profileConfigDir(getProfile(cfg, profileName)));
+  } catch {
+    /* best-effort: a missing profile/dir just means no relocation */
+  }
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
@@ -781,6 +805,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     // Kill any live process so the next send respawns under the new profile.
     sessionLauncher.stop?.(sid ?? "");
     setTaskProfile(db, id, profile);
+    // Move the session transcript into the new profile's config dir so `--resume`
+    // continues the SAME conversation under the new account (not the old, rate-
+    // limited one). Then clear the stale rate-limit banner.
+    if (sid) relocateSessionForProfile(profile, sid);
+    saveResult(id, "advance", "stop-reason", { kind: "none" });
     if (!resume) return c.json({ ok: true });
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
