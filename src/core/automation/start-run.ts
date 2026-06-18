@@ -16,6 +16,7 @@ import type { GitRunner } from "../security/sandbox.js";
 import { secureExecutor } from "../security/secure-executor.js";
 import { loadSecurityConfig } from "../security/policy-config.js";
 import { recordRunCost } from "../observability/cost-recorder.js";
+import { getTaskSession } from "../store/db.js";
 import { tokenEventsByTime, type TokenEvent } from "../plugins/token-pilot/adapter.js";
 import { resolveProjectRoot } from "../workspace/project-id.js";
 import { computePriors, outcomesFromEvents } from "../learning/priors.js";
@@ -35,6 +36,9 @@ export interface StartSpecRunOptions {
   loadTokenEvents?: () => TokenEvent[];
   /** Event source for learning priors (default: project event bus). */
   loadEvents?: () => LoomEvent[];
+  /** Real per-session $ spend reader (session-launcher's costOf). Lets the L4
+   *  path record `spent` so the cost-cap can trip — same as the session path. */
+  costOf?: (sessionId: string) => number;
 }
 
 export function startSpecRun(
@@ -74,7 +78,20 @@ export function startSpecRun(
       priors,
     });
     // provод 4 — record cost on completion (exact via spine task_id tagging).
-    if (ids.taskId) recordRunCost(db, ids.taskId, { tokenEvents: loadTokenEvents() });
+    // Pass real $ spend + sessionId (same as the session path, api.ts
+    // recordSessionCost) so the cost-cap reads aimux/spent and can trip on L4.
+    if (ids.taskId) {
+      try {
+        const sid = getTaskSession(db, ids.taskId).sessionId ?? undefined;
+        const raw = sid ? opts.costOf?.(sid) : undefined;
+        // Only record a sane spend: a non-finite/negative value would poison the
+        // aimux/spent rollup and make the cost-cap mis-read (NaN >= cap is false).
+        const spent = typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : undefined;
+        recordRunCost(db, ids.taskId, { tokenEvents: loadTokenEvents(), spent, sessionId: sid });
+      } catch {
+        /* cost is best-effort — a finished run must not be marked failed over accounting */
+      }
+    }
     return result;
   });
 }
