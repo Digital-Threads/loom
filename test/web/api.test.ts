@@ -75,6 +75,14 @@ describe("web api", () => {
     expect((await app2.request("/api/accounts/subscription", { method: "POST", body: "{}" })).status).toBe(400);
   });
 
+  it("GET /api/doctor returns the prereq report (D2.2)", async () => {
+    const rep = { ok: false, tools: [{ name: "claude", found: false, hint: "install it" }], missing: ["claude"] };
+    const app2 = createApi(db, { prereqs: () => rep });
+    const res = await app2.request("/api/doctor");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(rep);
+  });
+
   it("POST /api/accounts/active swaps the active profile (F1.5)", async () => {
     const swapped: string[] = [];
     const app2 = createApi(db, { setActiveProfile: (p) => swapped.push(p) });

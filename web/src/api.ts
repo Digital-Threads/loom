@@ -114,7 +114,11 @@ export interface NewTask {
 export interface Subscription { name: string; cli?: string; isSource?: boolean; authKind?: "oauth" | "api" | "none"; [k: string]: unknown }
 export interface SessionRow { sessionId?: string; profile?: string; lastUsedAtMs?: number; [k: string]: unknown }
 // aimux HealthReport: a profile is healthy when nothing is broken/missing/conflicting.
-export interface HealthRow { profile: string; valid?: string[]; broken?: string[]; missing?: string[]; conflicts?: string[]; [k: string]: unknown }
+export interface HealthRow { profile: string; ok?: boolean; valid?: string[]; broken?: string[]; missing?: string[]; conflicts?: string[]; [k: string]: unknown }
+// D2.2 — environment prerequisite probe (mirror of core PrereqReport). `optional`
+// tools (e.g. cargo, only for building from source) don't block the main path.
+export interface ToolStatus { name: string; found: boolean; hint: string; optional?: boolean }
+export interface PrereqReport { ok: boolean; tools: ToolStatus[]; missing: string[] }
 export interface TokenUsageRow { sessionId: string; used: number; saved: number; [k: string]: unknown }
 export interface TokenEvent { sessionId: string; used: number; saved: number; ts: number; [k: string]: unknown }
 export interface TjTaskSummary { id: string; title: string; status?: string; [k: string]: unknown }
@@ -180,6 +184,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ current: string | null; runId?: string }>(`${base}/api/tasks/${id}/move`, { stageKey, run }, f),
     // F1 — 3 core modules
     workspace: () => getJson<WorkspaceData>(`${base}/api/workspace`, f),
+    // D2.2 — first-run environment check: which required CLIs are on PATH.
+    doctor: () => getJson<PrereqReport>(`${base}/api/doctor`, f),
     accountsHealth: () =>
       postJson<{ health: HealthRow[] }>(`${base}/api/accounts/health`, {}, f).then((d) => d.health),
     setActive: (profileId: string) =>

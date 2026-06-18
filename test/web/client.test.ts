@@ -72,6 +72,13 @@ describe("web api client", () => {
     expect(await c.setActive("main")).toBe("main");
   });
 
+  it("doctor() returns the prereq report (D2.2)", async () => {
+    const rep = { ok: true, tools: [{ name: "claude", found: true, hint: "" }], missing: [] };
+    const c = createClient("", fakeFetch({ "/api/doctor": rep }));
+    expect((await c.doctor()).ok).toBe(true);
+    expect((await c.doctor()).tools[0].name).toBe("claude");
+  });
+
   it("memoryTask() unwraps detail", async () => {
     const c = createClient("", fakeFetch({ "/api/memory/tasks/tj-1": { detail: { decisions: [1], findings: [], rejections: [] } } }));
     expect((await c.memoryTask("tj-1")).decisions).toEqual([1]);

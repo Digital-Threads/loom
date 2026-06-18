@@ -74,6 +74,7 @@ import { resolveFlow } from "../core/quality/flow-config.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
+import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 
 // Injected backends so the API is testable without touching real aimux/tj/fs.
 export interface ApiDeps {
@@ -119,6 +120,8 @@ export interface ApiDeps {
   mcpProbe?: McpProbe;
   /** Tracker import drafts (default: beads connector). */
   importDrafts?: () => TaskDraft[];
+  /** Environment prerequisite check (default: which/where probe of REQUIRED_TOOLS). */
+  prereqs?: () => PrereqReport;
 }
 
 // Claude's config dir for an aimux profile: the source profile inherits the
@@ -148,6 +151,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
+  const doctorReport = deps.prereqs ?? (() => checkPrerequisites());
   const memoryTask =
     deps.memoryTask ?? ((id: string) => taskDetail(resolveProjectRoot(process.cwd()), id));
   const projectsList = deps.listProjects ?? (() => listProjects());
@@ -620,6 +624,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     });
 
   app.get("/api/health", (c) => c.json({ ok: true }));
+  // D2.2 — first-run environment check: are the required CLIs on PATH? Wraps the
+  // core prereqs probe so the onboarding wizard can show a status without a terminal.
+  app.get("/api/doctor", (c) => c.json(doctorReport()));
   app.get("/favicon.ico", (c) => c.body(null, 204)); // no favicon → quiet 204, not a console 404
 
   // The 3 core modules' aggregated workspace. ?project=<id> loads a specific
