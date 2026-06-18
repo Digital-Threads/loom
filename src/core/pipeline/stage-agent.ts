@@ -3,6 +3,7 @@
 // no config/profile it returns "" so the stage degrades gracefully.
 import { loadConfig, runProfileHeadless } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
+import { enforceFlags } from "../automation/enforced-settings.js";
 import type { StageAgent } from "./stage-runners.js";
 
 export interface StageAgentDeps {
@@ -20,7 +21,9 @@ export function createAimuxStageAgent(deps: StageAgentDeps = {}): StageAgent {
     if (!cfg) return "";
     const profile = deps.profile ?? listSubscriptions()[0]?.name;
     if (!profile) return "";
-    const res = await launch(cfg, profile, { model: deps.model, extraArgs: ["-p", prompt] });
+    // Force token-pilot's hooks into this headless session too — without these
+    // the stage (and the skill-generation path) would run on raw reads.
+    const res = await launch(cfg, profile, { model: deps.model, extraArgs: ["-p", prompt, ...enforceFlags()] });
     return res.stdout ?? "";
   };
 }

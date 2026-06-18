@@ -17,11 +17,11 @@ import { secureExecutor } from "../security/secure-executor.js";
 import { loadSecurityConfig } from "../security/policy-config.js";
 import { recordRunCost } from "../observability/cost-recorder.js";
 import { getTaskSession } from "../store/db.js";
-import { tokenEventsByTime, type TokenEvent } from "../plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, tokenPilotEngaged, type TokenEvent } from "../plugins/token-pilot/adapter.js";
 import { resolveProjectRoot } from "../workspace/project-id.js";
 import { computePriors, outcomesFromEvents } from "../learning/priors.js";
 import { loadLoomEvents } from "../spine/event-bus.js";
-import type { LoomEvent } from "../spine/event.js";
+import { makeEvent, type LoomEvent } from "../spine/event.js";
 
 export interface StartSpecRunOptions {
   /** Override the orchestrate deps (decomposer/executor) — for tests. */
@@ -39,6 +39,13 @@ export interface StartSpecRunOptions {
   /** Real per-session $ spend reader (session-launcher's costOf). Lets the L4
    *  path record `spent` so the cost-cap can trip — same as the session path. */
   costOf?: (sessionId: string) => number;
+  /** Post-session check: did token-pilot's hooks fire for this worktree?
+   *  Default: the real adapter probe. Injectable so tests stay hermetic. */
+  tokenPilotEngaged?: (projectRoot: string) => boolean;
+  /** The run's real project root, used by the post-session token-pilot check.
+   *  Callers in a multi-project host pass the active project's root so the
+   *  check reads the right .token-pilot dir instead of guessing from cwd. */
+  projectRoot?: string;
 }
 
 export function startSpecRun(
@@ -67,6 +74,8 @@ export function startSpecRun(
     opts.loadTokenEvents ??
     (() => tokenEventsByTime(opts.sandbox?.repoRoot ?? resolveProjectRoot(process.cwd())));
 
+  const engagedCheck = opts.tokenPilotEngaged ?? tokenPilotEngaged;
+
   // learning (L8): bias routing by past outcomes from the event history.
   const priorEvents = opts.loadEvents ? opts.loadEvents() : loadLoomEvents(ids.projectId);
   const priors = computePriors(outcomesFromEvents(priorEvents));
@@ -92,6 +101,24 @@ export function startSpecRun(
         /* cost is best-effort — a finished run must not be marked failed over accounting */
       }
     }
+    // Post-session assertion: did token-pilot actually engage this run? Zero
+    // hook-events means the enforced tools never fired — mark the run with a
+    // visible warning instead of letting it pass as if enforced. Best-effort: a
+    // failed check must never fail the run itself.
+    try {
+      const root = result.cwd ?? opts.sandbox?.repoRoot ?? opts.projectRoot ?? resolveProjectRoot(process.cwd());
+      if (!engagedCheck(root)) {
+        ctx.emit(makeEvent({
+          ts: Date.now(),
+          source: "loom",
+          projectId: ids.projectId,
+          taskId: ids.taskId,
+          type: "preflight",
+          severity: "warn",
+          message: "token-pilot did not engage",
+        }));
+      }
+    } catch { /* best-effort: the assertion must not break the run */ }
     return result;
   });
 }

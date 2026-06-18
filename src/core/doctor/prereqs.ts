@@ -13,6 +13,7 @@ export const REQUIRED_TOOLS: { name: string; hint: string; optional?: boolean }[
   { name: "npm", hint: "npm required (ships with Node.js): https://nodejs.org" },
   { name: "cargo", hint: "building from source: Rust ≥ 1.88 required (https://rustup.rs), takes a few minutes; the main path is a prebuilt binary", optional: true },
   { name: "claude", hint: "Claude Code CLI required: https://claude.com/claude-code" },
+  { name: "token-pilot", hint: "token-pilot required for enforced token-efficient reads — run Loom onboarding to install it (claude plugin)" },
 ];
 
 // Checks for tools via which/where (resolveProbeCmd). The run injection is for tests.

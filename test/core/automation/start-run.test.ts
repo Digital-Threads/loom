@@ -39,6 +39,7 @@ describe("startSpecRun (L4.2 wire)", () => {
     const runId = startSpecRun(rm, db, "t1", "build refund", { projectId: "p1", workflowId: "wf1" }, {
       deps: { decomposer, executor: okExecutor },
       candidates: [{ profile: "work" }],
+      tokenPilotEngaged: () => true, // hermetic: don't depend on ambient .token-pilot files
     });
     expect(runId).toMatch(/^run_[0-9a-f]{16}$/);
     const rec = await rm.wait(runId);
@@ -57,11 +58,47 @@ describe("startSpecRun (L4.2 wire)", () => {
     const runId = startSpecRun(rm, db, "t1", "x", { projectId: "p1" }, {
       deps: { decomposer, executor: okExecutor },
       candidates: [], // nothing to route to
+      tokenPilotEngaged: () => true, // hermetic: don't depend on ambient .token-pilot files
     });
     const rec = await rm.wait(runId);
     const result = rec.result as { assigned: number; unrouted: string[] };
     expect(result.assigned).toBe(0);
     expect(result.unrouted).toEqual(["s1", "s2"]);
+  });
+
+  it("marks the run 'token-pilot did not engage' when no hook-events were recorded", async () => {
+    const rm = createRunManager();
+    const runId = startSpecRun(rm, db, "t1", "x", { projectId: "p1", taskId: "t1" }, {
+      deps: { decomposer, executor: okExecutor },
+      candidates: [{ profile: "work" }],
+      tokenPilotEngaged: () => false, // token-pilot never fired
+    });
+    const rec = await rm.wait(runId);
+    const warn = rec.events.find((e) => e.type === "preflight");
+    expect(warn?.severity).toBe("warn");
+    expect(warn?.message).toBe("token-pilot did not engage");
+  });
+
+  it("does not mark the run when token-pilot engaged", async () => {
+    const rm = createRunManager();
+    const runId = startSpecRun(rm, db, "t1", "x", { projectId: "p1", taskId: "t1" }, {
+      deps: { decomposer, executor: okExecutor },
+      candidates: [{ profile: "work" }],
+      tokenPilotEngaged: () => true,
+    });
+    const rec = await rm.wait(runId);
+    expect(rec.events.some((e) => e.type === "preflight")).toBe(false);
+  });
+
+  it("a throwing engagement check never fails the run (best-effort)", async () => {
+    const rm = createRunManager();
+    const runId = startSpecRun(rm, db, "t1", "x", { projectId: "p1", taskId: "t1" }, {
+      deps: { decomposer, executor: okExecutor },
+      candidates: [{ profile: "work" }],
+      tokenPilotEngaged: () => { throw new Error("boom"); },
+    });
+    const rec = await rm.wait(runId);
+    expect(rec.status).toBe("done");
   });
 });
 

@@ -11,6 +11,9 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
+import type { CmdRunner } from "../install/types.js";
+import { resolveProbeCmd } from "../install/recipe.js";
+import { defaultRun } from "../install/runner.js";
 
 const cmd = (action: string) => ({ type: "command" as const, command: `token-pilot ${action}` });
 
@@ -46,6 +49,7 @@ if((recGrep||broadFind)&&!bounded){process.stdout.write(JSON.stringify({hookSpec
 process.exit(0)});`;
 
 let cachedPath: string | null = null;
+let warnedWriteFailure = false;
 
 /** Write the deny-raw-search hook script once; returns its path. */
 function denyRawSearchScriptPath(): string {
@@ -69,8 +73,31 @@ export function enforcedSettingsPath(): string {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(settings, null, 2), "utf8");
     cachedPath = path;
-  } catch {
-    cachedPath = path; // best-effort; a stale/partial file still beats none
+  } catch (err) {
+    // Visible, NOT swallowed: a missing settings file means the session would
+    // run WITHOUT token-pilot enforcement — that must never be silent. Don't
+    // cache on failure, so a later call retries the write. Log only once, so a
+    // persistently failing write (e.g. read-only HOME) on a per-call path like
+    // enforceFlags() doesn't spam the log every stage.
+    if (!warnedWriteFailure) {
+      console.error(`[loom] failed to write enforced-settings to ${path}:`, err);
+      warnedWriteFailure = true;
+    }
   }
   return path;
+}
+
+/** The launch flags that force token-pilot's hooks into a session, regardless of
+ *  the profile's config dir. Single source of truth for every launcher (live +
+ *  headless stage agent) so the `--settings` path can never drift. */
+export function enforceFlags(): string[] {
+  return ["--settings", enforcedSettingsPath()];
+}
+
+/** Whether `token-pilot` is on PATH — probed via the same which/where check the
+ *  doctor uses. When false, a launched session degrades to raw reads, so the
+ *  caller must surface a visible marker rather than fail silently. The run
+ *  injection is for tests. */
+export function tokenPilotOnPath(run: CmdRunner = defaultRun, platform: NodeJS.Platform = process.platform): boolean {
+  return run(resolveProbeCmd("which", platform), ["token-pilot"]).ok;
 }

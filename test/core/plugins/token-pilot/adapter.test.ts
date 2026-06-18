@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { tokenUsageBySession } from "../../../../src/core/plugins/token-pilot/adapter.js";
+import { tokenUsageBySession, tokenPilotEngaged } from "../../../../src/core/plugins/token-pilot/adapter.js";
 
 let dir: string;
 beforeAll(() => {
@@ -35,5 +35,14 @@ describe("token-pilot adapter — aggregation by session", () => {
 describe("token-pilot adapter — missing file", () => {
   it("returns an empty array for a non-existent path", () => {
     expect(tokenUsageBySession("/nonexistent/path")).toEqual([]);
+  });
+});
+
+describe("token-pilot adapter — engagement", () => {
+  it("is true when the worktree has hook-events", () => {
+    expect(tokenPilotEngaged(dir)).toBe(true);
+  });
+  it("is false when no hook-events exist", () => {
+    expect(tokenPilotEngaged("/nonexistent/path")).toBe(false);
   });
 });

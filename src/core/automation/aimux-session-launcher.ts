@@ -9,7 +9,7 @@ import { loadConfig, buildRunParams, loadActiveProfile } from "@digital-threads/
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import { createLiveSessionLauncher, type ProcLike, type SpawnSession } from "./live-session.js";
 import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
-import { enforcedSettingsPath } from "./enforced-settings.js";
+import { enforceFlags, tokenPilotOnPath } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
 export interface AimuxLiveLauncherDeps {
@@ -37,7 +37,7 @@ export interface AimuxLiveLauncherDeps {
 const STREAM_FLAGS = ["-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json"];
 // Force token-pilot's hooks into every Loom session regardless of the profile's
 // config dir — the platform makes the mandatory tools non-optional.
-const ENFORCE_FLAGS = ["--settings", enforcedSettingsPath()];
+const ENFORCE_FLAGS = enforceFlags();
 
 /** A ProcLike that yields one empty result then closes — used when there is no
  *  aimux config/profile, so the pipeline degrades gracefully instead of hanging. */
@@ -60,6 +60,12 @@ function emptyProc(): ProcLike {
 }
 
 export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}) {
+  // Preflight: if token-pilot is not on PATH, the enforced --settings hooks fail
+  // and the session silently falls back to raw reads. Surface a visible marker
+  // once at launcher creation instead of degrading quietly.
+  if (!tokenPilotOnPath()) {
+    console.warn("[loom] token-pilot is NOT on PATH — sessions will run WITHOUT enforced token-efficient tools");
+  }
   const load = deps.loadConfig ?? loadConfig;
   const build = deps.buildParams ?? buildRunParams;
   const listMcp = deps.listMcp ?? listMcpServers;

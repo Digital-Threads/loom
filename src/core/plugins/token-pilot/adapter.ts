@@ -142,6 +142,14 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
   return events.sort((a, b) => a.ts - b.ts);
 }
 
+/** True if token-pilot left at least one hook-event for this worktree — i.e. its
+ *  enforcement hooks actually fired during the session. A run with zero events
+ *  means token-pilot never engaged (hook missing / not on PATH), which the
+ *  caller surfaces rather than letting the session degrade silently. */
+export function tokenPilotEngaged(projectRoot: string): boolean {
+  return readHookEvents(projectRoot).length > 0;
+}
+
 export function settingsSchema(): SettingsSchema {
   return {
     fields: [
