@@ -88,7 +88,7 @@ import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
-import { computeLessons, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
+import { computeLessons, lessonsPromptBlock, type Lesson, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 import { isValidMarketplaceSource } from "../core/install/install.js";
 import { INSTALL_UNITS, runInstallPlan } from "../core/install/bootstrap.js";
@@ -283,9 +283,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // production runs review in the task's session so the agent has full context.
   const makeReviewPass = (id: string, targetHint: string) => (key: string): ReviewPass => {
     if (deps.reviewPass) return deps.reviewPass(key, targetHint);
-    if (deps.stageAgent) return { key, run: async () => parseFindings(key, await deps.stageAgent!(reviewPrompt(key, targetHint))) };
+    if (deps.stageAgent) return { key, run: async () => parseFindings(key, await deps.stageAgent!(reviewPrompt(key, targetHint) + lessonsBlock())) };
     const agent = stageAgentFor(id, "review");
-    return { key, run: async () => parseFindings(key, await agent(reviewPrompt(key, targetHint))) };
+    return { key, run: async () => parseFindings(key, await agent(reviewPrompt(key, targetHint) + lessonsBlock())) };
   };
 
   // ─── Multi-reviewer review pipeline ──────────────────────────────────────────
@@ -405,6 +405,35 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (t?.repo && isGitRepo(t.repo)) return resolveProjectRoot(worktreePath(id));
     return null;
   };
+
+  // L8 learning — derived lessons (recurring review findings + user corrections),
+  // shared by the /api/learning/lessons endpoint and the impl/review prompt
+  // injection. No store: computed on read from data that already exists.
+  const projectLessons = (minRuns: number): Lesson[] => {
+    const tasks = listTasks(db);
+    const findings: LessonFinding[] = [];
+    for (const t of tasks) {
+      const rr = loadResult<ReviewPayload>(t.id, "review-result");
+      for (const f of rr?.result.findings ?? []) {
+        findings.push({ taskId: t.id, severity: f.severity, message: f.message, file: f.file });
+      }
+    }
+    let corrections: LessonCorrection[] = [];
+    const root = tasks.map((t) => journalProjectRoot(t.id)).find((r): r is string => !!r);
+    if (root) {
+      corrections = exportEventsSafe(root)
+        .filter((e) => e.type === "correction")
+        .map((e) => ({ taskId: e.task_id, message: e.text, ts: Date.parse(e.timestamp) || undefined }));
+    }
+    return computeLessons(findings, corrections, { minRuns });
+  };
+
+  // Slice 1 — the "recurring issues to avoid" block appended to impl/review
+  // prompts so a run benefits from past lessons. Gated by a setting; "" = off.
+  const lessonsBlock = (): string =>
+    getSetting<boolean>(db, "learning.injectEnabled", true)
+      ? lessonsPromptBlock(projectLessons(2), getSetting<number>(db, "learning.maxLessons", 5))
+      : "";
   // Refresh per-task cost after a stage: token-pilot's own used/saved stats
   // (spine-tagged via LOOM_TASK_ID) + the live session's exact $ spent. No
   // separate counter — we read what token-pilot already tracks.
@@ -858,7 +887,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const overBudget = () =>
         capUsd > 0 &&
         getCosts(db, id).filter((r) => r.source === "aimux" && r.metric === "spent").reduce((s, r) => s + r.value, 0) >= capUsd;
-      let text = await sessionSend(id, "impl", IMPL_PROMPT);
+      let text = await sessionSend(id, "impl", IMPL_PROMPT + lessonsBlock());
       for (let i = 0; i < IMPL_MAX_CONTINUES && !settled(text); i++) {
         if (overBudget()) {
           saveResult(id, "impl", "impl-report", { report: text });
@@ -1512,29 +1541,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ hits: q ? search(q) : [] });
   });
 
-  // ─── learning (L8 Slice 0) ──────────────────────────────────────────────────────
-  // Read-only derived view of recurring lessons: review/QA findings that recur
-  // across tasks (file+severity) + explicit user corrections (task-journal). No
-  // store — computed on read from data that already exists.
+  // ─── learning (L8) ──────────────────────────────────────────────────────────────
+  // Endpoint defined below; the helpers `projectLessons` / `lessonsBlock` are
+  // hoisted to module scope earlier (so impl/review injection can use them).
   app.get("/api/learning/lessons", (c) => {
-    const minRuns = Number(c.req.query("minRuns")) || 2;
-    const tasks = listTasks(db);
-    const findings: LessonFinding[] = [];
-    for (const t of tasks) {
-      const rr = loadResult<ReviewPayload>(t.id, "review-result");
-      for (const f of rr?.result.findings ?? []) {
-        findings.push({ taskId: t.id, severity: f.severity, message: f.message, file: f.file });
-      }
-    }
-    // Corrections come from task-journal `correction` events (project-scoped).
-    let corrections: LessonCorrection[] = [];
-    const root = tasks.map((t) => journalProjectRoot(t.id)).find((r): r is string => !!r);
-    if (root) {
-      corrections = exportEventsSafe(root)
-        .filter((e) => e.type === "correction")
-        .map((e) => ({ taskId: e.task_id, message: e.text, ts: Date.parse(e.timestamp) || undefined }));
-    }
-    return c.json({ lessons: computeLessons(findings, corrections, { minRuns }) });
+    return c.json({ lessons: projectLessons(Number(c.req.query("minRuns")) || 2) });
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────

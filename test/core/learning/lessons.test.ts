@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lessonSignature, correctionSignature, computeLessons } from "../../../src/core/learning/lessons.js";
+import { lessonSignature, correctionSignature, computeLessons, lessonsPromptBlock } from "../../../src/core/learning/lessons.js";
 
 describe("learning/lessons (L8 Slice 0)", () => {
   it("lessonSignature is stable on severity + file, case-insensitive", () => {
@@ -68,6 +68,24 @@ describe("learning/lessons (L8 Slice 0)", () => {
     expect(lesson.sampleMessages).toEqual(["dup"]); // deduped + capped at 1
     expect(lesson.firstSeen).toBe(100);
     expect(lesson.lastSeen).toBe(300);
+  });
+
+  it("lessonsPromptBlock builds a top-K avoid block, empty when nothing", () => {
+    expect(lessonsPromptBlock([])).toBe("");
+    const lessons = computeLessons(
+      [
+        { taskId: "t1", severity: "error", message: "null deref", file: "a.ts" },
+        { taskId: "t2", severity: "error", message: "null deref", file: "a.ts" },
+      ],
+      [{ taskId: "t9", message: "use async here", file: "z.ts" }],
+    );
+    const block = lessonsPromptBlock(lessons, 5);
+    expect(block).toContain("Recurring issues to AVOID");
+    expect(block).toContain("your correction"); // corrections labelled + ranked first
+    expect(block).toContain("z.ts");
+    expect(block).toContain("a.ts");
+    // maxK caps the list
+    expect(lessonsPromptBlock(lessons, 1).split("\n").filter((l) => l.startsWith("- ")).length).toBe(1);
   });
 
   it("is pure: same input → same output (caller does project scoping)", () => {

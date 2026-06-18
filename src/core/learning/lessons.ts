@@ -140,3 +140,24 @@ export function computeLessons(
   });
   return lessons;
 }
+
+/**
+ * A compact "recurring issues to avoid" block for injecting the top-K lessons
+ * (already ranked, corrections first) into an impl/review stage prompt. Returns
+ * "" when there is nothing to inject, so the caller can append unconditionally.
+ */
+export function lessonsPromptBlock(lessons: Lesson[], maxK = 5): string {
+  const top = lessons.slice(0, Math.max(0, maxK));
+  if (!top.length) return "";
+  const line = (l: Lesson): string => {
+    const where = l.file ? ` (${l.file})` : "";
+    const msg = l.sampleMessages[0] ?? l.signature;
+    const tag = l.kind === "correction" ? "your correction" : `${l.severity ?? "issue"}, recurred ×${l.occurrences}`;
+    return `- [${tag}]${where} ${msg}`;
+  };
+  return [
+    "",
+    "Recurring issues to AVOID in this project (learned from past runs and your corrections):",
+    ...top.map(line),
+  ].join("\n");
+}
