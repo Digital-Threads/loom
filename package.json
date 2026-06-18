@@ -15,7 +15,7 @@
   "bin": {
     "loom": "dist/cli.js"
   },
-  "files": ["dist", "web/dist", "README.md"],
+  "files": ["dist", "web/dist", "README.md", "CHANGELOG.md"],
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build:host": "tsc -p tsconfig.json",
