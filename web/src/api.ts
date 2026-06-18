@@ -339,6 +339,17 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ attachments: Attachment[] }>(`${base}/api/tasks/${id}/attachments`, f).then((d) => d.attachments),
     addAttachment: (id: string, a: { kind: "file" | "link"; name: string; pathOrUrl: string }) =>
       postJson<{ attachment: Attachment }>(`${base}/api/tasks/${id}/attachments`, a, f).then((d) => d.attachment),
+    // Security policy / secret-scan configuration
+    securityPolicy: () => getJson<SecurityPolicyData>(`${base}/api/security/policy`, f),
+    saveSecurityPolicy: (allow: string[], deny: string[]) =>
+      postJson<{ ok?: boolean; error?: string; summary?: PolicySummary }>(`${base}/api/security/policy`, { allow, deny }, f),
+    securitySecrets: () => getJson<SecuritySecretsData>(`${base}/api/security/secrets`, f),
+    saveSecuritySecrets: (custom: SecretRule[], enabled: boolean) =>
+      postJson<{ ok?: boolean; error?: string; enabled?: boolean; custom?: SecretRule[] }>(
+        `${base}/api/security/secrets`,
+        { custom, enabled },
+        f,
+      ),
   };
 }
 
@@ -346,6 +357,27 @@ export interface DirEntry { name: string; path: string; isGitRepo: boolean }
 export interface DirListing { path: string; parent: string | null; entries: DirEntry[] }
 
 export interface Attachment { id: string; kind: string; name: string; path_or_url: string }
+
+export interface SecretRule { kind: string; source: string }
+export interface PolicySummary {
+  allowCount: number;
+  denyCount: number;
+  defaultDenyCount: number;
+  secretRuleCount: number;
+  defaultSecretKindCount: number;
+  secretScanEnabled: boolean;
+}
+export interface SecurityPolicyData {
+  defaults: { deny: string[] };
+  allow: string[];
+  deny: string[];
+  summary: PolicySummary;
+}
+export interface SecuritySecretsData {
+  defaults: string[];
+  custom: SecretRule[];
+  enabled: boolean;
+}
 export interface McpServer { id: string; command: string; args?: string[]; enabled: boolean }
 
 export interface LayerInfo {

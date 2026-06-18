@@ -14,6 +14,7 @@ import { liveCandidates } from "./router-live.js";
 import type { RouteCandidate } from "./router.js";
 import type { GitRunner } from "../security/sandbox.js";
 import { secureExecutor } from "../security/secure-executor.js";
+import { loadSecurityConfig } from "../security/policy-config.js";
 import { recordRunCost } from "../observability/cost-recorder.js";
 import { tokenEventsByTime, type TokenEvent } from "../plugins/token-pilot/adapter.js";
 import { resolveProjectRoot } from "../workspace/project-id.js";
@@ -48,9 +49,14 @@ export function startSpecRun(
     opts.deps ?? {
       decomposer: createAimuxDecomposer(),
       // retry(secure(aimux)): each attempt is sandboxed-redacted-audited.
-      executor: retryingExecutor(secureExecutor(createAimuxExecutor()), {
-        maxRetries: opts.maxRetries ?? 1,
-      }),
+      executor: retryingExecutor(
+        secureExecutor(createAimuxExecutor(), {
+          auditSecrets: loadSecurityConfig(db).secretScanEnabled, // honour the Security panel's on/off switch
+        }),
+        {
+          maxRetries: opts.maxRetries ?? 1,
+        },
+      ),
     };
   const candidates = opts.candidates ?? liveCandidates();
   const loadTokenEvents =

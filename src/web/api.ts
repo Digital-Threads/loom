@@ -60,7 +60,6 @@ import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
-import { scanSecrets } from "../core/security/secrets.js";
 import { audit } from "../core/security/audit.js";
 import { join as pathJoin, isAbsolute } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
@@ -68,6 +67,15 @@ import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
 import { renderDossier, diffSummary } from "../core/dashboard/dossier.js";
 import { getAllSettings, setSetting, getSetting } from "../core/store/settings.js";
+import {
+  loadSecurityConfig,
+  saveCommandPolicy,
+  saveSecretConfig,
+  policySummary,
+  defaultDenySources,
+  scanWithCustom,
+  DEFAULT_SECRET_KINDS,
+} from "../core/security/policy-config.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
 import { addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
@@ -374,8 +382,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
     // Secret scan on the NORMAL execution path (not just the experimental
     // sandbox): flag leaked credentials in the agent's output so the Security
-    // panel's audit trail is real for every run (loom-l6z1).
-    const secrets = scanSecrets(text);
+    // panel's audit trail is real for every run (loom-l6z1). Honours the
+    // secret-scan on/off switch and any user-defined rules from the Security panel.
+    const secCfg = loadSecurityConfig(db);
+    const secrets = secCfg.secretScanEnabled ? scanWithCustom(text, secCfg.secretRules) : [];
     if (secrets.length) {
       audit({
         projectId: projectActive()?.projectId ?? "default",
@@ -1358,6 +1368,44 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     setSetting(db, body.key, body.value);
     return c.json({ ok: true });
   });
+
+  // Security configuration — view/edit the command policy (allow/deny) and the
+  // secret-scan rules, plus the secret-scan on/off switch. Built-in defaults
+  // are returned read-only; user patterns are validated before they persist.
+  app.get("/api/security/policy", (c) => {
+    const cfg = loadSecurityConfig(db);
+    return c.json({
+      defaults: { deny: defaultDenySources() },
+      allow: cfg.allow,
+      deny: cfg.deny,
+      summary: policySummary(cfg),
+    });
+  });
+  app.post("/api/security/policy", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { allow?: unknown; deny?: unknown };
+    const r = saveCommandPolicy(db, body.allow ?? [], body.deny ?? []);
+    if (!r.ok) return c.json({ error: r.error }, 400);
+    return c.json({ ok: true, summary: policySummary(loadSecurityConfig(db)) });
+  });
+  app.get("/api/security/secrets", (c) => {
+    const cfg = loadSecurityConfig(db);
+    return c.json({
+      defaults: DEFAULT_SECRET_KINDS,
+      custom: cfg.secretRules,
+      enabled: cfg.secretScanEnabled,
+    });
+  });
+  app.post("/api/security/secrets", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { custom?: unknown; enabled?: unknown };
+    const cfg = loadSecurityConfig(db);
+    const enabled = body.enabled === undefined ? cfg.secretScanEnabled : body.enabled;
+    const rules = body.custom === undefined ? cfg.secretRules : body.custom;
+    const r = saveSecretConfig(db, rules, enabled);
+    if (!r.ok) return c.json({ error: r.error }, 400);
+    const next = loadSecurityConfig(db);
+    return c.json({ ok: true, enabled: next.secretScanEnabled, custom: next.secretRules });
+  });
+
   app.get("/api/tasks/:id/attachments", (c) => c.json({ attachments: getAttachments(db, c.req.param("id")) }));
   app.post("/api/tasks/:id/attachments", async (c) => {
     const id = c.req.param("id");
