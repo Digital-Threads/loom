@@ -14,7 +14,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
   const [busy, setBusy] = useState(false);
 
   function refresh() {
-    client.projectStats().then(setStats).catch((e) => setErr(String(e)));
+    client.projectStats().then((s) => { setStats(s); setErr(null); }).catch((e) => setErr(String(e)));
   }
   useEffect(refresh, [client]);
 
@@ -22,7 +22,7 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     if (!root.trim()) return;
     setBusy(true);
     try { await client.addProject(root.trim()); setRoot(""); refresh(); toast.success("Project added"); }
-    catch (e) { setErr(String(e)); toast.error("Couldn’t add project"); }
+    catch { toast.error("Couldn’t add project"); } // mutation failure → toast only, never the fatal panel
     finally { setBusy(false); }
   }
   async function setDefault(id: string) {
@@ -41,7 +41,14 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
     } catch (e) { toast.error(`Couldn’t remove: ${e}`); } finally { setBusy(false); }
   }
 
-  if (err) return <StateView kind="error" msg={err} />;
+  if (err) return (
+    <div className="panel">
+      <StateView kind="error" msg={err} />
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn acc" onClick={refresh}>Retry</button>
+      </div>
+    </div>
+  );
   if (!stats) return <StateView kind="loading" />;
 
   const pct = (u: number, s: number) => (u + s > 0 ? Math.round((s / (u + s)) * 100) : 0);
@@ -49,9 +56,9 @@ export function Projects({ client, onSwitched }: { client: LoomClient; onSwitche
   return (
     <div className="panel">
       <div className="acct-add" style={{ marginBottom: 12 }}>
-        <input className="inp" placeholder="/path/to/repo" value={root} onChange={(e) => setRoot(e.target.value)} />
+        <input className="inp" aria-label="Project repository path" value={root} onChange={(e) => setRoot(e.target.value)} />
         <button className="btn" onClick={() => setPicking(true)}>Browse…</button>
-        <button className="btn acc" disabled={busy} onClick={add}>Add project</button>
+        <button className="btn acc" disabled={busy || !root.trim()} onClick={add}>Add project</button>
       </div>
       <p className="acct-hint">
         Projects are added here or auto-registered when you create a task in a new repo. The <b>default</b> is what new

@@ -12,9 +12,13 @@ export function Settings({ client }: { client: LoomClient }) {
   useEffect(() => { client.settings().then(setS).catch((e) => setErr(String(e))); }, [client]);
 
   async function save(key: string, value: unknown) {
-    await client.saveSetting(key, value);
-    setS((cur) => ({ ...(cur ?? {}), [key]: value }));
-    toast.success("Saved");
+    try {
+      await client.saveSetting(key, value);
+      setS((cur) => ({ ...(cur ?? {}), [key]: value }));
+      toast.success("Saved");
+    } catch (e) {
+      toast.error(`Couldn’t save: ${e}`);
+    }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -39,7 +43,11 @@ export function Settings({ client }: { client: LoomClient }) {
         <b>Cost cap (per task, $)</b>
         <span>
           <input className="inp" type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80, minWidth: 0 }}
-            onBlur={(e) => save("cost.capUsd", Number(e.target.value) || 0)} />
+            onBlur={(e) => {
+              const capped = Math.max(0, Number(e.target.value) || 0);
+              e.target.value = String(capped);
+              save("cost.capUsd", capped);
+            }} />
           <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>0 = no limit (default)</span>
         </span>
       </div>
