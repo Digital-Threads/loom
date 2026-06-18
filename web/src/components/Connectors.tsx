@@ -5,11 +5,29 @@ import { toast } from "../toast";
 
 // D5.3 — Connectors (MCP): list/add/enable/test the MCP servers Loom passes
 // into agent sessions.
+
+// Per-server reachability after a Test, and the beads-import flow state — both
+// shown as clear status chips instead of raw strings.
+type TestState = { kind: "checking" } | { kind: "ok" } | { kind: "fail"; error?: string };
+type ImportState =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "done"; created: number }
+  | { kind: "error"; message: string };
+
+function TestStatus({ state }: { state?: TestState }) {
+  if (!state) return null;
+  if (state.kind === "checking") return <span className="chip warn" style={{ marginLeft: 6 }}>Checking…</span>;
+  if (state.kind === "ok") return <span className="chip ok" style={{ marginLeft: 6 }}>Reachable</span>;
+  return <span className="chip bad" style={{ marginLeft: 6 }} title={state.error}>Unreachable</span>;
+}
+
 export function Connectors({ client }: { client: LoomClient }) {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [id, setId] = useState("");
   const [command, setCommand] = useState("");
-  const [status, setStatus] = useState<Record<string, string>>({});
+  const [tests, setTests] = useState<Record<string, TestState>>({});
+  const [imp, setImp] = useState<ImportState>({ kind: "idle" });
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -26,15 +44,36 @@ export function Connectors({ client }: { client: LoomClient }) {
     catch (e) { toast.error(`Couldn’t toggle ${s.id}: ${e}`); }
   }
   async function remove(sid: string) {
-    try { await client.mcpRemove(sid); refresh(); toast.success("Server removed"); }
+    try {
+      await client.mcpRemove(sid);
+      setTests((m) => { if (!(sid in m)) return m; const next = { ...m }; delete next[sid]; return next; });
+      refresh();
+      toast.success("Server removed");
+    }
     catch (e) { toast.error(`Couldn’t remove ${sid}: ${e}`); }
   }
   async function test(sid: string) {
+    setTests((m) => ({ ...m, [sid]: { kind: "checking" } }));
     try {
       const r = await client.mcpTest(sid);
-      setStatus((m) => ({ ...m, [sid]: r.ok ? "ok" : r.error ?? "fail" }));
+      setTests((m) => ({ ...m, [sid]: r.ok ? { kind: "ok" } : { kind: "fail", error: r.error } }));
       if (r.ok) toast.success(`${sid}: reachable`); else toast.error(`${sid}: ${r.error ?? "unreachable"}`);
-    } catch (e) { toast.error(`Couldn’t test ${sid}: ${e}`); }
+    } catch (e) {
+      setTests((m) => ({ ...m, [sid]: { kind: "fail", error: String(e) } }));
+      toast.error(`Couldn’t test ${sid}: ${e}`);
+    }
+  }
+
+  async function importFromBeads() {
+    setImp({ kind: "running" });
+    try {
+      const r = await client.importTracker();
+      setImp({ kind: "done", created: r.created });
+      toast.success(r.created > 0 ? `Imported ${r.created}` : "Nothing new to import");
+    } catch (e) {
+      setImp({ kind: "error", message: String(e) });
+      toast.error(`Import failed: ${e}`);
+    }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -45,9 +84,15 @@ export function Connectors({ client }: { client: LoomClient }) {
         <input className="inp" placeholder="id" value={id} onChange={(e) => setId(e.target.value)} />
         <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
         <button className="btn acc" onClick={add}>Add MCP</button>
-        <button className="btn" onClick={async () => { try { const r = await client.importTracker(); setStatus((m) => ({ ...m, import: `imported ${r.created}` })); } catch (e) { toast.error(`Import failed: ${e}`); } }}>Import from beads</button>
+        <button className="btn" onClick={importFromBeads} disabled={imp.kind === "running"}>Import from beads</button>
       </div>
-      {status.import ? <div className="muted">{status.import}</div> : null}
+      {imp.kind === "running" ? (
+        <div style={{ marginTop: 8 }}><span className="chip warn">Importing…</span></div>
+      ) : imp.kind === "done" ? (
+        <div style={{ marginTop: 8 }}><span className="chip ok">{imp.created > 0 ? `Imported ${imp.created}` : "Nothing new to import"}</span></div>
+      ) : imp.kind === "error" ? (
+        <div style={{ marginTop: 8 }}><StateView kind="error" msg={imp.message} /></div>
+      ) : null}
       {loading ? (
         <StateView kind="loading" />
       ) : servers.length === 0 ? (
@@ -59,10 +104,10 @@ export function Connectors({ client }: { client: LoomClient }) {
             {servers.map((s) => (
               <tr key={s.id}>
                 <td>{s.id}{s.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
-                <td className="crumb">{s.command}{status[s.id] ? ` · ${status[s.id]}` : ""}</td>
+                <td className="crumb">{s.command}<TestStatus state={tests[s.id]} /></td>
                 <td>
                   <button className="btn" onClick={() => toggle(s)}>{s.enabled ? "Disable" : "Enable"}</button>
-                  <button className="btn" onClick={() => test(s.id)}>Test</button>
+                  <button className="btn" onClick={() => test(s.id)} disabled={tests[s.id]?.kind === "checking"}>Test</button>
                   <button className="btn" onClick={() => remove(s.id)}>Remove</button>
                 </td>
               </tr>
