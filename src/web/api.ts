@@ -641,10 +641,6 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // the agent recorded nothing. We mark it explicitly so History shows "no
   // journal" instead of a blank, and so empty tasks are no longer invisible.
   const JOURNAL_STATUS_KIND = "journal-status";
-  // A task that finished/ran but where something silently degraded underneath
-  // (cost not recorded, journal not snapshotted, MCP not loaded, token-pilot
-  // enforcement missing). Marked explicitly so a "green" task can't hide it.
-  const DEGRADED_KIND = "degraded";
   // Loom tasks whose journal we already guaranteed this server session — taskCwd
   // runs on every stage, so this in-memory guard keeps ensureJournalTask from
   // re-querying the journal CLI once a task is known-handled.
