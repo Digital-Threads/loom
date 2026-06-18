@@ -538,9 +538,13 @@ describe("web api", () => {
   it("GET /api/layers lists the full architecture: standalone + inline (L11)", async () => {
     const app2 = createApi(db);
     const body = (await (await app2.request("/api/layers")).json()) as { layers: { id: string; status: string }[] };
-    // 6 standalone (3 original plugins + security/quality/swarm), rest inline.
-    expect(body.layers.filter((l) => l.status === "standalone").map((l) => l.id).sort()).toEqual(["accounts", "efficiency", "memory", "quality", "security", "swarm"]);
+    // 3 standalone plugins (own package + repo); the rest — including the folded-in
+    // security/quality/swarm layers — are inline modules of loom-host.
+    expect(body.layers.filter((l) => l.status === "standalone").map((l) => l.id).sort()).toEqual(["accounts", "efficiency", "memory"]);
     expect(body.layers.some((l) => l.id === "automation" && l.status === "inline")).toBe(true);
+    for (const id of ["security", "quality", "swarm"]) {
+      expect(body.layers.some((l) => l.id === id && l.status === "inline")).toBe(true);
+    }
     expect(body.layers.length).toBeGreaterThan(3);
   });
   it("GET /api/skills lists the skills library (L11)", async () => {

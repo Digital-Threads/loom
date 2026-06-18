@@ -4,7 +4,7 @@
 
 Under the board, Loom is also a local control center for the AI-development tools that normally live apart: install plugins and MCP servers from one place, see every layer on one dashboard, and manage them in-app. Each layer is self-contained and works without Loom — the dependency is one-way: Loom reads and orchestrates the layers, the layers know nothing about Loom.
 
-The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits), **Token Pilot** (60–80% token savings on code reading), **Task Journal** (the reasoning behind your work — decisions, rejections, findings), plus the standalone **Knowledge / Swarm / Quality / Security** layers. New layers slot in as new adapters.
+The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits), **Token Pilot** (60–80% token savings on code reading), **Task Journal** (the reasoning behind your work — decisions, rejections, findings), plus the built-in **Knowledge / Swarm / Quality / Security** layers (folded into the core). New layers slot in as new adapters.
 
 ## Install
 
@@ -113,9 +113,8 @@ The full release map — every package and plugin, which registry it goes to
 (npm / crates.io / Claude marketplace), its version, the exact publish command,
 and the dependency-correct order — lives in **[PUBLISHING.md](./PUBLISHING.md)**.
 
-In short: `loom` depends on five sibling layers (`@digital-threads/aimux` +
-`loom-knowledge` / `-swarm` / `-quality` / `-security`) via `file:../` locally;
-`prepack` swaps those to registry versions for the tarball and `postpack`
-restores them. **Publish the layers first, then `npm publish` from `loom-host`**
-— use `npm publish` (not `bun publish`), since the swap relies on the
-`prepack`/`postpack` hooks.
+In short: the knowledge / swarm / quality / security layers are **built into the
+core** (`src/core/layers/`), so the only sibling dependency is `@digital-threads/aimux`
+(`file:../` locally). `prepack` swaps that to its registry version for the tarball
+and `postpack` restores it. **`npm publish` from `loom-host`** (not `bun publish`),
+since the swap relies on the `prepack`/`postpack` hooks.

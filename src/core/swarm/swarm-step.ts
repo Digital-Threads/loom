@@ -1,2 +1,2 @@
-// P2.4: extracted to @digital-threads/loom-swarm (see ./coordinator.ts).
-export * from "@digital-threads/loom-swarm";
+// P2.4: extracted to ../layers/swarm/index.js (see ./coordinator.ts).
+export * from "../layers/swarm/index.js";

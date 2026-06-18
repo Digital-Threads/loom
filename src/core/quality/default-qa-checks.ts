@@ -6,7 +6,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { QaCheck } from "@digital-threads/loom-quality";
+import type { QaCheck } from "../layers/quality/index.js";
 
 /** Run a command in a directory; never throws — captures exit + combined output.
  *  ASYNC (execFile, not execFileSync): the QA stage runs the repo's full test

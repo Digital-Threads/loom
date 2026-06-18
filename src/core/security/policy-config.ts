@@ -1,4 +1,4 @@
-// Host-side security configuration (loom-host only). The @digital-threads/loom-security
+// Host-side security configuration (loom-host only). The ../layers/security/index.js
 // package is pure and stateless; the EDITABLE layer — extra allow/deny command
 // patterns, custom secret-scan rules, and the secret-scan on/off switch — lives
 // in the host settings store and is surfaced/edited via /api/security/*.

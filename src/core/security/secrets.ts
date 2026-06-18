@@ -1,2 +1,2 @@
-// P2: extracted to @digital-threads/loom-security. Host re-exports.
-export * from "@digital-threads/loom-security";
+// P2: extracted to ../layers/security/index.js. Host re-exports.
+export * from "../layers/security/index.js";

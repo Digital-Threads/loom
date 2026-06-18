@@ -1,3 +1,3 @@
-// P2.4: extracted to @digital-threads/loom-swarm. Host re-exports so existing
+// P2.4: extracted to ../layers/swarm/index.js. Host re-exports so existing
 // imports keep working; the layer also runs standalone.
-export * from "@digital-threads/loom-swarm";
+export * from "../layers/swarm/index.js";
