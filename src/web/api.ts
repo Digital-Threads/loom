@@ -11,7 +11,7 @@ import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../c
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
-import { taskDetail, taskPack, boardTaskJournal, exportEventsSafe, renderJournalFromEvents, bindExternal, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
+import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
@@ -444,30 +444,35 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // deletion — but to be safe we ALSO snapshot it at Done. Reads prefer the live
   // journal and fall back to the snapshot when the worktree is gone.
   const JOURNAL_SNAPSHOT_KIND = "journal-snapshot";
-  /** A board task's journal as Markdown. Read live from the task's own worktree
-   *  project (1:1 with the board task) — task-journal keys projects by the path
-   *  STRING, so `export --project <worktreePath>` still returns the events after
-   *  the worktree dir is deleted. The Done-time snapshot is only a fallback for
-   *  when the central store itself is gone. */
+  /** A board task's story as Markdown. Prefer task-journal's OWN `export-pr`
+   *  narrative (Summary / Changes / Why / Verification / Affected) while the
+   *  worktree exists; then the Done-time snapshot of that story (survives the
+   *  worktree's deletion); finally a raw-event render as a universal fallback
+   *  (export --project still works after the dir is gone). */
   const boardJournalPack = (id: string): string => {
     const root = journalProjectRoot(id);
-    if (root) {
-      const live = boardTaskJournal(root);
-      if (live.trim()) return live;
+    if (!root) return "";
+    if (existsSync(worktreePath(id))) {
+      const story = boardTaskStory(root); // task-journal's native export-pr
+      if (story.trim()) return story;
     }
-    const snap = loadResult<{ events: TjEvent[] }>(id, JOURNAL_SNAPSHOT_KIND);
-    return snap ? renderJournalFromEvents(snap.events) : "";
+    const snap = loadResult<{ events?: TjEvent[]; story?: string }>(id, JOURNAL_SNAPSHOT_KIND);
+    if (snap?.story?.trim()) return snap.story;
+    const live = boardTaskJournal(root);
+    if (live.trim()) return live;
+    return snap?.events ? renderJournalFromEvents(snap.events) : "";
   };
-  /** Persist the agent's journal + bind it to loom:<id> (best-effort). Called at
-   *  Done while the worktree still exists, so the reasoning outlives cleanup.
-   *  No-op for non-git tasks, which have no dedicated 1:1 journal project. */
+  /** Persist the agent's story + journal and bind it to loom:<id> (best-effort).
+   *  Called at Done while the worktree still exists, so both the readable
+   *  export-pr story and the raw events outlive cleanup. No-op for non-git
+   *  tasks, which have no dedicated 1:1 journal project. */
   const snapshotJournal = (id: string): void => {
     try {
       const root = journalProjectRoot(id);
       if (!root) return; // only a git worktree is 1:1 with the board task
       const events = exportEventsSafe(root);
       if (!events.length) return;
-      saveResult(id, "memory", JOURNAL_SNAPSHOT_KIND, { events });
+      saveResult(id, "memory", JOURNAL_SNAPSHOT_KIND, { events, story: boardTaskStory(root) });
       for (const t of tasksFromEvents(events)) bindExternal(root, t.id, `loom:${id}`);
     } catch {
       /* journal snapshot is best-effort */

@@ -195,6 +195,32 @@ export function boardTaskJournal(projectRoot: string): string {
   return renderJournalFromEvents(exportEventsSafe(projectRoot));
 }
 
+/** A board task's story rendered by task-journal's OWN `export-pr` — the
+ *  canonical narrative: Summary / Changes / Why-this-approach / Verification /
+ *  Affected. This is the readable "what was the task, what was done, why" view,
+ *  produced by task-journal itself rather than re-derived here. `export-pr`
+ *  resolves the project from cwd (no --project flag), so `projectRoot` must
+ *  exist on disk; returns "" when it doesn't, or when there are no events. */
+export function boardTaskStory(projectRoot: string): string {
+  const tasks = tasksFromEvents(exportEventsSafe(projectRoot));
+  if (!tasks.length) return "";
+  const parts: string[] = [];
+  for (const t of tasks) {
+    try {
+      const out = execFileSync("task-journal", ["export-pr", t.id], {
+        cwd: projectRoot,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (out) parts.push(out);
+    } catch {
+      /* skip a task export-pr can't render (e.g. cwd gone) */
+    }
+  }
+  return parts.join("\n\n---\n\n");
+}
+
 /** Tie a journal task to outside work via an external reference, e.g.
  *  `loom:<board task id>` (best-effort). Returns true when the CLI succeeds. */
 export function bindExternal(projectRoot: string, taskId: string, ref: string): boolean {
