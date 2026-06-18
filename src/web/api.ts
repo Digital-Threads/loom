@@ -11,7 +11,7 @@ import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../c
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
-import { taskDetail, taskPack, taskPackByLoomId } from "../core/plugins/task-journal/adapter.js";
+import { taskDetail, taskPack, boardTaskJournal, exportEventsSafe, renderJournalFromEvents, bindExternal, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
@@ -55,7 +55,7 @@ import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from ".
 import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
-import { worktreeBranch, ensureWorktree } from "../core/security/sandbox.js";
+import { worktreeBranch, ensureWorktree, worktreePath } from "../core/security/sandbox.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync } from "node:fs";
@@ -299,6 +299,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (t?.repo && isGitRepo(t.repo)) return ensureWorktree(t.repo, id).path;
     return t?.repo || undefined;
   };
+  // The DEDICATED task-journal project the agent wrote to: a git task's own
+  // worktree, which is 1:1 with the board task. Non-git / no-repo tasks share a
+  // project with other tasks, so there is no journal we can attribute to them —
+  // returns null (we never read or tag a shared project). Uses worktreePath()
+  // (NOT ensureWorktree) so a READ never recreates a deleted worktree. The id is
+  // a filesystem path segment via worktreePath(), so it is format-guarded here.
+  const safeTaskId = (id: string) => /^[A-Za-z0-9._-]+$/.test(id) && !id.startsWith("-");
+  const journalProjectRoot = (id: string): string | null => {
+    if (!safeTaskId(id)) return null;
+    const t = getTask(db, id);
+    if (t?.repo && isGitRepo(t.repo)) return resolveProjectRoot(worktreePath(id));
+    return null;
+  };
   // Refresh per-task cost after a stage: token-pilot's own used/saved stats
   // (spine-tagged via LOOM_TASK_ID) + the live session's exact $ spent. No
   // separate counter — we read what token-pilot already tracks.
@@ -424,6 +437,40 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const a = latestArtifact(db, taskId, kind);
     if (!a) return null;
     try { return JSON.parse(a.content) as T; } catch { return null; }
+  };
+  // ─── task-journal: the agent's reasoning for a board task ───────────────────
+  // The agent writes its journal into the project of its cwd (its worktree).
+  // That data lives in task-journal's own data dir and survives the worktree's
+  // deletion — but to be safe we ALSO snapshot it at Done. Reads prefer the live
+  // journal and fall back to the snapshot when the worktree is gone.
+  const JOURNAL_SNAPSHOT_KIND = "journal-snapshot";
+  /** A board task's journal as Markdown. Read live ONLY from the task's own
+   *  worktree project (1:1 with the board task) and ONLY while that worktree
+   *  still exists — never a shared or walked-up project. Once the worktree is
+   *  gone, fall back to the snapshot captured at Done. */
+  const boardJournalPack = (id: string): string => {
+    const root = journalProjectRoot(id);
+    if (root && existsSync(worktreePath(id))) {
+      const live = boardTaskJournal(root);
+      if (live.trim()) return live;
+    }
+    const snap = loadResult<{ events: TjEvent[] }>(id, JOURNAL_SNAPSHOT_KIND);
+    return snap ? renderJournalFromEvents(snap.events) : "";
+  };
+  /** Persist the agent's journal + bind it to loom:<id> (best-effort). Called at
+   *  Done while the worktree still exists, so the reasoning outlives cleanup.
+   *  No-op for non-git tasks, which have no dedicated 1:1 journal project. */
+  const snapshotJournal = (id: string): void => {
+    try {
+      const root = journalProjectRoot(id);
+      if (!root) return; // only a git worktree is 1:1 with the board task
+      const events = exportEventsSafe(root);
+      if (!events.length) return;
+      saveResult(id, "memory", JOURNAL_SNAPSHOT_KIND, { events });
+      for (const t of tasksFromEvents(events)) bindExternal(root, t.id, `loom:${id}`);
+    } catch {
+      /* journal snapshot is best-effort */
+    }
   };
   // Record a readable turn in the shared transcript. Stages that produce
   // structured results (review/qa/pr/done/brainstorm) call this so the user
@@ -562,6 +609,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
+      snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
       const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
       if (sid) sessionLauncher.stop?.(sid);
@@ -1034,13 +1082,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // task-journal task detail (decisions/findings/rejections) for the Memory drill-in.
   app.get("/api/memory/tasks/:id", (c) => c.json({ detail: memoryTask(c.req.param("id")) }));
-  // A board task's history dossier — its task-journal pack, linked via the
-  // external reference loom:<task id> (auto-bound by the MCP during runs).
+  // A board task's history dossier — the agent's task-journal reasoning, read
+  // from the worktree project it ran in (live), falling back to the snapshot
+  // captured at Done so it survives the worktree's deletion.
   app.get("/api/tasks/:id/dossier", async (c) => {
     const id = c.req.param("id");
     const t = getTask(db, id);
-    const root = resolveProjectRoot(t?.repo || projectActive()?.root || process.cwd());
-    const pack = taskPackByLoomId(root, id);
+    const pack = boardJournalPack(id);
     // Best-effort git diff --stat of the task's branch; "" (no Changes section)
     // when the task has no repo, the branch doesn't exist yet, or git is absent.
     const diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id)) : "";
@@ -1058,6 +1106,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   app.get("/api/memory/tasks/:id/pack", (c) =>
     c.json({ pack: taskPack(resolveProjectRoot(projectActive()?.root ?? process.cwd()), c.req.param("id")) }),
   );
+  // Memory drill-in for a BOARD task: the agent's reasoning journal for t-<id>
+  // (live from its worktree project, snapshot fallback) — no pipeline/cost noise.
+  app.get("/api/memory/board/:id", (c) => c.json({ pack: boardJournalPack(c.req.param("id")) }));
 
   // ─── observability (L9) ──────────────────────────────────────────────────────
   // Unified timeline: the project's LoomEvent stream, time-ordered.
@@ -1178,6 +1229,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     runDone(db, id, { projectId: resolveProjectId(c), closeTask: () => deps.closeTask?.(id) });
+    snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
     recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
     return c.json({ ok: true });
   });

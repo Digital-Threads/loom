@@ -7,6 +7,7 @@ import { setSetting } from "../../src/core/store/settings.js";
 import { listRunsForTask, insertRun, reconcileInterruptedRuns, upsertCost } from "../../src/core/store/execute.js";
 import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
+import { createArtifact } from "../../src/core/store/artifacts.js";
 import { startTask, attentionQueue } from "../../src/core/pipeline/engine.js";
 import { createApi } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
@@ -104,6 +105,35 @@ describe("web api", () => {
     const app2 = createApi(db, { memoryTask: (id) => ({ id, decisions: ["d1"] }) });
     const res = await app2.request("/api/memory/tasks/tj-9");
     expect(await res.json()).toEqual({ detail: { id: "tj-9", decisions: ["d1"] } });
+  });
+
+  it("GET /api/memory/board/:id returns empty for a non-git task (no shared-project leak)", async () => {
+    // t1 has no repo → no dedicated 1:1 journal project → must NOT dump the
+    // host/shared project's unrelated tj tasks. Empty string, not a leak.
+    const res = await app.request("/api/memory/board/t1");
+    expect(res.status).toBe(200);
+    expect((await res.json()).pack).toBe("");
+  });
+
+  it("GET /api/memory/board/:id is empty and never throws for an unknown id", async () => {
+    // Unknown task → no dedicated journal project → empty, no throw.
+    const res = await app.request("/api/memory/board/not-a-real-id");
+    expect(res.status).toBe(200);
+    expect((await res.json()).pack).toBe("");
+  });
+
+  it("GET /api/memory/board/:id falls back to the snapshot when the worktree journal is gone", async () => {
+    // A git-repo task → its journal project is the (absent) worktree, so the
+    // live read is empty and the Done-time snapshot must be used instead.
+    createTask(db, { id: "t-snap", title: "Snapshot task", repo: process.cwd() });
+    const events = [
+      { event_id: "e1", task_id: "tj-z", type: "open", timestamp: "2026-06-18T10:00:00.000Z", text: "Snapshot reasoning task" },
+      { event_id: "e2", task_id: "tj-z", type: "decision", timestamp: "2026-06-18T10:01:00.000Z", text: "snapshot decision kept" },
+    ];
+    createArtifact(db, { id: "art_snap", taskId: "t-snap", stage: "memory", kind: "journal-snapshot", content: JSON.stringify({ events }), status: "accepted" });
+    const res = await app.request("/api/memory/board/t-snap");
+    expect(res.status).toBe(200);
+    expect((await res.json()).pack).toContain("snapshot decision kept");
   });
 
   // ── projects (D3) ──

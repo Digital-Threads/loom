@@ -130,21 +130,67 @@ export function taskPack(projectRoot: string, id: string, mode: "compact" | "ful
   }
 }
 
-/** The dossier for a Loom board task: its journal is linked by the external
- *  reference `loom:<board task id>` (set by the MCP auto-bind). Renders that
- *  journal's pack. Empty string when no journal is linked yet. */
-export function taskPackByLoomId(projectRoot: string, boardTaskId: string, mode: "compact" | "full" = "full"): string {
-  if (!/^[A-Za-z0-9._-]+$/.test(boardTaskId) || boardTaskId.startsWith("-")) return "";
+/** All tj events for a project, or [] on any failure (tj missing / empty
+ *  project). Thin wrapper around the export so callers never throw. */
+export function exportEventsSafe(projectRoot: string): TjEvent[] {
   try {
-    return execFileSync(
-      "task-journal",
-      ["pack", "--external", `loom:${boardTaskId}`, "--mode", mode],
-      // ignore stderr (see taskPack): no linked journal → tj writes to stderr,
-      // which we'd otherwise echo. "" is the graceful "no journal yet" result.
-      { cwd: projectRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
-    );
+    return exportEvents(projectRoot);
   } catch {
-    return "";
+    return [];
+  }
+}
+
+/** Render a readable Markdown pack for a board task's journal directly from raw
+ *  tj events — works the same whether the events come live from the worktree
+ *  project or from a stored snapshot (so it survives the worktree's deletion).
+ *  The worktree project is 1:1 with the board task, so every task found is
+ *  rendered (newest first). Empty string when there are no events. */
+export function renderJournalFromEvents(events: TjEvent[]): string {
+  const tasks = tasksFromEvents(events);
+  if (tasks.length === 0) return "";
+  const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+  const blocks: string[] = [];
+  for (const t of tasks) {
+    const own = events.filter((e) => e.task_id === t.id);
+    const detail = taskDetailFromEvents(events, t.id);
+    const open = own.find((e) => e.type === "open");
+    const goal = typeof open?.meta?.goal === "string" ? (open.meta.goal as string) : "";
+    const lines: string[] = [`## ${t.title || t.id}`];
+    if (goal && clean(goal) !== clean(t.title)) lines.push(`\n_${clean(goal)}_`);
+    const section = (label: string, evs: TjEvent[]) => {
+      if (!evs.length) return;
+      lines.push(`\n### ${label}`);
+      for (const e of evs) lines.push(`- ${clean(e.text)}`);
+    };
+    section("Decisions", detail.decisions);
+    section("Findings", detail.findings);
+    section("Rejected", detail.rejections);
+    section("Evidence", own.filter((e) => e.type === "evidence"));
+    blocks.push(lines.join("\n"));
+  }
+  return blocks.join("\n\n");
+}
+
+/** A board task's journal pack, read live from the project the agent actually
+ *  wrote to (its worktree). Empty string when the project has no events. */
+export function boardTaskJournal(projectRoot: string): string {
+  return renderJournalFromEvents(exportEventsSafe(projectRoot));
+}
+
+/** Tie a journal task to outside work via an external reference, e.g.
+ *  `loom:<board task id>` (best-effort). Returns true when the CLI succeeds. */
+export function bindExternal(projectRoot: string, taskId: string, ref: string): boolean {
+  if (!/^[A-Za-z0-9._-]+$/.test(taskId) || taskId.startsWith("-")) return false;
+  if (!/^[A-Za-z0-9._:-]+$/.test(ref) || ref.startsWith("-")) return false;
+  try {
+    execFileSync("task-journal", ["external", "--add", ref, taskId], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
