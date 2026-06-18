@@ -52,7 +52,7 @@ import type { SessionControl } from "../core/automation/live-session.js";
 import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
-import { runPr, runDone, prConnectorStatus, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
+import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree, worktreePath } from "../core/security/sandbox.js";
@@ -486,7 +486,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try {
       const t = getTask(db, id);
       if (!t?.repo) return;
-      const diff = await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id));
+      const base = t.branch ?? await defaultBranch(realSh, t.repo); // null branch → repo default (master), not "main"
+      const diff = await diffSummary(realSh, t.repo, base, worktreeBranch(id));
       if (diff.trim()) saveResult(id, "memory", DIFF_SNAPSHOT_KIND, { diff });
     } catch {
       /* diff snapshot is best-effort */
@@ -1112,7 +1113,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const pack = boardJournalPack(id);
     // Best-effort git diff --stat of the task's branch; "" (no Changes section)
     // when the task has no repo, the branch doesn't exist yet, or git is absent.
-    let diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? "main", worktreeBranch(id)) : "";
+    let diff = t?.repo ? await diffSummary(realSh, t.repo, t.branch ?? await defaultBranch(realSh, t.repo), worktreeBranch(id)) : "";
     if (!diff.trim()) diff = loadResult<{ diff?: string }>(id, DIFF_SNAPSHOT_KIND)?.diff ?? ""; // branch merged+deleted → stored snapshot
     return c.json({
       pack: renderDossier({
