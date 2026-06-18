@@ -15,6 +15,7 @@ import { taskDetail, taskPack, taskPackByLoomId } from "../core/plugins/task-jou
 import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
+import { pickFallbackProfile, shouldAutoFallback, type ProfileLimit } from "../core/automation/auto-fallback.js";
 import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
@@ -1550,6 +1551,50 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       }
     });
   });
+
+  // ── Auto-fallback: when a task is parked on a rate limit and the user doesn't
+  // pick a replacement within the grace window, switch to the next subscription
+  // that still has headroom and continue the SAME session there. The server runs
+  // this on a timer (see server.ts). Profile names come from the live config —
+  // never hardcoded — and if nothing healthy exists the task stays parked.
+  function performProfileSwitch(id: string, profile: string): void {
+    const sid = getTaskSession(db, id).sessionId;
+    sessionLauncher.stop?.(sid ?? "");
+    setTaskProfile(db, id, profile);
+    if (sid) relocateSessionForProfile(profile, sid);
+    saveResult(id, "advance", "stop-reason", { kind: "none" });
+    const projectId = projectActive()?.projectId ?? "default";
+    rm.start({ projectId, taskId: id }, async (ctx) => {
+      streamSinks.set(id, ctx.appendOutput);
+      try {
+        updateTaskStatus(db, id, "running");
+        const res = await advanceTask(db, id, runners, advanceOpts());
+        if (res.stoppedAt && getTask(db, id)?.status !== "done") updateTaskStatus(db, id, "waiting");
+        return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
+      } finally {
+        streamSinks.delete(id);
+      }
+    });
+  }
+
+  async function autoFallbackTick(): Promise<void> {
+    const cfg = loadConfig();
+    if (!cfg) return;
+    const now = Date.now();
+    for (const t of listTasks(db)) {
+      if (t.status !== "waiting") continue;
+      const stop = loadResult<{ kind: string; profile?: string | null }>(t.id, "stop-reason");
+      if (stop?.kind !== "rate_limit") continue;
+      if (!shouldAutoFallback(t.updated_at, now)) continue;
+      const current = stop.profile ?? t.profile ?? "";
+      const limits = (await Promise.all(Object.keys(cfg.profiles).map((n) => limitsFor(n, cfg)))).filter(Boolean) as ProfileLimit[];
+      const next = pickFallbackProfile(limits, current);
+      if (!next) continue; // no healthy alternative → stay parked, honest
+      recordTurn(t.id, "advance", "Auto-fallback", `No account chosen within the grace window — switching to "${next}" (has headroom) and continuing.`);
+      performProfileSwitch(t.id, next);
+    }
+  }
+  (app as Hono & { autoFallbackTick?: () => Promise<void> }).autoFallbackTick = autoFallbackTick;
 
   return app;
 }

@@ -49,7 +49,16 @@ export function serveApi(opts: ServeOptions = {}) {
   configureSecurity({ emit: (projectId, ev) => appendLoomEvent(projectId, ev as never) });
 
   const app = new Hono();
-  app.route("/", createApi(db));
+  const api = createApi(db);
+  app.route("/", api);
+
+  // Auto-fallback timer: periodically move tasks parked on a rate limit to a
+  // subscription that still has headroom, so autopilot recovers without a human.
+  // unref so it never keeps the process alive on its own.
+  const fallbackTimer = setInterval(() => {
+    (api as { autoFallbackTick?: () => Promise<void> }).autoFallbackTick?.().catch(() => {});
+  }, 30_000);
+  (fallbackTimer as { unref?: () => void }).unref?.();
 
   if (opts.webDist && existsSync(opts.webDist)) {
     const root = opts.webDist;
