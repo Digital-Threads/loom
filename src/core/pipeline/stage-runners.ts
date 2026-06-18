@@ -139,6 +139,70 @@ export async function summarizeBrainstorm(
   });
 }
 
+// ─── L12.2b Autopilot brainstorm (self-driven Q&A) ────────────────────────────
+/** The auto-answer emits this (as its whole reply) when a question is a genuine
+ *  blocker that cannot be resolved from the description + analysis — the runner
+ *  parks the stage for a human instead of guessing. */
+export const BRAINSTORM_BLOCKED = "BLOCKED";
+/** Cap on auto Q&A rounds, so a model that never says READY can't loop (and burn
+ *  budget) forever — we summarise with what we have and move on. */
+export const BRAINSTORM_MAX_ROUNDS = 5;
+
+/** Prompt the agent to answer its own brainstorm question from the task context,
+ *  recording the assumptions it commits to into task-journal. */
+export function autoAnswerPrompt(spec: string, analysis: string, question: string): string {
+  return [
+    "You are auto-answering a brainstorming question in AUTOPILOT — there is no human to ask.",
+    "Answer the QUESTION using ONLY the TASK and ANALYSIS below.",
+    "Whenever you settle an open point by assuming something, RECORD that assumption in",
+    "task-journal as a `decision` (a choice you made) or `finding` (a fact you verified).",
+    "Only when the question is a REAL blocker you cannot resolve from the context —",
+    "answering it wrong would change the task's goal or scope — reply with exactly:",
+    `${BRAINSTORM_BLOCKED} — <one short sentence on what's missing>.`,
+    "Otherwise reply with the answer (the accepted assumption), no preamble.",
+    "",
+    "TASK:",
+    spec || "(none)",
+    "",
+    "ANALYSIS:",
+    analysis || "(none)",
+    "",
+    "QUESTION:",
+    question,
+  ].join("\n");
+}
+
+export interface AutoBrainstormResult {
+  blocked: boolean;
+  note?: string;
+}
+
+/** Autopilot brainstorm: the agent asks itself clarifying questions (reusing the
+ *  manual brainstormPrompt) and answers them from the task + analysis, logging
+ *  accepted assumptions to task-journal. It parks (blocked) only on a genuine
+ *  blocker; otherwise it summarises the transcript exactly like the manual flow. */
+export async function runAutoBrainstorm(
+  db: Database.Database,
+  taskId: string,
+  agent: StageAgent,
+  ctx: { spec: string; analysis: string },
+): Promise<AutoBrainstormResult> {
+  for (let round = 0; round < BRAINSTORM_MAX_ROUNDS; round++) {
+    const question = await brainstormTurn(db, taskId, agent);
+    if (question.startsWith(BRAINSTORM_READY)) break; // enough context to write the spec
+    const answer = (await agent(autoAnswerPrompt(ctx.spec, ctx.analysis, question))).trim();
+    if (answer.startsWith(BRAINSTORM_BLOCKED)) {
+      const note = answer.slice(BRAINSTORM_BLOCKED.length).replace(/^[\s—-]+/, "").trim() || "blocked on a question that can't be resolved from context";
+      return { blocked: true, note };
+    }
+    // the auto-answer lands as the "user" turn, so the next question sees it in
+    // history and summarizeBrainstorm / the manual transcript both pick it up.
+    appendChatMessage(db, { id: id("msg"), taskId, stage: "brainstorm", role: "user", content: answer });
+  }
+  await summarizeBrainstorm(db, taskId, agent);
+  return { blocked: false };
+}
+
 // ─── L12.3 Spec (draft → edit / return-with-comment → accept) ─────────────────
 /** Draft a spec from the brainstorm summary (new spec-md artifact, draft). */
 export async function draftSpec(db: Database.Database, taskId: string, agent: StageAgent): Promise<ArtifactRow> {

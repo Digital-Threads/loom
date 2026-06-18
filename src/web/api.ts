@@ -40,6 +40,7 @@ import {
   runAnalysis,
   brainstormTurn,
   summarizeBrainstorm,
+  runAutoBrainstorm,
   draftSpec,
   reviseSpec,
   acceptSpec,
@@ -641,7 +642,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const doneProjectId = () => projectActive()?.projectId ?? "default";
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
-    brainstorm: async () => ({ ok: true }), // human-driven via StageDialog
+    brainstorm: async (_d, id) => {
+      // Manual mode is human-driven via StageDialog (/brainstorm/message) — the
+      // runner stays a no-op so it can't auto-skip the human's dialog. Autopilot
+      // self-drives: the agent asks + answers clarifying questions from the task
+      // and analysis, logs accepted assumptions to task-journal, and only parks
+      // on a genuine blocker.
+      if (getTask(db, id)?.run_mode !== "autopilot") return { ok: true };
+      const analysis = latestArtifact(db, id, "analysis")?.content ?? "";
+      const res = await runAutoBrainstorm(db, id, stageAgentFor(id, "brainstorm"), { spec: taskSpec(id), analysis });
+      recordTurn(id, "brainstorm", "Auto-brainstorm (autopilot)", res.blocked ? `Parked: ${res.note}` : "Resolved from context");
+      return res.blocked ? { ok: true, needsAttention: true, note: res.note } : { ok: true };
+    },
     spec: async (_d, id) => {
       const art = await draftSpec(db, id, stageAgentFor(id, "spec"));
       const { complete, note } = parseCompleteness(art.content); // completeness-gate: don't advance a doubtful spec

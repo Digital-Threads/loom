@@ -8,6 +8,8 @@ import {
   runAnalysis,
   brainstormTurn,
   summarizeBrainstorm,
+  runAutoBrainstorm,
+  BRAINSTORM_MAX_ROUNDS,
   draftSpec,
   reviseSpec,
   acceptSpec,
@@ -56,6 +58,50 @@ describe("L12.2 brainstorm", () => {
     const summary = await summarizeBrainstorm(db, "t1", async () => "BRIEF");
     expect(summary.kind).toBe("brainstorm-summary");
     expect(summary.status).toBe("accepted");
+    expect(latestArtifact(db, "t1", "brainstorm-summary")?.content).toBe("BRIEF");
+  });
+});
+
+describe("L12.2b autopilot brainstorm (runAutoBrainstorm)", () => {
+  // One injected agent serves all three prompt kinds; branch on prompt content.
+  const ctx = { spec: "do X", analysis: "lands in foo.ts" };
+
+  it("auto-answers questions, records Q&A turns, summarises and advances", async () => {
+    let q = 0;
+    const agent = async (prompt: string) => {
+      if (prompt.includes("Summarise this brainstorm")) return "BRIEF";
+      if (prompt.includes("AUTOPILOT")) return "assume the default";
+      return ++q <= 2 ? `question ${q}?` : "READY — enough context";
+    };
+    const res = await runAutoBrainstorm(db, "t1", agent, ctx);
+    expect(res.blocked).toBe(false);
+    // two Q&A rounds then a READY question: agent, user, agent, user, agent
+    expect(getChatMessages(db, "t1", "brainstorm").map((m) => m.role)).toEqual(["agent", "user", "agent", "user", "agent"]);
+    expect(latestArtifact(db, "t1", "brainstorm-summary")?.content).toBe("BRIEF");
+  });
+
+  it("parks (blocked) on a genuine blocker without summarising", async () => {
+    const agent = async (prompt: string) => {
+      if (prompt.includes("AUTOPILOT")) return "BLOCKED — missing external contract";
+      if (prompt.includes("Summarise this brainstorm")) return "BRIEF";
+      return "question 1?";
+    };
+    const res = await runAutoBrainstorm(db, "t1", agent, { spec: "x", analysis: "" });
+    expect(res.blocked).toBe(true);
+    expect(res.note).toContain("missing external contract");
+    expect(latestArtifact(db, "t1", "brainstorm-summary")).toBeUndefined(); // not summarised on a park
+  });
+
+  it("caps the loop when the agent never says READY, then still summarises", async () => {
+    let q = 0;
+    const agent = async (prompt: string) => {
+      if (prompt.includes("Summarise this brainstorm")) return "BRIEF";
+      if (prompt.includes("AUTOPILOT")) return "assume the default";
+      return `question ${++q}?`; // never READY
+    };
+    const res = await runAutoBrainstorm(db, "t1", agent, ctx);
+    expect(res.blocked).toBe(false);
+    expect(getChatMessages(db, "t1", "brainstorm").filter((m) => m.role === "agent").length).toBe(BRAINSTORM_MAX_ROUNDS);
     expect(latestArtifact(db, "t1", "brainstorm-summary")?.content).toBe("BRIEF");
   });
 });
