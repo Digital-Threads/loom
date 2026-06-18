@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listSkills, readSkill, writeSkill, generateSkill } from "../../../src/core/skills/skills.js";
+import { listSkills, readSkill, writeSkill, generateSkill, deleteSkill } from "../../../src/core/skills/skills.js";
 
 let root: string;
 beforeEach(() => {
@@ -60,5 +60,38 @@ describe("skills library", () => {
   it("AI-generate returns null when the output has no valid name", async () => {
     const agent = async () => "no frontmatter here";
     expect(await generateSkill("x", agent, root)).toBeNull();
+  });
+
+  it("deletes a dir-based skill (removes the whole folder)", () => {
+    expect(deleteSkill("adversarial-review", root)).toBe(true);
+    expect(existsSync(join(root, "adversarial-review"))).toBe(false);
+    expect(listSkills(root).some((s) => s.name === "adversarial-review")).toBe(false);
+  });
+
+  it("deletes a bare .md skill", () => {
+    expect(deleteSkill("quick-fix", root)).toBe(true);
+    expect(existsSync(join(root, "quick-fix.md"))).toBe(false);
+    expect(listSkills(root).some((s) => s.name === "quick-fix")).toBe(false);
+  });
+
+  it("returns false for a missing skill", () => {
+    expect(deleteSkill("nope", root)).toBe(false);
+  });
+
+  it("rejects path traversal and leaves files untouched", () => {
+    expect(deleteSkill("../../etc/passwd", root)).toBe(false);
+    expect(deleteSkill("../evil", root)).toBe(false);
+    // the seeded skills are still there
+    expect(existsSync(join(root, "adversarial-review", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(root, "quick-fix.md"))).toBe(true);
+  });
+
+  it("refuses '.' so it can never wipe the skills root", () => {
+    // a SKILL.md sitting directly in the root would make '.' resolve to the root
+    writeFileSync(join(root, "SKILL.md"), "---\ndescription: root.\n---\n# Root");
+    expect(deleteSkill(".", root)).toBe(false);
+    expect(existsSync(root)).toBe(true);
+    expect(existsSync(join(root, "adversarial-review", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(root, "quick-fix.md"))).toBe(true);
   });
 });

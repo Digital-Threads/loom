@@ -3,8 +3,8 @@
 // with a SKILL.md (name = dir name) or a bare *.md file (name = file basename).
 // Only the global folder for now (plugin/project sources are a later add).
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
+import { join, dirname, sep } from "node:path";
 import { homedir } from "node:os";
 
 export function skillsRoot(): string {
@@ -22,10 +22,19 @@ export interface SkillMeta {
 }
 
 /** A skill name is used to build a filesystem path, so it must be a plain slug —
- *  never `..` or a leading dash (defends against path traversal / flag smuggling). */
+ *  never `.`/`..` or a leading dash (defends against path traversal / flag
+ *  smuggling). `.` is rejected too: it resolves to the skills root itself, so a
+ *  delete on it would wipe the whole library. */
 const VALID_NAME = /^[A-Za-z0-9._-]+$/;
 function safeName(name: string): boolean {
+  if (name === "." || name === "..") return false;
   return VALID_NAME.test(name) && !name.startsWith("-") && !name.includes("..");
+}
+
+/** Public guard for callers (e.g. the web API) that need to reject an invalid
+ *  skill name with a distinct error before touching the library. */
+export function isValidSkillName(name: string): boolean {
+  return safeName(name);
 }
 
 /** Parse the leading YAML-ish frontmatter for the fields skills declare. */
@@ -83,6 +92,23 @@ export function writeSkill(name: string, content: string, root = skillsRoot()): 
   const f = resolveFile(name, root) ?? join(root, name, "SKILL.md");
   mkdirSync(dirname(f), { recursive: true });
   writeFileSync(f, content, "utf8");
+  return true;
+}
+
+/** Delete a skill by name. A dir-based skill removes the whole <name>/ folder
+ *  (its SKILL.md plus any bundled files); a bare skill unlinks <name>.md.
+ *  Returns false on a bad name or when the skill does not exist. */
+export function deleteSkill(name: string, root = skillsRoot()): boolean {
+  if (!safeName(name)) return false;
+  const f = resolveFile(name, root);
+  if (!f) return false;
+  // dir-based skills live at <name>/SKILL.md — drop the containing folder.
+  const target = f === join(root, name, "SKILL.md") ? join(root, name) : f;
+  // Defence-in-depth: never delete the root itself or anything outside it,
+  // even if a future name slipped past safeName.
+  const rootPrefix = root.endsWith(sep) ? root : root + sep;
+  if (target === root || !target.startsWith(rootPrefix)) return false;
+  rmSync(target, { recursive: true, force: true });
   return true;
 }
 

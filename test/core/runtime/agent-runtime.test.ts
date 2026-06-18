@@ -36,6 +36,7 @@ function fakeRuntime() {
       },
       read: () => "demo body",
       write: () => true,
+      delete: () => true,
       generate: async () => ({ name: "demo", content: "x" }),
     },
     connectors: {

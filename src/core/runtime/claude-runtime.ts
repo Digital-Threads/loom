@@ -8,7 +8,7 @@ import type { SessionLauncher } from "../automation/task-session.js";
 import type { SessionControl } from "../automation/live-session.js";
 import type { RecallHit } from "../knowledge/recall.js";
 import { createAimuxLiveLauncher } from "../automation/aimux-session-launcher.js";
-import { listSkills, readSkill, writeSkill, generateSkill } from "../skills/skills.js";
+import { listSkills, readSkill, writeSkill, deleteSkill, generateSkill } from "../skills/skills.js";
 import { listMcp } from "../connectors/mcp.js";
 import { beadsConnector } from "../connectors/beads.js";
 
@@ -29,6 +29,7 @@ export function createClaudeRuntime(deps: ClaudeRuntimeDeps = {}): AgentRuntime 
       list: listSkills,
       read: readSkill,
       write: writeSkill,
+      delete: deleteSkill,
       generate: generateSkill,
     },
     connectors: {

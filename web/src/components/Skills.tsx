@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LoomClient, SkillMeta } from "../api";
 import { StateView } from "./StateView";
 import { Markdown } from "./Markdown";
@@ -27,6 +27,8 @@ export function Skills({ client }: { client: LoomClient }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const deleting = useRef(false);
   const [profiles, setProfiles] = useState<string[]>([]);
 
   const reload = () => client.skills().then(setSkills).catch((e) => setErr(String(e)));
@@ -41,6 +43,16 @@ export function Skills({ client }: { client: LoomClient }) {
     setBusy(true);
     client.skillSave(sel, draft).then(() => { setContent(draft); setEditing(false); reload(); })
       .catch((e) => toast.error(`Couldn’t save: ${e}`)).finally(() => setBusy(false));
+  }
+  function del() {
+    // Guard with a ref, not `busy`: a fast double-click fires both handlers
+    // before the disabled state re-renders, which would send two DELETEs.
+    if (!sel || deleting.current) return;
+    deleting.current = true;
+    setBusy(true);
+    client.skillDelete(sel)
+      .then(() => { toast.success("Skill deleted"); setConfirmDel(false); setSel(null); setContent(""); setEditing(false); reload(); })
+      .catch((e) => toast.error(`Couldn’t delete: ${e}`)).finally(() => { deleting.current = false; setBusy(false); });
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -80,7 +92,10 @@ export function Skills({ client }: { client: LoomClient }) {
                   <button className="btn acc sm" disabled={busy} onClick={save}>{busy ? "…" : "💾 Save"}</button>
                 </span>
               ) : (
-                <button className="btn sm" onClick={() => { setDraft(content); setEditing(true); }}>✏ Edit</button>
+                <span>
+                  <button className="btn sm" style={{ marginRight: 6 }} onClick={() => { setDraft(content); setEditing(true); }}>✏ Edit</button>
+                  <button className="btn sm" onClick={() => setConfirmDel(true)}>🗑 Delete</button>
+                </span>
               )}
             </div>
             {editing ? (
@@ -101,6 +116,21 @@ export function Skills({ client }: { client: LoomClient }) {
       </div>
 
       {creating ? <CreateSkill client={client} profiles={profiles} onClose={() => { setCreating(false); reload(); }} onCreated={(name) => { setCreating(false); reload().then(() => open(name)); }} /> : null}
+
+      {confirmDel && sel ? (
+        <div className="overlay" onClick={() => !busy && setConfirmDel(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+            <div className="modal-h">Delete skill</div>
+            <div className="modal-b">
+              Delete <b>{sel}</b>? This permanently removes its files from <code>~/.claude/skills</code> and can’t be undone.
+            </div>
+            <div className="modal-f">
+              <button className="btn" disabled={busy} onClick={() => setConfirmDel(false)}>Cancel</button>
+              <button className="btn acc" disabled={busy} onClick={del}>{busy ? "Deleting…" : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

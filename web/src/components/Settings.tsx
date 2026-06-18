@@ -4,8 +4,9 @@ import { StateView } from "./StateView";
 import { toast } from "../toast";
 
 // D6.2 — Settings: default run_mode, token-pilot on/off, notifications on/off.
-// (Per-column flow defaults reuse the L6 flow-config; surfaced here later.)
-export function Settings({ client }: { client: LoomClient }) {
+// Per-stage flow defaults live in the L6 flow-config (the Quality page); surfaced
+// here as a shortcut so they're discoverable from Settings.
+export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view: string) => void }) {
   const [s, setS] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -66,6 +67,17 @@ export function Settings({ client }: { client: LoomClient }) {
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
         Confines agent writes to the task worktree (bubblewrap / sandbox-exec). Requires the tool installed; verify in your environment.
+      </div>
+      <div className="kv">
+        <b>Flow defaults</b>
+        <span>
+          {onNav
+            ? <button className="btn" onClick={() => onNav("quality")}>Open Quality →</button>
+            : <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Set per-stage checks on the Quality page.</span>}
+        </span>
+      </div>
+      <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
+        Per-stage quality checks and review passes are configured on the Quality page.
       </div>
     </div>
   );

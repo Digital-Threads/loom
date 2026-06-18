@@ -152,7 +152,7 @@ export function App() {
           ) : view === "skills" ? (
             <Skills client={client} />
           ) : view === "settings" ? (
-            <Settings client={client} />
+            <Settings client={client} onNav={nav} />
           ) : view === "connectors" ? (
             <Connectors client={client} />
           ) : view === "security" ? (

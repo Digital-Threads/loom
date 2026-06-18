@@ -15,22 +15,30 @@ export function Sidebar({
   open: boolean;
 }) {
   const [attn, setAttn] = useState<AttentionItem[]>([]);
-  const [notifyOn, setNotifyOn] = useState(true);
-  // Honour the Settings "Notifications" toggle (loom-wkhe): default on, off when
-  // the user disabled it.
-  useEffect(() => { client.settings().then((s) => setNotifyOn(s["notify.enabled"] !== false)).catch(() => {}); }, [client]);
   useEffect(() => {
-    client.attention().then((items) => {
-      // D6.4 — browser push when new items need attention (unless disabled).
-      if (notifyOn && typeof Notification !== "undefined" && items.length > attn.length) {
-        if (Notification.permission === "granted") {
-          new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
-        } else if (Notification.permission === "default") {
-          Notification.requestPermission().catch(() => {});
-        }
-      }
-      setAttn(items);
-    }).catch(() => setAttn([]));
+    let cancelled = false;
+    // Read notify.enabled fresh each cycle, right before deciding — so toggling
+    // it in Settings (loom-wkhe) takes effect immediately and no stale value can
+    // fire a notification after it was disabled. Default on; off only when set.
+    client.settings()
+      .then((s) => s["notify.enabled"] !== false)
+      .catch(() => true)
+      .then((notifyOn) =>
+        client.attention().then((items) => {
+          if (cancelled) return;
+          // D6.4 — browser push when new items need attention (unless disabled).
+          if (notifyOn && typeof Notification !== "undefined" && items.length > attn.length) {
+            if (Notification.permission === "granted") {
+              new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
+            } else if (Notification.permission === "default") {
+              Notification.requestPermission().catch(() => {});
+            }
+          }
+          setAttn(items);
+        }),
+      )
+      .catch(() => { if (!cancelled) setAttn([]); });
+    return () => { cancelled = true; };
   }, [client, view]);
 
   return (

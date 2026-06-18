@@ -307,6 +307,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     skills: () => getJson<{ skills: SkillMeta[] }>(`${base}/api/skills`, f).then((d) => d.skills),
     skillGet: (name: string) => getJson<{ name: string; content: string }>(`${base}/api/skills/${encodeURIComponent(name)}`, f),
     skillSave: (name: string, content: string) => postJson<{ ok: boolean }>(`${base}/api/skills/${encodeURIComponent(name)}`, { content }, f, "PUT"),
+    skillDelete: (name: string) => postJson<{ ok: boolean }>(`${base}/api/skills/${encodeURIComponent(name)}`, {}, f, "DELETE"),
     skillGenerate: (description: string, profile?: string) =>
       postJson<{ name: string; content: string }>(`${base}/api/skills/generate`, { description, profile }, f),
     // L13 — conductor

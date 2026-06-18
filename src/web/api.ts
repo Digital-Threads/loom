@@ -72,6 +72,7 @@ import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/
 import { addMcp, toggleMcp, removeMcp, testMcp, type McpProbe } from "../core/connectors/mcp.js";
 import type { TaskDraft } from "../core/connectors/connector.js";
 import { resolveFlow } from "../core/quality/flow-config.js";
+import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
@@ -1402,6 +1403,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const body = (await c.req.json().catch(() => ({}))) as { content?: unknown };
     if (typeof body.content !== "string") return c.json({ error: "content required" }, 400);
     return runtime.skills.write(c.req.param("name"), body.content) ? c.json({ ok: true }) : c.json({ error: "invalid name" }, 400);
+  });
+  app.delete("/api/skills/:name", (c) => {
+    const name = c.req.param("name");
+    // Reject a bad name up front so the two failure modes stay distinct:
+    // 400 invalid name vs 404 the skill doesn't exist.
+    if (!isValidSkillName(name)) return c.json({ error: "invalid name" }, 400);
+    return runtime.skills.delete(name) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
   });
   app.post("/api/skills/generate", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { description?: unknown; profile?: unknown };

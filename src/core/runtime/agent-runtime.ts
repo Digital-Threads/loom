@@ -16,6 +16,7 @@ export interface SkillsProvider {
   list(): SkillMeta[];
   read(name: string): string | null;
   write(name: string, content: string): boolean;
+  delete(name: string): boolean;
   generate(
     description: string,
     agent: (prompt: string) => Promise<string>,
