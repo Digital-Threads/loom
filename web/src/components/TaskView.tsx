@@ -352,7 +352,16 @@ export function TaskView({
             <span className={`badge ${badgeClass(activeStatus)}`}>{statusLabel(activeStatus)}</span>
             <div className="ph-actions">
               {task.status === "created" ? (
-                <button className="btn acc sm" onClick={async () => { await client.start(taskId); refreshAndFollow(); onChanged?.(); }}>▶ Start task</button>
+                <button className="btn acc sm" onClick={async () => {
+                  await client.start(taskId);
+                  // Autopilot means "run end-to-end" — Start should actually drive
+                  // the pipeline, not just activate the first stage and sit idle.
+                  if (task.run_mode === "autopilot") {
+                    followLiveRef.current = true; setLive([]);
+                    client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the run: ${e}`));
+                  }
+                  refreshAndFollow(); onChanged?.();
+                }}>▶ Start task</button>
               ) : task.status !== "done" ? (
                 <>
                   <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
