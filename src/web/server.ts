@@ -1,9 +1,9 @@
 // Serve the Loom app: the Hono API + the built React frontend (web/dist).
-// Runs under Bun (host runtime). `declare const Bun` keeps tsc clean without
-// pulling bun-types project-wide.
+// Runs under Node via @hono/node-server (no Bun runtime dependency).
 
 import { Hono } from "hono";
-import { serveStatic } from "hono/bun";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createApi } from "./api.js";
@@ -12,13 +12,6 @@ import { configureSecurity } from "../core/security/config.js";
 import { appendLoomEvent } from "../core/spine/event-bus.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import type Database from "better-sqlite3";
-
-declare const Bun: {
-  serve(opts: { port: number; hostname?: string; idleTimeout?: number; fetch: (req: Request) => Response | Promise<Response> }): {
-    stop(): void;
-    url: URL;
-  };
-};
 
 export const DEFAULT_PORT = 4317;
 
@@ -82,7 +75,13 @@ export function serveApi(opts: ServeOptions = {}) {
     app.get("*", serveStatic({ path: join(root, "index.html") }));
   }
 
-  // idleTimeout 0 disables Bun's default 10s idle cutoff: SSE run streams stay
-  // open while the agent thinks (first output can take far longer than 10s).
-  return Bun.serve({ port, hostname: opts.hostname ?? "127.0.0.1", idleTimeout: 0, fetch: app.fetch });
+  const hostname = opts.hostname ?? "127.0.0.1";
+  const server = serve({ fetch: app.fetch, port, hostname });
+  // Long-lived SSE run streams stay open while the agent thinks (far longer than
+  // Node's default timeouts), so disable the request/socket cutoffs.
+  const httpServer = server as unknown as { timeout?: number; requestTimeout?: number; close: () => void };
+  httpServer.timeout = 0;
+  httpServer.requestTimeout = 0;
+  const url = new URL(`http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${port}/`);
+  return { url, stop: () => httpServer.close() };
 }

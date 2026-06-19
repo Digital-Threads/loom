@@ -12,16 +12,12 @@ The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits
 
 ## Install
 
-**Prerequisite: [Bun](https://bun.sh).** Loom's server runs on the Bun runtime
-(`Bun.serve`), so Bun must be installed even if you install Loom with npm.
+**Prerequisite: [Node.js](https://nodejs.org) ≥ 22.**
 
 ```bash
-npm i -g @digital-threads/loom     # installs the dependency tree reliably
-loom                               # runs under Bun (the prerequisite above)
+npm i -g @digital-threads/loom
+loom
 ```
-
-> Use **npm** to install (it resolves the full dependency tree); Loom itself still
-> runs under Bun. `bun i -g` can skip transitive dependencies in a global install.
 
 `loom` with no arguments starts the app — the local API and the web UI — and
 opens the dashboard in your browser. Stop it with `Ctrl+C`.
@@ -29,8 +25,7 @@ opens the dashboard in your browser. Stop it with `Ctrl+C`.
 **First run sets itself up.** The onboarding screen checks your prerequisites
 (the `claude` CLI, `cargo`) and offers a one-click **Install missing** that pulls
 in the rest — Token Pilot and Task Journal (and `cargo`/Rust if needed) — so you
-don't have to install dependencies by hand. Bun is the one prerequisite you bring
-yourself (above).
+don't have to install dependencies by hand.
 
 Flags:
 
@@ -43,9 +38,9 @@ loom serve --project /path/to/repo # run against another project directory
 From source (development) — clone the repo, then:
 
 ```bash
-bun install
-bun run build
-bun run start
+npm install
+npm run build
+npm start
 ```
 
 ## What it shows
@@ -107,11 +102,11 @@ The one-way rule is the core invariant: plugins have zero dependency on Loom and
 
 ## Stack
 
-TypeScript, [Ink](https://github.com/vadimdemedes/ink) 7 (React in the terminal), Bun for build and run, Vitest for tests. Node ≥ 22.
+TypeScript, [Ink](https://github.com/vadimdemedes/ink) 7 (React in the terminal), Node ≥ 22 for build and run, Vitest for tests.
 
 ```bash
-bun run build      # check:ds + tsc + build web + copy plugin manifests into dist/
-bunx vitest run    # tests
+npm run build      # check:ds + tsc + build web + copy plugin manifests into dist/
+npx vitest run     # tests
 ```
 
 ## Publishing (maintainers)

@@ -1,6 +1,6 @@
 {
   "name": "@digital-threads/loom",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "description": "Loom — local AI-dev orchestrator: give it a task and it runs the work through an analysis → spec → code → review → PR pipeline on a board, with cost, reasoning memory and multi-account support. Public beta.",
   "license": "MIT",
@@ -44,16 +44,16 @@
     "build:web": "tsc --noEmit -p web/tsconfig.json && vite build web",
     "check:ds": "node web/scripts/check-design-system.mjs",
     "copy:manifests": "node scripts/copy-manifests.mjs",
-    "build": "bun run check:ds && tsc -p tsconfig.json && bun run build:web && bun run copy:manifests",
-    "start": "bun dist/cli.js",
+    "build": "npm run check:ds && tsc -p tsconfig.json && npm run build:web && npm run copy:manifests",
+    "start": "node dist/cli.js",
     "test": "vitest run",
-    "smoke:bun": "bun test/bun-smoke.mjs",
-    "prepublishOnly": "bun run build",
+    "prepublishOnly": "npm run build",
     "prepack": "node scripts/prepare-publish.mjs --prepack",
     "postpack": "node scripts/prepare-publish.mjs --restore"
   },
   "dependencies": {
     "@digital-threads/aimux": "file:../aimux",
+    "@hono/node-server": "^2.0.5",
     "better-sqlite3": "^12.10.1",
     "hono": "^4.12.25",
     "ink": "^7.0.1",

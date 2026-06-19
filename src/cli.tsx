@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runPluginCli } from "./cli/plugin-cli.js";
@@ -45,7 +45,7 @@ function runServe(args: string[]): void {
   console.log(`Loom running at ${url}`);
   if (open) openBrowser(url);
   console.log("Press Ctrl+C to stop.");
-  // Bun.serve keeps the process alive.
+  // The listening HTTP server keeps the process alive.
 }
 
 async function main(): Promise<void> {
