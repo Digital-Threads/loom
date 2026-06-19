@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask } from "../../../src/core/store/db.js";
 import { createTaskSession } from "../../../src/core/automation/task-session.js";
-import { createLiveSessionLauncher, type SpawnSession, type ProcLike } from "../../../src/core/automation/live-session.js";
+import { createAimuxLiveLauncher } from "../../../src/core/automation/aimux-session-launcher.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -20,38 +20,46 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-// A fake spawn that auto-completes each turn and records how it was started.
-function fakeSpawn() {
-  const spawns: Array<{ resume: boolean; sessionId: string }> = [];
-  const spawn: SpawnSession = ({ sessionId, resume }) => {
-    let onData: ((d: string) => void) | undefined;
-    spawns.push({ resume, sessionId });
-    const proc: ProcLike = {
-      stdin: { write: () => queueMicrotask(() => onData?.(JSON.stringify({ type: "result", subtype: "success", result: "ok" }) + "\n")), end: () => {} },
-      stdout: { on: (_e, cb) => { onData = cb as (d: string) => void; } },
-      on: () => {},
-      kill: () => {},
+// A fake aimux openSession that auto-completes each turn and records how the
+// session was opened (resume flag + id) — so we can assert restart recovery.
+function fakeOpen() {
+  const opens: Array<{ resume: boolean; sessionId: string }> = [];
+  const openSession = ((_cfg: unknown, _profile: string, opts: { resume?: boolean; sessionId: string }) => {
+    opens.push({ resume: !!opts.resume, sessionId: opts.sessionId });
+    return {
+      send: async () => ({ text: "ok", costUsd: 0, denials: [] }),
+      interject: () => false,
+      relocate: () => {},
+      cost: () => 0,
+      denials: () => [],
+      close: () => {},
     };
-    return proc;
-  };
-  return { spawn, spawns };
+  }) as never;
+  return { openSession, opens };
 }
+
+const deps = (openSession: never) => ({
+  loadConfig: (() => ({})) as never, // truthy cfg → passes the no-config guard
+  profile: "p1",
+  openSession,
+  listMcp: () => [],
+});
 
 describe("session durability — recovery after a host restart", () => {
   it("a started session resumes (not recreates) from a fresh launcher registry", async () => {
     // First run: fresh task → create the session.
-    const a = fakeSpawn();
-    await createTaskSession(db, "t1", { launcher: createLiveSessionLauncher({ spawn: a.spawn }) }).send("step 1", { stage: "analysis" });
-    expect(a.spawns).toHaveLength(1);
-    expect(a.spawns[0].resume).toBe(false); // created with --session-id
-    const sessionId = a.spawns[0].sessionId;
+    const a = fakeOpen();
+    await createTaskSession(db, "t1", { launcher: createAimuxLiveLauncher(deps(a.openSession)) }).send("step 1", { stage: "analysis" });
+    expect(a.opens).toHaveLength(1);
+    expect(a.opens[0].resume).toBe(false); // created with --session-id
+    const sessionId = a.opens[0].sessionId;
 
     // Simulate a host restart: the live process is gone, a NEW launcher with an
     // empty registry is created. The session_id is still in the DB (durable).
-    const b = fakeSpawn();
-    await createTaskSession(db, "t1", { launcher: createLiveSessionLauncher({ spawn: b.spawn }) }).send("step 2", { stage: "spec" });
-    expect(b.spawns).toHaveLength(1);
-    expect(b.spawns[0].resume).toBe(true); // recovered with --resume
-    expect(b.spawns[0].sessionId).toBe(sessionId); // same session, not a new one
+    const b = fakeOpen();
+    await createTaskSession(db, "t1", { launcher: createAimuxLiveLauncher(deps(b.openSession)) }).send("step 2", { stage: "spec" });
+    expect(b.opens).toHaveLength(1);
+    expect(b.opens[0].resume).toBe(true); // recovered with --resume
+    expect(b.opens[0].sessionId).toBe(sessionId); // same session, not a new one
   });
 });
