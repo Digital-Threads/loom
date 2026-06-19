@@ -10,7 +10,7 @@ import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
-import { STAGE_MODEL, MODEL_TIERS } from "../core/pipeline/stage-model.js";
+import { STAGE_MODEL, MODEL_TIERS, resolveStageModel } from "../core/pipeline/stage-model.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, openTask, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
@@ -511,15 +511,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
     const autopilot = t?.run_mode === "autopilot";
+    const relocations = loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0; // escalates a stubborn impl to opus
+    // A model the user pinned by hand wins over the policy: per-task-stage first,
+    // else the per-column (stage) default.
+    const modelOverride =
+      getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
+      getSetting<string>(db, `model.col.${stage}`, "") ||
+      undefined;
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
       stage,
-      relocations: loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0, // escalates a stubborn impl to opus
-      // A model the user pinned by hand wins over the policy: per-task-stage first,
-      // else the per-column (stage) default.
-      modelOverride:
-        getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
-        getSetting<string>(db, `model.col.${stage}`, "") ||
-        undefined,
+      relocations,
+      modelOverride,
       raw: opts?.raw,
       cwd: taskCwd(id),
       env: spineEnv(ids),
@@ -538,6 +540,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       for (const what of sid ? sessionLauncher.degradedOf?.(sid) ?? [] : []) markDegraded(id, what);
     } catch { /* best-effort */ }
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
+    // Which model actually ran this stage (observability — opus to think, cheaper
+    // to do). Raw chat continues the active lane, so it doesn't record a stage model.
+    if (!opts?.raw) saveResult(id, stage, "model", { model: resolveStageModel(stage, { relocations, override: modelOverride }) });
     // Secret scan on the NORMAL execution path (not just the experimental
     // sandbox): flag leaked credentials in the agent's output so the Security
     // panel's audit trail is real for every run (loom-l6z1). Honours the
