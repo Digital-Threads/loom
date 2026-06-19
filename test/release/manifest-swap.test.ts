@@ -30,11 +30,11 @@ const devManifest = {
 describe("swapToVersions (D2.1 release manifest)", () => {
   it("pins every file:.. dep to its resolved version", () => {
     const out = swapToVersions(devManifest, resolve);
-    expect(out.dependencies["@digital-threads/aimux"]).toBe("0.13.0");
-    expect(out.dependencies["@digital-threads/loom-knowledge"]).toBe("0.1.0");
-    expect(out.dependencies["@digital-threads/loom-swarm"]).toBe("0.1.0");
-    expect(out.dependencies["@digital-threads/loom-quality"]).toBe("0.1.0");
-    expect(out.dependencies["@digital-threads/loom-security"]).toBe("0.1.0");
+    expect(out.dependencies["@digital-threads/aimux"]).toBe("^0.13.0");
+    expect(out.dependencies["@digital-threads/loom-knowledge"]).toBe("^0.1.0");
+    expect(out.dependencies["@digital-threads/loom-swarm"]).toBe("^0.1.0");
+    expect(out.dependencies["@digital-threads/loom-quality"]).toBe("^0.1.0");
+    expect(out.dependencies["@digital-threads/loom-security"]).toBe("^0.1.0");
   });
 
   it("leaves non-file deps untouched", () => {
@@ -57,7 +57,7 @@ describe("swapToVersions (D2.1 release manifest)", () => {
     const resolvePlus = (name: string) =>
       name === "@digital-threads/loom-future" ? "1.0.0" : resolve(name);
     const out = swapToVersions(withNew, resolvePlus);
-    expect(out.dependencies["@digital-threads/loom-future"]).toBe("1.0.0");
+    expect(out.dependencies["@digital-threads/loom-future"]).toBe("^1.0.0");
   });
 
   it("throws if a file:.. dep survives the swap (broken manifest never ships)", () => {

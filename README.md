@@ -16,9 +16,12 @@ The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits
 (`Bun.serve`), so Bun must be installed even if you install Loom with npm.
 
 ```bash
-bun i -g @digital-threads/loom     # or: npm i -g @digital-threads/loom
-loom
+npm i -g @digital-threads/loom     # installs the dependency tree reliably
+loom                               # runs under Bun (the prerequisite above)
 ```
+
+> Use **npm** to install (it resolves the full dependency tree); Loom itself still
+> runs under Bun. `bun i -g` can skip transitive dependencies in a global install.
 
 `loom` with no arguments starts the app — the local API and the web UI — and
 opens the dashboard in your browser. Stop it with `Ctrl+C`.

@@ -53,7 +53,14 @@ export function swapToVersions(manifest, resolveVersion = installedVersion) {
   const deps = next.dependencies ?? {};
   for (const [name, spec] of Object.entries(deps)) {
     if (typeof spec === "string" && spec.startsWith("file:")) {
-      deps[name] = resolveVersion(name);
+      // Pin as a caret range (^x.y.z), not an exact version: an exact pin
+      // conflicts in a flat global node_modules when the user already has the
+      // sibling (e.g. aimux) installed standalone at a compatible version. The
+      // range lets a satisfying existing install be reused instead of fighting it.
+      // Only caret-prefix a real version — if the resolver misbehaves and returns
+      // a path, leave it raw so the leftover guard below still trips.
+      const v = resolveVersion(name);
+      deps[name] = /^\d/.test(v) ? `^${v}` : v;
     }
   }
   const leftover = Object.entries(deps)
