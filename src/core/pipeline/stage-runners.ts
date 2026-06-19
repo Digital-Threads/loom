@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
 import { STAGE_KEYS, getStages, updateStageStatus } from "../store/db.js";
+import { setSetting } from "../store/settings.js";
 import {
   createArtifact,
   latestArtifact,
@@ -38,6 +39,9 @@ export async function runAnalysis(
   // store the agent's full readable analysis (the user reads this), not just the
   // parsed class/route — the route is derived from the JSON line at the end.
   createArtifact(db, { id: id("art"), taskId, stage: "analysis", kind: "analysis", content: raw });
+  // Persist the class so downstream stages can scale to it (e.g. the review stage
+  // runs fewer reviewers for a trivial chore) — loom-ohky.
+  setSetting(db, `analysis.class.${taskId}`, parsed.class);
   if (parsed.route.length) {
     db.prepare("UPDATE tasks SET route = ?, updated_at = ? WHERE id = ?").run(
       JSON.stringify(parsed.route),

@@ -10,7 +10,7 @@ import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
 import { createArtifact } from "../../src/core/store/artifacts.js";
 import { startTask, attentionQueue } from "../../src/core/pipeline/engine.js";
-import { createApi } from "../../src/web/api.js";
+import { createApi, reviewersForClass } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
@@ -627,6 +627,23 @@ describe("web api", () => {
     });
     const r = (await (await app2.request("/api/tasks/t1/qa/run", { method: "POST", body: "{}" })).json()) as { result: { passed: boolean } };
     expect(r.result.passed).toBe(false);
+  });
+
+  // ── review depth scales with task class (loom-ohky) ──
+  it("reviewersForClass narrows to one reviewer only for a chore", () => {
+    const full = ["self", "ralph", "adversarial"];
+    expect(reviewersForClass(full, "chore")).toEqual(["self"]); // trivial → single pass
+    expect(reviewersForClass(full, "feature")).toEqual(full); // feature → full panel
+    expect(reviewersForClass(full, "bug")).toEqual(full); // bug → full panel
+    expect(reviewersForClass(full, "")).toEqual(full); // unknown → full (never under-reviews)
+    expect(reviewersForClass(full, undefined)).toEqual(full);
+    expect(reviewersForClass(["self"], "chore")).toEqual(["self"]); // already one → unchanged
+  });
+  it("analysis persists the task class so review can scale to it (loom-ohky)", async () => {
+    const app2 = createApi(db, { stageAgent: async () => '{ "class": "chore", "route": ["analysis","impl","review","qa","pr","done"] }' });
+    await app2.request("/api/tasks/t1/analysis/run", { method: "POST" });
+    const settings = (await (await app2.request("/api/settings")).json()) as Record<string, unknown>;
+    expect(settings["analysis.class.t1"]).toBe("chore");
   });
 
   // ── dialog stages (L12) ──

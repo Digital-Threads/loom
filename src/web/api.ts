@@ -237,6 +237,15 @@ function relocateSessionForProfile(profileName: string, sessionId: string): void
   }
 }
 
+/** Scale review depth to the task's analysis class: a trivial "chore" gets a
+ *  single reviewer — the full self→ralph→adversarial panel (each an opus pass
+ *  over the growing task session) is wasted cost on a one-line change. Features
+ *  and bugs keep the whole enabled pipeline. Unknown/empty class → full set, so
+ *  this only ever narrows when the analysis explicitly said "chore" (loom-ohky). */
+export function reviewersForClass(keys: string[], taskClass: string | undefined): string[] {
+  return taskClass === "chore" && keys.length > 1 ? keys.slice(0, 1) : keys;
+}
+
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
   const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
@@ -995,7 +1004,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const autopilot = getTask(db, id)?.run_mode === "autopilot";
       if (autopilot) {
         let payload: ReviewPayload | undefined;
-        const activeKeys = resolvedReviewerKeys();
+        const activeKeys = reviewersForClass(resolvedReviewerKeys(), getSetting<string>(db, `analysis.class.${id}`, ""));
         for (let i = 0; i < activeKeys.length; i++) {
           const reviewer = REVIEWERS.find((r) => r.key === activeKeys[i])!;
           const findings = await runReviewer(id, reviewer);
