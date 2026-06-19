@@ -2,9 +2,25 @@
   "name": "@digital-threads/loom",
   "version": "0.1.0",
   "type": "module",
-  "description": "Loom — a TUI host that unifies aimux, Token Pilot and Task Journal behind a single plugin-based interface.",
+  "description": "Loom — local AI-dev orchestrator: give it a task and it runs the work through an analysis → spec → code → review → PR pipeline on a board, with cost, reasoning memory and multi-account support. Public beta.",
   "license": "MIT",
   "author": "Digital-Threads",
+  "keywords": [
+    "ai",
+    "agent",
+    "orchestrator",
+    "claude",
+    "claude-code",
+    "pipeline",
+    "automation",
+    "code-review",
+    "devtools",
+    "aimux"
+  ],
+  "homepage": "https://github.com/Digital-Threads/loom#readme",
+  "engines": {
+    "node": ">=22"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Digital-Threads/loom.git"

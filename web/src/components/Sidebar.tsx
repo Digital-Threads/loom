@@ -45,6 +45,7 @@ export function Sidebar({
     <aside className={`side ${open ? "open" : ""}`}>
       <div className="brand">
         <img className="brand-mark" src={loomMark} alt="" aria-hidden="true" /> Loom
+        <span className="beta-tag">beta</span>
       </div>
       <nav className="nav">
         {NAV.map((n) => (

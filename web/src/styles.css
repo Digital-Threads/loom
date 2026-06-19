@@ -27,6 +27,7 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .side{width:230px;flex:0 0 230px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px;z-index:40}
 .brand{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:-.01em;padding:6px 8px 14px}
 .brand-mark{width:22px;height:22px;display:block}
+.brand .beta-tag{font-family:var(--font-mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--filament-400);border:1px solid var(--line);border-radius:var(--r-pill);padding:1px 5px;margin-left:6px;align-self:center}
 .nav{display:flex;flex-direction:column;gap:2px;overflow:auto}
 .grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .nav .grp{padding:12px 10px 4px}

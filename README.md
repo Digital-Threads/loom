@@ -1,5 +1,9 @@
 # Loom
 
+> 🧪 **Public beta.** Loom is early and under active development — expect rough
+> edges, and please [report what breaks](https://github.com/Digital-Threads/loom/issues).
+> Thanks for testing it.
+
 **Give Loom a task; it runs that task through a real engineering pipeline — analysis → brainstorm → spec → plan → code → review → QA → PR — driving an AI agent through every stage in an isolated sandbox, and shows the whole thing on a board.** You watch, or let it run on autopilot and review the PR it produces.
 
 Under the board, Loom is also a local control center for the AI-development tools that normally live apart: install plugins and MCP servers from one place, see every layer on one dashboard, and manage them in-app. Each layer is self-contained and works without Loom — the dependency is one-way: Loom reads and orchestrates the layers, the layers know nothing about Loom.
