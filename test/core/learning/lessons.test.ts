@@ -108,6 +108,25 @@ describe("learning/lessons (L8 Slice 0)", () => {
     expect(desc).toContain("forgot null check"); // example carried in
   });
 
+  it("computes an effectiveness trend (recent vs prior) and decays stale findings", () => {
+    const DAY = 86_400_000;
+    const now = 100 * DAY;
+    const findings = [
+      { taskId: "t1", severity: "error", message: "x", file: "a.ts", ts: now - 20 * DAY }, // prior
+      { taskId: "t2", severity: "error", message: "x", file: "a.ts", ts: now - 1 * DAY }, // recent
+      { taskId: "t3", severity: "warn", message: "old", file: "b.ts", ts: now - 90 * DAY },
+      { taskId: "t4", severity: "warn", message: "old", file: "b.ts", ts: now - 80 * DAY },
+    ];
+    const lessons = computeLessons(findings, [], { minRuns: 2, now, recentDays: 7 });
+    const aTs = lessons.find((l) => l.file === "a.ts")!;
+    expect(aTs.trend).toEqual({ recent: 1, prior: 1 }); // one within 7d, one before
+
+    // decay: b.ts (last seen 80d ago) drops when staleDays=30
+    const decayed = computeLessons(findings, [], { minRuns: 2, now, staleDays: 30 });
+    expect(decayed.some((l) => l.file === "b.ts")).toBe(false);
+    expect(decayed.some((l) => l.file === "a.ts")).toBe(true);
+  });
+
   it("is pure: same input → same output (caller does project scoping)", () => {
     const findings = [
       { taskId: "t1", severity: "error", message: "m", file: "a.ts" },

@@ -434,7 +434,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         .filter((e) => e.type === "correction")
         .map((e) => ({ taskId: e.task_id, message: e.text, ts: Date.parse(e.timestamp) || undefined }));
     }
-    return computeLessons(findings, corrections, { minRuns });
+    const dismissed = new Set(getSetting<string[]>(db, "learning.dismissed", []));
+    return computeLessons(findings, corrections, {
+      minRuns,
+      now: Date.now(),
+      staleDays: getSetting<number>(db, "learning.staleDays", 0),
+    }).filter((l) => !dismissed.has(l.signature));
   };
 
   // Slice 1 — the "recurring issues to avoid" block appended to impl/review
@@ -1589,6 +1594,25 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const agent = deps.skillAgent ?? createAimuxStageAgent({ profile });
     const r = await runtime.skills.generate(lessonToSkillDescription(lesson), agent);
     return r ? c.json(r) : c.json({ error: "generation produced no valid skill" }, 422);
+  });
+  // Dismiss a lesson (a wrong/irrelevant one): it stops being shown AND injected.
+  // POST adds it, DELETE restores it (so a mistaken dismiss is reversible).
+  app.post("/api/learning/dismiss", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { signature?: unknown };
+    const signature = typeof body.signature === "string" ? body.signature : "";
+    if (!signature) return c.json({ error: "signature required" }, 400);
+    const set = new Set(getSetting<string[]>(db, "learning.dismissed", []));
+    set.add(signature);
+    setSetting(db, "learning.dismissed", [...set]);
+    return c.json({ ok: true });
+  });
+  app.delete("/api/learning/dismiss", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { signature?: unknown };
+    const signature = typeof body.signature === "string" ? body.signature : "";
+    const set = new Set(getSetting<string[]>(db, "learning.dismissed", []));
+    set.delete(signature);
+    setSetting(db, "learning.dismissed", [...set]);
+    return c.json({ ok: true });
   });
 
   // ─── conductor (L13) ──────────────────────────────────────────────────────────

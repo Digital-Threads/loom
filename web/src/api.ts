@@ -253,6 +253,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
       getJson<{ lessons: Lesson[] }>(`${base}/api/learning/lessons${minRuns ? `?minRuns=${minRuns}` : ""}`, f),
     skillFromLesson: (signature: string) =>
       postJson<{ name: string; content: string }>(`${base}/api/learning/skill`, { signature }, f),
+    dismissLesson: (signature: string) =>
+      postJson<{ ok: boolean }>(`${base}/api/learning/dismiss`, { signature }, f),
     // L12 — dialog stages
     analysisRun: (id: string) =>
       postJson<{ class: string; route: string[] }>(`${base}/api/tasks/${id}/analysis/run`, {}, f),
@@ -475,6 +477,7 @@ export interface Lesson {
   sampleMessages: string[];
   firstSeen?: number;
   lastSeen?: number;
+  trend?: { recent: number; prior: number };
 }
 
 // L7.3 — kind of a reasoning-graph node, derived client-side from recall hits.

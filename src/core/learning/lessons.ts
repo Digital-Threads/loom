@@ -40,6 +40,10 @@ export interface Lesson {
   sampleMessages: string[];
   firstSeen?: number;
   lastSeen?: number;
+  /** Effectiveness: occurrences in the recent window vs before it. recent < prior
+   *  means the lesson is working (recurrence trending down). Present only when
+   *  `now` was passed to computeLessons. */
+  trend?: { recent: number; prior: number };
 }
 
 export interface ComputeLessonsOptions {
@@ -48,6 +52,14 @@ export interface ComputeLessonsOptions {
   minRuns?: number;
   /** Max sample messages kept per lesson. Default 3. */
   maxSamples?: number;
+  /** Reference "now" (ms) enabling effectiveness + decay. Omit to skip both. */
+  now?: number;
+  /** Window (days) splitting occurrences into recent vs prior for the trend.
+   *  Default 7. Only meaningful when `now` is given and findings carry `ts`. */
+  recentDays?: number;
+  /** Drop finding-lessons not seen within this many days (decay). 0/undefined
+   *  = never decay. Needs `now`. */
+  staleDays?: number;
 }
 
 /** Stable signature for a finding: the reliable axes only (severity + file). */
@@ -73,6 +85,7 @@ interface Acc {
   count: number;
   firstSeen?: number;
   lastSeen?: number;
+  tsList: number[];
 }
 
 /**
@@ -99,7 +112,7 @@ export function computeLessons(
   ): void => {
     let a = acc.get(signature);
     if (!a) {
-      a = { signature, kind, severity: fields.severity, file: fields.file, taskIds: new Set(), messages: [], count: 0 };
+      a = { signature, kind, severity: fields.severity, file: fields.file, taskIds: new Set(), messages: [], count: 0, tsList: [] };
       acc.set(signature, a);
     }
     a.taskIds.add(taskId);
@@ -109,6 +122,7 @@ export function computeLessons(
     if (ts != null) {
       a.firstSeen = a.firstSeen == null ? ts : Math.min(a.firstSeen, ts);
       a.lastSeen = a.lastSeen == null ? ts : Math.max(a.lastSeen, ts);
+      a.tsList.push(ts);
     }
   };
 
@@ -116,9 +130,17 @@ export function computeLessons(
   for (const c of corrections) bump(correctionSignature(c), "correction", { file: c.file }, c.taskId, c.message, c.ts);
 
   const lessons: Lesson[] = [];
+  const recentCutoff = opts.now != null ? opts.now - (opts.recentDays ?? 7) * 86_400_000 : null;
+  const staleCutoff = opts.now != null && opts.staleDays ? opts.now - opts.staleDays * 86_400_000 : null;
   for (const a of acc.values()) {
     // Findings need cross-task recurrence; a single user correction is already a lesson.
     if (a.kind === "finding" && a.taskIds.size < minRuns) continue;
+    // Decay: a finding not seen within staleDays drops off (corrections persist).
+    if (staleCutoff != null && a.kind === "finding" && (a.lastSeen ?? 0) < staleCutoff) continue;
+    const trend =
+      recentCutoff != null
+        ? { recent: a.tsList.filter((t) => t >= recentCutoff).length, prior: a.tsList.filter((t) => t < recentCutoff).length }
+        : undefined;
     lessons.push({
       signature: a.signature,
       kind: a.kind,
@@ -129,6 +151,7 @@ export function computeLessons(
       sampleMessages: a.messages,
       firstSeen: a.firstSeen,
       lastSeen: a.lastSeen,
+      trend,
     });
   }
 

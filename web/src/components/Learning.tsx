@@ -38,10 +38,30 @@ export function Learning({ client }: { client: LoomClient }) {
     setGenFor(null);
   }
 
-  const skillBtn = (l: Lesson) => (
-    <button className="btn" disabled={genFor !== null} onClick={() => createSkill(l)}>
-      {genFor === l.signature ? "Generating…" : "Create skill"}
-    </button>
+  async function dismiss(l: Lesson) {
+    try {
+      await client.dismissLesson(l.signature);
+      setLessons((ls) => ls.filter((x) => x.signature !== l.signature));
+    } catch (e) {
+      toast.error(`Dismiss failed: ${e}`);
+    }
+  }
+
+  // Effectiveness: earlier→recent occurrences. ↓ = recurrence trending down (working).
+  const trendChip = (l: Lesson) =>
+    l.trend && l.trend.recent + l.trend.prior > 0 ? (
+      <span className="n" title="occurrences earlier → recent">
+        {l.trend.recent < l.trend.prior ? "↓" : l.trend.recent > l.trend.prior ? "↑" : "→"} {l.trend.prior}→{l.trend.recent}
+      </span>
+    ) : null;
+
+  const actions = (l: Lesson) => (
+    <span className="row" style={{ gap: 6 }}>
+      <button className="btn" disabled={genFor !== null} onClick={() => createSkill(l)}>
+        {genFor === l.signature ? "Generating…" : "Create skill"}
+      </button>
+      <button className="btn" onClick={() => dismiss(l)}>Dismiss</button>
+    </span>
   );
 
   const corrections = lessons.filter((l) => l.kind === "correction");
@@ -72,7 +92,7 @@ export function Learning({ client }: { client: LoomClient }) {
                 {l.sampleMessages[0] ?? l.signature}
                 {l.occurrences > 1 ? ` · ×${l.occurrences}` : ""}
               </span>
-              {skillBtn(l)}
+              {actions(l)}
             </div>
           ))}
         </>
@@ -85,9 +105,9 @@ export function Learning({ client }: { client: LoomClient }) {
             <div className={`kv ${l.severity === "error" ? "warn" : ""}`} key={i}>
               <b>{l.file ?? "—"}</b>
               <span>
-                [{l.severity}] {l.sampleMessages[0] ?? ""} · recurred ×{l.occurrences} across {l.taskIds.length} tasks
+                [{l.severity}] {l.sampleMessages[0] ?? ""} · recurred ×{l.occurrences} across {l.taskIds.length} tasks {trendChip(l)}
               </span>
-              {skillBtn(l)}
+              {actions(l)}
             </div>
           ))}
         </>
