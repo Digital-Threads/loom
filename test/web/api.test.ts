@@ -635,7 +635,7 @@ describe("web api", () => {
     const stageAgent = async (prompt: string) => {
       if (prompt.includes("Classify")) return '{"class":"feature","route":["analysis","spec","impl","done"]}';
       if (prompt.includes("Summarise")) return "BRIEF";
-      if (prompt.includes("Write an SDD")) return "# SDD";
+      if (prompt.includes("SDD")) return "# SDD";
       return `q${++n}?`;
     };
     const app2 = createApi(db, { stageAgent });
