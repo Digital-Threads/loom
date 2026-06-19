@@ -57,6 +57,11 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-raised);border:1px solid var(--line);color:var(--txt);padding:9px 14px;border-radius:var(--r-sm);cursor:pointer;font:600 13px/1 var(--sans);white-space:nowrap;transition:background var(--dur-1) var(--ease-out),border-color var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
 .btn:hover{background:var(--surface-hover);border-color:var(--line-strong)}
 .btn:active{transform:translateY(.5px)}
+/* Adjacent buttons (action groups, e.g. table rows) get breathing room. Flex
+   containers that already space their children (.row) opt out so it never doubles. */
+.btn + .btn{margin-left:var(--space-4)}
+.row .btn + .btn{margin-left:0}
+td > .btn:first-child{margin-left:0}
 .btn.acc{background:var(--filament-400);border-color:transparent;color:var(--fg-on-accent);font-weight:700}
 .btn.acc:hover{background:var(--filament-300);border-color:transparent}
 .btn.acc:active{background:var(--filament-500)}
