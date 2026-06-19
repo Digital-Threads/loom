@@ -79,9 +79,24 @@ export function serveApi(opts: ServeOptions = {}) {
   const server = serve({ fetch: app.fetch, port, hostname });
   // Long-lived SSE run streams stay open while the agent thinks (far longer than
   // Node's default timeouts), so disable the request/socket cutoffs.
-  const httpServer = server as unknown as { timeout?: number; requestTimeout?: number; close: () => void };
+  const httpServer = server as unknown as {
+    timeout?: number;
+    requestTimeout?: number;
+    close: () => void;
+    on: (ev: string, cb: (err: NodeJS.ErrnoException) => void) => void;
+  };
   httpServer.timeout = 0;
   httpServer.requestTimeout = 0;
+  // Turn an unhandled listen error (e.g. the port is taken by another Loom) into
+  // a clear one-line message instead of a raw Node stack trace.
+  httpServer.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\nLoom: port ${port} is already in use — stop the other Loom, or start on another port:\n  loom serve --port <N>`);
+    } else {
+      console.error(`\nLoom: could not start the server — ${err.message}`);
+    }
+    process.exit(1);
+  });
   const url = new URL(`http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${port}/`);
   return { url, stop: () => httpServer.close() };
 }
