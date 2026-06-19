@@ -556,7 +556,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       onChunk: streamSinks.get(id),
       profile: t?.profile ?? undefined, // run under the task's current subscription
     });
-    recordSessionCost(id, repoRoot);
+    // Read token-pilot stats from where the agent actually ran — its worktree —
+    // not the main repo. token-pilot writes .token-pilot/hook-events.jsonl under
+    // the session cwd (the worktree, which lives outside the repo in ~/.loom),
+    // and those events carry this task's id; reading the main repo finds none, so
+    // used/saved always showed 0 (loom-tpm). Non-git tasks fall back to the repo.
+    recordSessionCost(id, taskCwd(id) ?? repoRoot);
     recordDenials(id);
     // Drain any spawn-time degradations the launcher recorded for this session
     // (MCP not loaded, token-pilot enforcement missing) onto the task — same
