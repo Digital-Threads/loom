@@ -65,6 +65,7 @@ import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { audit } from "../core/security/audit.js";
 import { join as pathJoin, isAbsolute, dirname, resolve as pathResolve } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
+import { parseRelocate, relocateAllowed, type Relocate } from "../core/pipeline/relocate.js";
 import { loomRegistry } from "../core/plugins/index.js";
 import { LAYER_CATALOG } from "../core/dashboard/layer-catalog.js";
 import { renderDossier, diffSummary } from "../core/dashboard/dossier.js";
@@ -281,11 +282,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // avoid spawning real processes.
   // Build a review pass factory. Tests inject deps.reviewPass (sync mock);
   // production runs review in the task's session so the agent has full context.
+  // Stash each task's latest raw reviewer output so the review runner can check
+  // it for a self-steering LOOM-RELOCATE directive (parseFindings drops it).
+  const reviewRaw = new Map<string, string>();
   const makeReviewPass = (id: string, targetHint: string) => (key: string): ReviewPass => {
     if (deps.reviewPass) return deps.reviewPass(key, targetHint);
-    if (deps.stageAgent) return { key, run: async () => parseFindings(key, await deps.stageAgent!(reviewPrompt(key, targetHint) + lessonsBlock())) };
+    const run = async (call: (p: string) => Promise<string>): Promise<Finding[]> => {
+      const out = await call(reviewPrompt(key, targetHint) + lessonsBlock());
+      reviewRaw.set(id, out);
+      return parseFindings(key, out);
+    };
+    if (deps.stageAgent) return { key, run: () => run(deps.stageAgent!) };
     const agent = stageAgentFor(id, "review");
-    return { key, run: async () => parseFindings(key, await agent(reviewPrompt(key, targetHint) + lessonsBlock())) };
+    return { key, run: () => run(agent) };
   };
 
   // ─── Multi-reviewer review pipeline ──────────────────────────────────────────
@@ -823,6 +832,21 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // actually SEES the outcome — the chat-first transcript renders only turns.
   const recordTurn = (taskId: string, stage: string, input: string, output: string) =>
     saveResult(taskId, stage, "turn", { input, output });
+  // L13.x agent self-steering: if a stage agent emitted a LOOM-RELOCATE directive,
+  // honour it within the per-task budget (loop guard) and audit the move as a
+  // visible turn. Returns the relocate for runStage to execute, or undefined.
+  const applyRelocate = (id: string, fromStage: string, agentText: string): Relocate | undefined => {
+    const rel = parseRelocate(agentText);
+    if (!rel || rel.stage === fromStage) return undefined;
+    const used = loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0;
+    if (!relocateAllowed(used)) {
+      recordTurn(id, fromStage, "Self-steer ignored", `Relocate budget reached — staying in ${fromStage} (wanted ${rel.stage}: ${rel.reason})`);
+      return undefined;
+    }
+    saveResult(id, "system", "relocate-count", { n: used + 1 });
+    recordTurn(id, fromStage, "Agent self-steered the task", `${fromStage} → ${rel.stage}: ${rel.reason}`);
+    return rel;
+  };
   const fmtReview = (r: { passed: boolean; findings: { severity: string; message: string; file?: string }[]; counts: Record<string, number> }): string => {
     if (r.passed && !r.findings.length) return "Code review: no issues found.";
     const lines = r.findings.map((f) => `• [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`);
@@ -901,6 +925,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // impl (and any PR built from it) reads as incomplete (loom-3s07).
       if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom${done ? "" : " WIP"}: ${t.title}`);
       saveResult(id, "impl", "impl-report", { report: text });
+      const implRel = applyRelocate(id, "impl", text);
+      if (implRel) return { ok: true, relocate: implRel };
       if (done) return { ok: true };
       const note = parseCompleteness(text).note ?? "implementation still has remaining plan items";
       return { ok: true, needsAttention: true, note };
@@ -921,6 +947,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           payload = recordReviewer(id, reviewer.key, findings, { reset: i === 0 });
         }
         recordTurn(id, "review", `Review (${activeKeys.join(" → ")})`, fmtReview(payload!.result));
+        // Self-steer takes precedence over auto-fix: if the reviewer judged the
+        // work needs an earlier stage (e.g. back to analysis), move it there
+        // instead of patching findings in place.
+        const reviewRel = applyRelocate(id, "review", reviewRaw.get(id) ?? "");
+        if (reviewRel) return { ok: true, relocate: reviewRel };
         // Autopilot fixes the accumulated findings once, then re-reviews — no
         // human gate, so it must resolve the work rather than park on it.
         if (payload!.result.findings.length) {

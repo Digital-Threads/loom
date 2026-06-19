@@ -4,14 +4,19 @@
 // pr/done → L14) are registered in a map; the conductor is pure orchestration
 // over the pipeline engine (currentStage/completeStage) — no LLM (variant A).
 import type Database from "better-sqlite3";
-import { currentStage, completeStage } from "./engine.js";
+import { currentStage, completeStage, moveToStage } from "./engine.js";
 import { getStages, getTask, setStageGate } from "../store/db.js";
+import type { Relocate } from "./relocate.js";
 
 export interface StageOutcome {
   ok: boolean;
   /** Park for a human even on ok (e.g. review found issues to triage). */
   needsAttention?: boolean;
   note?: string;
+  /** Agent self-steering: the runner decided (and already audited) that the task
+   *  belongs at another stage. The conductor moves it there instead of advancing
+   *  to the default next stage. Set only by a runner that honoured the budget. */
+  relocate?: Relocate;
 }
 
 export type StageRunner = (db: Database.Database, taskId: string, stageKey: string) => Promise<StageOutcome>;
@@ -27,6 +32,10 @@ export async function runStage(
 ): Promise<{ outcome: StageOutcome; next: string | null }> {
   const runner = runners[stageKey];
   const outcome: StageOutcome = runner ? await runner(db, taskId, stageKey) : { ok: true };
+  if (outcome.relocate) {
+    // Agent self-steered: honour it (the runner already audited + budgeted the move).
+    return { outcome, next: moveToStage(db, taskId, outcome.relocate.stage) ?? stageKey };
+  }
   if (outcome.ok && !outcome.needsAttention) {
     return { outcome, next: completeStage(db, taskId, stageKey) };
   }

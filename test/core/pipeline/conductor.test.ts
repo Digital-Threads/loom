@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTask, setStageGate } from "../../../src/core/store/db.js";
 import { startTask } from "../../../src/core/pipeline/engine.js";
-import { advanceTask, runAndAdvance, type RunnerRegistry, type StageOutcome } from "../../../src/core/pipeline/conductor.js";
+import { advanceTask, runAndAdvance, runStage, type RunnerRegistry, type StageOutcome } from "../../../src/core/pipeline/conductor.js";
+import { currentStage } from "../../../src/core/pipeline/engine.js";
+import { getStages } from "../../../src/core/store/db.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -31,6 +33,16 @@ describe("conductor (L13)", () => {
     expect(calls).toEqual(["analysis", "impl", "done"]);
     expect(r.stoppedAt).toBeNull();
     expect(getTask(db, "t1")?.status).toBe("done");
+  });
+
+  it("runStage honours a relocate outcome (agent self-steers to another stage)", async () => {
+    seed("autopilot");
+    const relocator: RunnerRegistry = {
+      impl: async (): Promise<StageOutcome> => ({ ok: true, relocate: { stage: "analysis", reason: "spec missed the requirement" } }),
+    };
+    const r = await runStage(db, "t1", "impl", relocator);
+    expect(r.next).toBe("analysis"); // moved back, not advanced to "done"
+    expect(currentStage(getStages(db, "t1"))?.stage_key).toBe("analysis");
   });
 
   it("gated auto-runs gate=0 stages and parks at the first gate=1", async () => {
