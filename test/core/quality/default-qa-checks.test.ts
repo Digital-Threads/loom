@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildQaChecks, detectPackageManager } from "../../../src/core/quality/default-qa-checks.js";
-import { runQa } from "@digital-threads/loom-quality";
+import { runQa } from "../../../src/core/quality/qa-runner.js";
 
 describe("default QA checks", () => {
   it("runs the repo's test/build scripts via the detected package manager", async () => {
