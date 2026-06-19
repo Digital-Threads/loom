@@ -1297,10 +1297,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       projectId = existing ?? (validRoot(repo) ? projectAdd(repo).projectId : undefined);
     }
     if (!projectId) projectId = projectActive()?.projectId ?? undefined;
+    // A task with no explicit repo runs in its project's repo — derive it from the
+    // project root so the run can create a worktree. Without it taskCwd has no repo,
+    // the stage never gets a working dir, and the run hangs silently (loom-szvp).
+    const projectRoot = projectId ? projectsList().find((p) => p.projectId === projectId)?.root : undefined;
     const task = createTask(db, {
       id,
       title,
-      repo: repo || undefined,
+      repo: repo || projectRoot || undefined,
       branch: typeof body.branch === "string" ? body.branch : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       // Fall back to the global default run mode (Settings), not a hardcoded
