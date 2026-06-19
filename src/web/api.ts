@@ -485,7 +485,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   };
   // manual/gated: agent may freely read/edit in the worktree + run git; anything
   // else is denied and surfaced for approval. autopilot: full access (no list).
-  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite", "mcp__token-pilot__*"];
+  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite", "mcp__token-pilot"];
   const allowKey = (id: string) => `perm.allow.${id}`;
   const taskAllowed = (id: string): string[] => getSetting<string[]>(db, allowKey(id), []);
   const allowedToolsFor = (id: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...taskAllowed(id)];
