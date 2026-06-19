@@ -31,7 +31,7 @@ export function Board({
     client.board().then(setCols).catch((e) => setErr(String(e)));
   }, [client]);
   useEffect(() => {
-    client.modelConfig().then(setModelCfg).catch(() => {});
+    client.modelConfig?.().then(setModelCfg).catch(() => {});
   }, [client]);
 
   // Pin a model for a whole stage column (or "" = auto, the per-stage default).

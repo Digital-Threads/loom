@@ -4,6 +4,7 @@ import { stageStateClass, stageIcon, statusLabel } from "../ui";
 import { Approvals } from "./Approvals";
 import { Transcript } from "./Transcript";
 import { StageActions } from "./StageActions";
+import { StageModelPicker } from "./StageModelPicker";
 import { StageResult } from "./StageResult";
 import { DocPanel } from "./DocPanel";
 import { CostBar } from "./CostBar";
@@ -396,6 +397,7 @@ export function TaskView({
                 }}>▶ Start task</button>
               ) : task.status !== "done" ? (
                 <>
+                  <StageModelPicker client={client} taskId={taskId} stage={active} />
                   <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
                   {active === "review" && reviewersDone.length > 0 && reviewNext ? (
                     <button className="btn acc sm" disabled={reviewerBusy} title="Approve the current reviewer and run the next one (findings accumulate)" onClick={runNextReviewer}>
