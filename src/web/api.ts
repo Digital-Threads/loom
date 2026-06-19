@@ -1113,6 +1113,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           const outcome = runner ? await runner(db, taskId, stageKey) : { ok: true };
           if (outcome.ok && !outcome.needsAttention) completeStage(db, taskId, stageKey);
           return { outcome };
+        } catch (e) {
+          // Surface WHY a run died instead of a silent hang (loom-jrhg): log the
+          // stack and mark the task so the user sees the failure. Re-throw so the
+          // run-manager still records it as a failed run.
+          console.error(`[loom] stage "${stageKey}" for ${taskId} failed:`, e instanceof Error ? e.stack : e);
+          markDegraded(taskId, `stage ${stageKey} failed: ${e instanceof Error ? e.message : String(e)}`);
+          throw e;
         } finally {
           streamSinks.delete(taskId);
         }
