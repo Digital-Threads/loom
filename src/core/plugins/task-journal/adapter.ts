@@ -75,7 +75,11 @@ function exportEvents(projectRoot: string): TjEvent[] {
   const raw = execFileSync(
     "task-journal",
     ["export", "--format", "json", "--project", projectRoot],
-    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    // Ignore stderr: a fresh project has no events file yet, and `export` writes
+    // "no events file at …" to stderr (while exiting 0). Without this, that benign
+    // message leaks into Loom's log and reads like the journal is broken on every
+    // new worktree (loom-arwv). We already degrade to [] on empty/parse failure.
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
   );
   const parsed = JSON.parse(raw);
   return Array.isArray(parsed) ? (parsed as TjEvent[]) : [];
