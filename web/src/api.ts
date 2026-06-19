@@ -371,6 +371,8 @@ export function createClient(base = "", f: Fetcher = fetch) {
     // D6 — settings / attachments
     settings: () => getJson<Record<string, unknown>>(`${base}/api/settings`, f),
     saveSetting: (key: string, value: unknown) => postJson<{ ok: boolean }>(`${base}/api/settings`, { key, value }, f),
+    modelConfig: () =>
+      getJson<{ stageDefaults: Record<string, string>; tiers: string[]; columns: Record<string, string> }>(`${base}/api/model-config`, f),
     attachments: (id: string) =>
       getJson<{ attachments: Attachment[] }>(`${base}/api/tasks/${id}/attachments`, f).then((d) => d.attachments),
     addAttachment: (id: string, a: { kind: "file" | "link"; name: string; pathOrUrl: string }) =>
