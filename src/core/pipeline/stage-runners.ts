@@ -110,6 +110,8 @@ export const BRAINSTORM_READY = "READY";
 export function brainstormPrompt(history: string): string {
   return [
     "You are running a brainstorming dialog, ONE question at a time.",
+    "Lean on the `superpowers:brainstorming` skill's technique — surface hidden",
+    "assumptions, weigh 2-3 approaches — but keep THIS one-question-at-a-time flow.",
     "Ask the single most useful next question to pin down the task.",
     "When you already have ENOUGH to write a clear spec, do NOT ask another question —",
     `instead reply with exactly: ${BRAINSTORM_READY} — <one short sentence on why it's clear enough>.`,
@@ -219,7 +221,20 @@ export async function runAutoBrainstorm(
 /** Draft a spec from the brainstorm summary (new spec-md artifact, draft). */
 export async function draftSpec(db: Database.Database, taskId: string, agent: StageAgent): Promise<ArtifactRow> {
   const summary = latestArtifact(db, taskId, "brainstorm-summary")?.content ?? "";
-  const md = await agent(`Write an SDD (markdown) for this brief:\n\n${summary}`);
+  const md = await agent(
+    [
+      "Write a clear SDD (software design document, markdown) for this brief.",
+      "Use the `superpowers:writing-plans` skill's approach to make it implementable.",
+      "Cover: goal, scope (and explicit NON-goals), the design/approach, the data and",
+      "control flow, edge cases, and concrete acceptance criteria a reviewer can check.",
+      "Surface the weak assumptions — anything that, if wrong, breaks the plan — and",
+      "resolve or flag each. A cheaper implementation model will FOLLOW this spec, so",
+      "it must be airtight and unambiguous, not aspirational.",
+      "",
+      "BRIEF:",
+      summary,
+    ].join("\n"),
+  );
   return createArtifact(db, { id: id("art"), taskId, stage: "spec", kind: "spec-md", content: md });
 }
 

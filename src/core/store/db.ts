@@ -46,6 +46,10 @@ const ENSURE_COLUMNS: Record<string, Array<{ name: string; ddl: string }>> = {
   tasks: [
     { name: "session_id", ddl: "session_id TEXT" },
     { name: "session_started", ddl: "session_started INTEGER NOT NULL DEFAULT 0" },
+    // Per-model "lanes": a task runs different stages on different models (opus to
+    // think, cheaper to do). Each model is its own Claude conversation, so we keep
+    // a JSON map { model: laneSessionId } of the lanes started for this task.
+    { name: "session_lanes", ddl: "session_lanes TEXT" },
     { name: "profile", ddl: "profile TEXT" },
     { name: "project_id", ddl: "project_id TEXT" },
     { name: "external_ref", ddl: "external_ref TEXT" },
@@ -103,6 +107,7 @@ export interface TaskRow {
   external_ref: string | null;
   session_id: string | null;
   session_started: number;
+  session_lanes: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -240,6 +245,38 @@ export function setTaskProfile(db: Database.Database, id: string, profile: strin
 export function getTaskSession(db: Database.Database, id: string): { sessionId: string | null; started: boolean } {
   const t = getTask(db, id);
   return { sessionId: t?.session_id ?? null, started: !!t?.session_started };
+}
+
+function readLanes(db: Database.Database, id: string): Record<string, string> {
+  const t = getTask(db, id);
+  if (!t?.session_lanes) return {};
+  try {
+    const o = JSON.parse(t.session_lanes);
+    return o && typeof o === "object" ? (o as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The Claude session id for one model lane of a task, and whether it has been
+ *  started yet (resume vs create). Lanes let different stages run on different
+ *  models — each model is its own Claude conversation. */
+export function getLaneSession(db: Database.Database, id: string, model: string): { sessionId: string | null; started: boolean } {
+  const sid = readLanes(db, id)[model] ?? null;
+  return { sessionId: sid, started: sid !== null };
+}
+
+/** Record the session id started for a model lane. */
+export function setLaneSession(db: Database.Database, id: string, model: string, sessionId: string): void {
+  const lanes = readLanes(db, id);
+  lanes[model] = sessionId;
+  db.prepare("UPDATE tasks SET session_lanes = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(lanes), Date.now(), id);
+}
+
+/** Every Claude session id across a task's model lanes — for cost/denials/stop
+ *  fan-out (operations that must span all of a task's conversations). */
+export function getLaneSessionIds(db: Database.Database, id: string): string[] {
+  return Object.values(readLanes(db, id));
 }
 
 // ─── Stage helpers ──────────────────────────────────────────────────────────

@@ -166,6 +166,8 @@ select option:checked,.lm-select option:checked{background:var(--panel2);color:v
 .col-over{border-color:var(--filament-400);background:rgba(239,177,78,.07)}
 .col h2{font-size:11px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;color:var(--fg-dim);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
 .col h2 .n{margin-left:auto;background:var(--chip);color:var(--mut);border-radius:var(--r-pill);font-size:11px;padding:0 var(--space-3)}
+.col h2 .col-model{background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:var(--r-sm);font:inherit;font-size:10px;text-transform:none;letter-spacing:0;padding:1px 3px;font-family:var(--font-mono);cursor:pointer}
+.model-pick{background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:var(--r-sm);font:inherit;font-size:11px;padding:3px 6px;font-family:var(--font-mono);cursor:pointer}
 .col .stack{flex:1;min-height:0;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4);overflow-y:auto}
 .card{flex:0 0 auto;position:relative;background:var(--surface-card);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--space-6) var(--space-6) var(--space-6) var(--space-7);cursor:pointer;overflow:hidden;transition:border-color var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out),box-shadow var(--dur-1) var(--ease-out)}
 .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--idle);opacity:0;transition:opacity var(--dur-1) var(--ease-out)}

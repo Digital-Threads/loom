@@ -5,11 +5,12 @@
 import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, getLaneSessionIds, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
+import { STAGE_MODEL, MODEL_TIERS, resolveStageModel } from "../core/pipeline/stage-model.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, openTask, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
@@ -463,11 +464,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Refresh per-task cost after a stage: token-pilot's own used/saved stats
   // (spine-tagged via LOOM_TASK_ID) + the live session's exact $ spent. No
   // separate counter — we read what token-pilot already tracks.
+  // Every Claude session id this task spans — across its model lanes (opus to
+  // think, cheaper to do) plus the active conversation. Cost/denials/stop must
+  // cover all of them, not just the lane in use right now.
+  const taskSessionIds = (id: string): string[] => {
+    const ids = new Set(getLaneSessionIds(db, id));
+    const active = getTaskSession(db, id).sessionId;
+    if (active) ids.add(active);
+    return [...ids];
+  };
   const recordSessionCost = (id: string, repoRoot: string) => {
     try {
-      const sid = getTaskSession(db, id).sessionId;
-      const spent = sid ? sessionLauncher.costOf?.(sid) : undefined;
-      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: sid ?? undefined });
+      const ids = taskSessionIds(id);
+      const spent = ids.length ? ids.reduce((sum, s) => sum + (sessionLauncher.costOf?.(s) ?? 0), 0) : undefined;
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0] });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
       markDegraded(id, "session cost not recorded");
@@ -482,8 +492,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Capture tools the agent was denied (await user approval) after a send.
   const recordDenials = (id: string) => {
     try {
-      const sid = getTaskSession(db, id).sessionId;
-      const denials = sid ? sessionLauncher.denialsOf?.(sid) ?? [] : [];
+      const denials = [...new Set(taskSessionIds(id).flatMap((s) => sessionLauncher.denialsOf?.(s) ?? []))];
       if (denials.length) saveResult(id, "permissions", "permission-denials", { denials });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
@@ -502,8 +511,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
     const autopilot = t?.run_mode === "autopilot";
+    const relocations = loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0; // escalates a stubborn impl to opus
+    // A model the user pinned by hand wins over the policy: per-task-stage first,
+    // else the per-column (stage) default.
+    const modelOverride =
+      getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
+      getSetting<string>(db, `model.col.${stage}`, "") ||
+      undefined;
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
       stage,
+      relocations,
+      modelOverride,
       raw: opts?.raw,
       cwd: taskCwd(id),
       env: spineEnv(ids),
@@ -522,6 +540,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       for (const what of sid ? sessionLauncher.degradedOf?.(sid) ?? [] : []) markDegraded(id, what);
     } catch { /* best-effort */ }
     saveResult(id, stage, "turn", { input: prompt, output: text }); // session transcript
+    // Which model actually ran this stage (observability — opus to think, cheaper
+    // to do). Raw chat continues the active lane, so it doesn't record a stage model.
+    if (!opts?.raw) saveResult(id, stage, "model", { model: resolveStageModel(stage, { relocations, override: modelOverride }) });
     // Secret scan on the NORMAL execution path (not just the experimental
     // sandbox): flag leaked credentials in the agent's output so the Security
     // panel's audit trail is real for every run (loom-l6z1). Honours the
@@ -1020,8 +1041,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
       await snapshotDiff(id); // and freeze the git diff --stat before the branch is merged + deleted
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
-      const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
-      if (sid) sessionLauncher.stop?.(sid);
+      // task finished → stop every lane's live process, free resources
+      for (const s of taskSessionIds(id)) sessionLauncher.stop?.(s);
       // History is snapshotted (journal + diff) above → drop the worktree + branch
       // so they don't leak. Only for git tasks with a real repo.
       const dt = getTask(db, id);
@@ -1221,6 +1242,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // Board view-model: 9 stage columns with their cards.
   app.get("/api/board", (c) => c.json({ columns: boardColumns(db) }));
+  // The per-stage model policy + the tiers a user can pick by hand. The UI shows
+  // the default per stage and writes overrides via /api/settings (model.col.<stage>
+  // for a column, model.task.<id>.<stage> for one task).
+  app.get("/api/model-config", (c) =>
+    c.json({
+      stageDefaults: STAGE_MODEL,
+      tiers: MODEL_TIERS,
+      columns: Object.fromEntries(
+        Object.keys(STAGE_MODEL).map((s) => [s, getSetting<string>(db, `model.col.${s}`, "")]).filter(([, v]) => v),
+      ),
+    }),
+  );
 
   // Attention queue: tasks parked at a gated stage.
   app.get("/api/attention", (c) => c.json({ items: attentionQueue(db) }));
