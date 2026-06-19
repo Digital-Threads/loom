@@ -483,9 +483,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       markDegraded(id, "session cost not recorded");
     }
   };
-  // manual/gated: agent may freely read/edit in the worktree + run git; anything
-  // else is denied and surfaced for approval. autopilot: full access (no list).
-  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite"];
+  // Loom ships these MCP servers (bundled plugins: token-pilot@token-pilot,
+  // task-journal@task-journal) and SESSION_PREAMBLE tells the agent to use them.
+  // They must be allowed by default in gated/manual — else every call is denied
+  // and the agent silently falls back to raw Read/Grep (losing token-pilot's
+  // savings) or loses its journal (loom-hlpy). Both names are listed: the
+  // plugin-delivered form (mcp__plugin_<marketplace>_<plugin>, how Loom installs
+  // them) and the bare standalone-server form (mcp__<server>, e.g. task-journal
+  // registered via enforced-mcp.json). The bare form allows the WHOLE server —
+  // no "*", since the permission layer matches names literally (the manual
+  // /permissions/allow validator even rejects "*").
+  const BUNDLED_MCP_TOOLS = [
+    "mcp__token-pilot",
+    "mcp__plugin_token-pilot_token-pilot",
+    "mcp__task-journal",
+    "mcp__plugin_task-journal_task-journal",
+  ];
+  // manual/gated: agent may freely read/edit in the worktree + run git + use the
+  // bundled MCP servers; anything else is denied and surfaced for approval.
+  // autopilot: full access (no list).
+  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite", ...BUNDLED_MCP_TOOLS];
   const allowKey = (id: string) => `perm.allow.${id}`;
   const taskAllowed = (id: string): string[] => getSetting<string[]>(db, allowKey(id), []);
   const allowedToolsFor = (id: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...taskAllowed(id)];
