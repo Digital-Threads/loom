@@ -39,7 +39,7 @@ describe("GET /api/onboarding/install/stream", () => {
     // every unit reports progress, ending in a done summary
     expect(text).toContain("event: step");
     expect(text).toContain("event: done");
-    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode"]) {
+    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode", "superpowers"]) {
       expect(text).toContain(`"id":"${id}"`);
     }
     expect(text).toContain('"state":"done"');
@@ -48,7 +48,7 @@ describe("GET /api/onboarding/install/stream", () => {
   it("already present: tools stream skipped, plugins stream a refresh to latest", async () => {
     const present: CmdRunner = (cmd, args) => {
       if (cmd === "which" || cmd === "where") return { ok: true, stdout: "", stderr: "" };
-      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace\ncontext-mode@context-mode", stderr: "" };
+      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace\ncontext-mode@context-mode\nsuperpowers@claude-plugins-official", stderr: "" };
       return { ok: true, stdout: "", stderr: "" };
     };
     const app = createApi(db, { installRunner: present, installSkills: noSkills });

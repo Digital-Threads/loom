@@ -127,6 +127,18 @@ export const INSTALL_UNITS: InstallUnit[] = [
     update: pluginUpdate("context-mode@context-mode"),
     requires: ["claude"],
   },
+  {
+    id: "superpowers",
+    title: "Superpowers",
+    why: "High-quality skills for brainstorming, planning and writing specs — used by the thinking stages.",
+    detect: { probe: { cmd: "claude", args: ["plugin", "list"] }, presenceMatch: "superpowers@claude-plugins-official" },
+    steps: [
+      { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/anthropics/claude-plugins-official"] },
+      { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "superpowers@claude-plugins-official"], scoped: true },
+    ],
+    update: pluginUpdate("superpowers@claude-plugins-official"),
+    requires: ["claude"],
+  },
 ];
 
 // One progress event emitted as the plan runs. The SSE route forwards these to
