@@ -1,6 +1,6 @@
 {
   "name": "@digital-threads/loom",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Loom — local AI-dev orchestrator: give it a task and it runs the work through an analysis → spec → code → review → PR pipeline on a board, with cost, reasoning memory and multi-account support. Public beta.",
   "license": "MIT",
@@ -31,7 +31,13 @@
   "bin": {
     "loom": "dist/cli.js"
   },
-  "files": ["dist", "web/dist", "skills", "README.md", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "web/dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build:host": "tsc -p tsconfig.json",
