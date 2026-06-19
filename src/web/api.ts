@@ -32,7 +32,7 @@ import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
-import { tokenEventsByTime, tokenUsageBySession } from "../core/plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, tokenUsageBySession, toolCallTokensForSessions } from "../core/plugins/token-pilot/adapter.js";
 import { listSessions } from "../core/plugins/aimux/adapter.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
@@ -486,7 +486,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try {
       const ids = taskSessionIds(id);
       const spent = ids.length ? ids.reduce((sum, s) => sum + (sessionLauncher.costOf?.(s) ?? 0), 0) : undefined;
-      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0] });
+      // token-pilot's MCP-tool savings live in tool-calls.jsonl, keyed by session
+      // id (not task_id) — add them on top of the hook-event totals so the Cost
+      // block reflects real tool savings, not just Read-hook denials (loom-cust).
+      const extra = toolCallTokensForSessions(repoRoot, ids);
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0], extra });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
       markDegraded(id, "session cost not recorded");

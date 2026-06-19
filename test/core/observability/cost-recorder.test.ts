@@ -31,6 +31,16 @@ describe("recordRunCost (L9.1 — провод 4)", () => {
     expect(saved).toMatchObject({ value: 20, exact: 1 });
   });
 
+  it("adds MCP tool-call savings (extra) on top of the hook-event totals (loom-cust)", () => {
+    const tokenEvents: TokenEvent[] = [
+      { sessionId: "a", used: 100, saved: 20, ts: 1, agentType: null, taskId: "t1" },
+    ];
+    recordRunCost(db, "t1", { tokenEvents, extra: { used: 1294, saved: 61882 } });
+    const costs = getCosts(db, "t1");
+    expect(costs.find((c) => c.metric === "used")?.value).toBe(100 + 1294);
+    expect(costs.find((c) => c.metric === "saved")?.value).toBe(20 + 61882);
+  });
+
   it("records real spend when provided", () => {
     recordRunCost(db, "t1", { tokenEvents: [], spent: 777 });
     const spent = getCosts(db, "t1").find((c) => c.source === "aimux" && c.metric === "spent");

@@ -10,14 +10,17 @@ export interface TokenUsageRow {
 
 // current hook-events.jsonl + rotated archives hook-events.<digits>.jsonl
 const ARCHIVE_RE = /^hook-events\.\d+\.jsonl$/;
+// current tool-calls.jsonl + rotated archives tool-calls.<digits>.jsonl
+const TOOL_ARCHIVE_RE = /^tool-calls\.\d+\.jsonl$/;
 // heavy directories the recursive walk does not descend into
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "target"]);
 const MAX_DEPTH = 6;
 
-// recursively collects the absolute paths of all hook-events*.jsonl in all
-// .token-pilot directories below projectRoot (including projectRoot/.token-pilot itself),
-// skipping heavy directories and limiting depth. Defensive: I/O errors -> skip.
-function collectHookEventFiles(projectRoot: string): string[] {
+// Recursively collect the absolute paths of every .token-pilot/<file matching
+// `isMatch> below projectRoot (including projectRoot/.token-pilot itself),
+// skipping heavy directories and limiting depth. Shared by the hook-events and
+// tool-calls readers. Defensive: I/O errors -> skip.
+function collectTokenPilotFiles(projectRoot: string, isMatch: (name: string) => boolean): string[] {
   const files: string[] = [];
 
   function walk(dir: string, depth: number): void {
@@ -33,14 +36,14 @@ function collectHookEventFiles(projectRoot: string): string[] {
       if (SKIP_DIRS.has(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.name === ".token-pilot") {
-        addJsonlFiles(full);
+        addFrom(full);
         continue;
       }
       walk(full, depth + 1);
     }
   }
 
-  function addJsonlFiles(tpDir: string): void {
+  function addFrom(tpDir: string): void {
     let entries: import("node:fs").Dirent[];
     try {
       entries = readdirSync(tpDir, { withFileTypes: true });
@@ -48,15 +51,16 @@ function collectHookEventFiles(projectRoot: string): string[] {
       return;
     }
     for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      if (entry.name === "hook-events.jsonl" || ARCHIVE_RE.test(entry.name)) {
-        files.push(join(tpDir, entry.name));
-      }
+      if (entry.isFile() && isMatch(entry.name)) files.push(join(tpDir, entry.name));
     }
   }
 
   walk(projectRoot, 0);
   return files;
+}
+
+function collectHookEventFiles(projectRoot: string): string[] {
+  return collectTokenPilotFiles(projectRoot, (n) => n === "hook-events.jsonl" || ARCHIVE_RE.test(n));
 }
 
 interface RawHookEvent {
@@ -140,6 +144,43 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
   }
 
   return events.sort((a, b) => a.ts - b.ts);
+}
+
+/** Per-session token usage from token-pilot's MCP tool-call log
+ *  (.token-pilot/tool-calls.jsonl). token-pilot records every smart_read /
+ *  read_symbol / … call there with its accounting — DELIBERATELY separate from
+ *  hook-events.jsonl. Loom only read hook-events, so all MCP-tool savings showed
+ *  as 0; this sums them for the given sessions. used = tokens actually returned;
+ *  saved = what a full read would have cost minus that (loom-cust deeper layer). */
+export function toolCallTokensForSessions(projectRoot: string, sessionIds: string[]): { used: number; saved: number } {
+  const want = new Set(sessionIds.filter(Boolean));
+  if (!want.size) return { used: 0, saved: 0 };
+  let used = 0;
+  let saved = 0;
+  for (const file of collectTokenPilotFiles(projectRoot, (n) => n === "tool-calls.jsonl" || TOOL_ARCHIVE_RE.test(n))) {
+    let raw: string;
+    try {
+      raw = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let ev: { session_id?: unknown; tokensReturned?: unknown; tokensWouldBe?: unknown };
+      try {
+        ev = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      if (typeof ev.session_id !== "string" || !want.has(ev.session_id)) continue;
+      const returned = typeof ev.tokensReturned === "number" ? ev.tokensReturned : 0;
+      const wouldBe = typeof ev.tokensWouldBe === "number" ? ev.tokensWouldBe : 0;
+      used += returned;
+      saved += Math.max(0, wouldBe - returned);
+    }
+  }
+  return { used, saved };
 }
 
 /** True if token-pilot left at least one hook-event for this worktree — i.e. its
