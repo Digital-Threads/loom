@@ -410,14 +410,21 @@ describe("web api", () => {
   // ── connectors: Claude plugins ──
   it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status)", async () => {
     const app2 = createApi(db, {
-      claudePlugin: () => Promise.resolve({ code: 0, stdout: "my-plugin 1.2.0 enabled\nother 2.0.0 disabled\nNo trailing prose" }),
+      claudePlugin: () =>
+        Promise.resolve({
+          code: 0,
+          stdout:
+            "Installed plugins:\n\n" +
+            "  ❯ my-plugin@my-marketplace\n    Version: 1.2.0\n    Scope: user\n    Status: ✔ enabled\n\n" +
+            "  ❯ other@other-mkt\n    Version: 2.0.0\n    Scope: project\n    Status: ✘ disabled\n",
+        }),
     });
     const r = (await (await app2.request("/api/connectors/plugins")).json()) as {
       plugins: { name: string; version?: string; enabled: boolean }[];
     };
     expect(r.plugins).toEqual([
-      { name: "my-plugin", version: "1.2.0", enabled: true },
-      { name: "other", version: "2.0.0", enabled: false },
+      { name: "my-plugin@my-marketplace", version: "1.2.0", enabled: true },
+      { name: "other@other-mkt", version: "2.0.0", enabled: false },
     ]);
   });
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LoomClient, AttentionItem } from "../api";
 import { NAV } from "../nav";
 import loomMark from "../assets/loom-mark.svg";
@@ -7,38 +7,46 @@ export function Sidebar({
   client,
   view,
   onNav,
+  onOpenTask,
   open,
 }: {
   client: LoomClient;
   view: string;
   onNav: (v: string) => void;
+  onOpenTask: (id: string) => void;
   open: boolean;
 }) {
   const [attn, setAttn] = useState<AttentionItem[]>([]);
+  const seen = useRef(0); // last count we notified about — avoids re-firing
+
   useEffect(() => {
     let cancelled = false;
-    // Read notify.enabled fresh each cycle, right before deciding — so toggling
-    // it in Settings (loom-wkhe) takes effect immediately and no stale value can
-    // fire a notification after it was disabled. Default on; off only when set.
-    client.settings()
-      .then((s) => s["notify.enabled"] !== false)
-      .catch(() => true)
-      .then((notifyOn) =>
-        client.attention().then((items) => {
-          if (cancelled) return;
-          // D6.4 — browser push when new items need attention (unless disabled).
-          if (notifyOn && typeof Notification !== "undefined" && items.length > attn.length) {
-            if (Notification.permission === "granted") {
-              new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
-            } else if (Notification.permission === "default") {
-              Notification.requestPermission().catch(() => {});
-            }
+    async function poll() {
+      try {
+        // Read notify.enabled fresh each cycle so toggling it in Settings takes
+        // effect immediately. Default on; off only when explicitly set.
+        const notifyOn = await client.settings().then((s) => s["notify.enabled"] !== false).catch(() => true);
+        const items = await client.attention();
+        if (cancelled) return;
+        // D6.4 — browser push when MORE tasks need attention than we last saw.
+        if (notifyOn && typeof Notification !== "undefined" && items.length > seen.current) {
+          if (Notification.permission === "granted") {
+            new Notification("Loom — needs attention", { body: `${items.length} task(s) awaiting you` });
+          } else if (Notification.permission === "default") {
+            Notification.requestPermission().catch(() => {});
           }
-          setAttn(items);
-        }),
-      )
-      .catch(() => { if (!cancelled) setAttn([]); });
-    return () => { cancelled = true; };
+        }
+        seen.current = items.length;
+        setAttn(items);
+      } catch {
+        if (!cancelled) setAttn([]);
+      }
+    }
+    poll();
+    // Keep the queue fresh without a page reload — a task can hit a gate or crash
+    // while you sit on any screen.
+    const timer = setInterval(poll, 8000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [client, view]);
 
   return (
@@ -62,14 +70,30 @@ export function Sidebar({
         ))}
       </nav>
       <div className="spacer" />
-      <button type="button" className="attn" onClick={() => onNav("board")}>
+      <div className="attn">
         <div className="h">
-          <span aria-hidden="true">🔔</span> Needs attention {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
+          <span aria-hidden="true">🔔</span> Needs attention
+          {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
         </div>
-        <div className="b">
-          {attn.length ? attn.map((a) => `${a.taskId}: ${a.stageKey}`).join(" · ") : "empty"}
-        </div>
-      </button>
+        {attn.length ? (
+          <div className="attn-list">
+            {attn.map((a) => (
+              <button
+                type="button"
+                className="attn-item"
+                key={a.taskId}
+                onClick={() => onOpenTask(a.taskId)}
+                title={`${a.title} — ${a.stageKey} (click to open)`}
+              >
+                <span className="attn-title">{a.title || a.taskId}</span>
+                <span className="attn-stage">{a.stageKey}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="b">Nothing waiting on you.</div>
+        )}
+      </div>
     </aside>
   );
 }

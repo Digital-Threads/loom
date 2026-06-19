@@ -166,25 +166,32 @@ function profileConfigDir(p: { is_source?: boolean; path: string }): string {
 // A Claude plugin row for the Connectors UI. Parsed from `claude plugin list`.
 interface PluginEntry { name: string; version?: string; enabled: boolean }
 
-// Defensive parse of `claude plugin list` — the CLI output format is not
-// guaranteed, so this never throws: an unexpected/empty line yields no row and
-// a prose line (e.g. "No plugins installed") is skipped (no version, no status).
+// Defensive parse of `claude plugin list`. The real output is a multi-line block
+// per plugin:
+//     ❯ name@marketplace
+//       Version: 1.2.0
+//       Scope: user
+//       Status: ✔ enabled
+// So we track the current plugin from its "name@marketplace" header line and
+// attach the Version/Status that follow. Never throws; prose lines are ignored.
 function parsePluginList(stdout: string): PluginEntry[] {
   const out: PluginEntry[] = [];
-  for (const line of String(stdout ?? "").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const tokens = trimmed.split(/\s+/);
-    const name = tokens[0];
-    if (!name || name.startsWith("-")) continue;
-    // A version token (e.g. "1.2.0"/"v2") is the strong signal of a data row.
-    // Header lines ("NAME VERSION ENABLED") and prose ("No plugins installed")
-    // carry none, so they are skipped — no phantom rows.
-    const version = tokens.slice(1).find((t) => /^v?\d+\./.test(t));
-    if (!version) continue;
-    // Enabled unless an explicit disabled/off marker is present.
-    const enabled = !/\b(disabled|off)\b/.test(trimmed.toLowerCase());
-    out.push({ name, version, enabled });
+  let cur: PluginEntry | null = null;
+  for (const raw of String(stdout ?? "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Header: an optional bullet glyph, then "<name>@<marketplace>" alone.
+    const ref = line.replace(/^[^\w]+/, "").match(/^([A-Za-z0-9][\w.-]*@[\w.-]+)$/);
+    if (ref) {
+      cur = { name: ref[1], enabled: true };
+      out.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    const v = line.match(/^Version:\s*(\S+)/i);
+    if (v) { cur.version = v[1]; continue; }
+    const s = line.match(/^Status:\s*(.+)$/i);
+    if (s) { cur.enabled = !/disabled/i.test(s[1]); continue; }
   }
   return out;
 }

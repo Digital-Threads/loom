@@ -96,7 +96,7 @@ export function App() {
   return (
     <div className="app">
       <a className="skip-link" href="#content">Skip to content</a>
-      <Sidebar client={client} view={inTask ? "" : view} onNav={nav} open={drawer} />
+      <Sidebar client={client} view={inTask ? "" : view} onNav={nav} onOpenTask={(id) => { setTaskId(id); setDrawer(false); }} open={drawer} />
       {drawer ? <div className="side-backdrop" aria-hidden="true" onClick={() => setDrawer(false)} /> : null}
       <div className="main">
         <header className="top">

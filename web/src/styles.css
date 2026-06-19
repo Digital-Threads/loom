@@ -35,9 +35,14 @@ body{background:var(--bg);background-image:var(--mesh);background-attachment:fix
 .nav button:hover{background:var(--panel2);color:var(--txt)}
 .nav button.active{background:rgba(239,177,78,.10);color:var(--txt);font-weight:600;box-shadow:inset 2px 0 0 var(--filament-400)}
 .side .spacer{flex:1;min-height:8px}
-.attn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;width:100%;text-align:left;font:inherit;color:inherit;display:block}
+.attn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
 .attn .h{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
 .attn .b{color:var(--mut);font-size:12px;margin-top:6px}
+.attn-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.attn-item{display:flex;align-items:center;gap:8px;justify-content:space-between;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer}
+.attn-item:hover{border-color:var(--filament-400)}
+.attn-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.attn-stage{color:var(--mut);font-size:11px;font-family:var(--font-mono);flex-shrink:0}
 .badge{background:var(--bad);color:#fff;border-radius:20px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:auto}
 
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
