@@ -5,7 +5,7 @@
 import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, getLaneSessionIds, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
@@ -463,11 +463,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Refresh per-task cost after a stage: token-pilot's own used/saved stats
   // (spine-tagged via LOOM_TASK_ID) + the live session's exact $ spent. No
   // separate counter — we read what token-pilot already tracks.
+  // Every Claude session id this task spans — across its model lanes (opus to
+  // think, cheaper to do) plus the active conversation. Cost/denials/stop must
+  // cover all of them, not just the lane in use right now.
+  const taskSessionIds = (id: string): string[] => {
+    const ids = new Set(getLaneSessionIds(db, id));
+    const active = getTaskSession(db, id).sessionId;
+    if (active) ids.add(active);
+    return [...ids];
+  };
   const recordSessionCost = (id: string, repoRoot: string) => {
     try {
-      const sid = getTaskSession(db, id).sessionId;
-      const spent = sid ? sessionLauncher.costOf?.(sid) : undefined;
-      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: sid ?? undefined });
+      const ids = taskSessionIds(id);
+      const spent = ids.length ? ids.reduce((sum, s) => sum + (sessionLauncher.costOf?.(s) ?? 0), 0) : undefined;
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0] });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
       markDegraded(id, "session cost not recorded");
@@ -482,8 +491,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Capture tools the agent was denied (await user approval) after a send.
   const recordDenials = (id: string) => {
     try {
-      const sid = getTaskSession(db, id).sessionId;
-      const denials = sid ? sessionLauncher.denialsOf?.(sid) ?? [] : [];
+      const denials = [...new Set(taskSessionIds(id).flatMap((s) => sessionLauncher.denialsOf?.(s) ?? []))];
       if (denials.length) saveResult(id, "permissions", "permission-denials", { denials });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
@@ -1020,8 +1028,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       snapshotJournal(id); // after close: capture the full reasoning (incl. outcome) before worktree cleanup
       await snapshotDiff(id); // and freeze the git diff --stat before the branch is merged + deleted
       recordTurn(id, "done", "Finalize the task", "Task finished and closed.");
-      const sid = getTaskSession(db, id).sessionId; // task finished → stop its live process, free resources
-      if (sid) sessionLauncher.stop?.(sid);
+      // task finished → stop every lane's live process, free resources
+      for (const s of taskSessionIds(id)) sessionLauncher.stop?.(s);
       // History is snapshotted (journal + diff) above → drop the worktree + branch
       // so they don't leak. Only for git tasks with a real repo.
       const dt = getTask(db, id);
