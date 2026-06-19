@@ -512,6 +512,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const autopilot = t?.run_mode === "autopilot";
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
       stage,
+      relocations: loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0, // escalates a stubborn impl to opus
       raw: opts?.raw,
       cwd: taskCwd(id),
       env: spineEnv(ids),
