@@ -1054,13 +1054,26 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           return { ok: true, needsAttention: true, note };
         }
       }
-      const pr = await runPr(db, id, deps.prOptions?.(id) ?? {});
+      // Default PR options: in autopilot, actually push the branch to origin and
+      // return the host's "open a PR" link — Loom's push+link feature (we never
+      // auto-create the PR itself). Manual/gated stays description-only; the user
+      // pushes on demand via POST /api/tasks/:id/pr. Tests inject deps.prOptions,
+      // which wins. sh+repoRoot+branch are passed either way so the description
+      // gets a real change summary (commits + diffstat), not just the task spec.
+      const prOpts: PrOptions = deps.prOptions?.(id) ?? {
+        connector: prT?.run_mode === "autopilot",
+        sh: realSh,
+        repoRoot: prWt,
+        branch: worktreeBranch(id),
+      };
+      const pr = await runPr(db, id, prOpts);
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
-      // Opening the PR is the irreversible, opt-in step. When no PR was actually
-      // created (description-only / connector off), park here for the human to
-      // push + open it — don't silently advance the task to "done" with no PR.
-      return { ok: true, needsAttention: !pr.created };
+      // Pushed (autopilot) → Loom's part is done, advance. Otherwise — description
+      // only, or a push that failed — park for the human to push + open the PR,
+      // rather than silently finishing with nothing on origin. A push error is
+      // already saved on pr-result so it isn't a silent stall.
+      return { ok: true, needsAttention: !pr.pushed };
     },
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });

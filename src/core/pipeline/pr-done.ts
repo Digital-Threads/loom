@@ -87,7 +87,15 @@ export async function defaultBranch(sh: Sh, repoRoot: string): Promise<string> {
  *  Bitbucket alike). Best-effort but never silent: no remote / push failure comes
  *  back as `error`. Async (the sh spawns git): a sync spawn would block the loop. */
 export async function runPr(db: Database.Database, taskId: string, opts: PrOptions = {}): Promise<PrResult> {
-  const description = opts.describe ? opts.describe() : defaultDescription(db, taskId);
+  let description = opts.describe ? opts.describe() : defaultDescription(db, taskId);
+  // Base ref shared by the change summary and the push target.
+  const base = opts.sh && opts.repoRoot ? (opts.base ?? (await defaultBranch(opts.sh, opts.repoRoot))) : (opts.base ?? "");
+  // Append a summary of what actually changed (commits + diffstat) so the PR body
+  // describes the work — not a verbatim copy of the original task spec (loom-b0kj).
+  if (opts.sh && opts.repoRoot && opts.branch && base) {
+    const changes = await changeSummary(opts.sh, opts.repoRoot, base, opts.branch);
+    if (changes) description += `\n\n## Changes\n\n${changes}`;
+  }
   createArtifact(db, { id: id(), taskId, stage: "pr", kind: "pr-description", content: description, status: "accepted" });
 
   if (!opts.connector) return { description, created: false, pushed: false, connector: false };
@@ -100,13 +108,26 @@ export async function runPr(db: Database.Database, taskId: string, opts: PrOptio
   if (remoteRes.code !== 0) {
     return { description, created: false, pushed: false, connector: true, error: "This repo has no `origin` remote — add one before pushing." };
   }
-  const base = opts.base ?? (await defaultBranch(opts.sh, opts.repoRoot));
   const push = await opts.sh("git", ["push", "-u", "origin", opts.branch], opts.repoRoot);
   if (push.code !== 0) {
     return { description, created: false, pushed: false, connector: true, error: `git push failed:\n${push.stdout.trim() || "(no output)"}` };
   }
   const compareUrl = prCompareUrl(remoteRes.stdout, base, opts.branch) ?? undefined;
   return { description, created: false, pushed: true, connector: true, compareUrl, url: compareUrl };
+}
+
+/** A compact summary of what the branch changed vs base — commit subjects + a
+ *  diffstat — for the PR body, so it describes the work rather than echoing the
+ *  original task spec (loom-b0kj). Best-effort: a failed git call omits that part. */
+export async function changeSummary(sh: Sh, repoRoot: string, base: string, branch: string): Promise<string> {
+  const log = await sh("git", ["log", "--format=- %s", `${base}..${branch}`], repoRoot);
+  const stat = await sh("git", ["diff", "--stat", `${base}...${branch}`], repoRoot);
+  const commits = log.code === 0 ? log.stdout.trim() : "";
+  const files = stat.code === 0 ? stat.stdout.trim() : "";
+  return [
+    commits && `### Commits\n${commits}`,
+    files && `### Files\n\`\`\`\n${files}\n\`\`\``,
+  ].filter(Boolean).join("\n\n");
 }
 
 function defaultDescription(db: Database.Database, taskId: string): string {
