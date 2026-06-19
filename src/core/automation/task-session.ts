@@ -8,13 +8,14 @@
 
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { getTaskSession, setTaskSession } from "../store/db.js";
+import { getTaskSession, setTaskSession, getLaneSession, setLaneSession } from "../store/db.js";
+import { resolveStageModel } from "../pipeline/stage-model.js";
 
 /** One headless turn against a session. resume=false → create with sessionId. */
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string },
+    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string },
   ): Promise<{ text: string }>;
 }
 
@@ -150,9 +151,16 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
     taskId,
     sessionId: () => getTaskSession(db, taskId).sessionId ?? "",
     async send(instruction, opts = {}) {
-      const sess = getTaskSession(db, taskId);
-      const resume = sess.started;
-      const sessionId = sess.sessionId ?? newId();
+      // A real stage picks a model and runs in that model's lane — its own Claude
+      // conversation (same-model stages share one; artifacts carry context across
+      // lanes). A raw/verbatim message (the user chatting with the agent) or a
+      // stageless send continues the task's ACTIVE conversation instead of forking
+      // a new lane. The model is fixed per session, so each model is its own one.
+      const stageModel = !opts.raw && opts.stage ? resolveStageModel(opts.stage) : undefined;
+      const lane = stageModel ? getLaneSession(db, taskId, stageModel) : getTaskSession(db, taskId);
+      const model = stageModel;
+      const resume = lane.started;
+      const sessionId = lane.sessionId ?? newId();
 
       if (deps.compact && deps.compactEvery && turns > 0 && turns % deps.compactEvery === 0) {
         await deps.compact({ sessionId, cwd: opts.cwd });
@@ -163,9 +171,10 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // otherwise decay). Keeps token-pilot + task-journal non-optional.
       const body = opts.raw ? instruction : `${stageInstruction(opts.stage, instruction)}\n\n${TOOLS_ANCHOR}`;
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
-      const res = await deps.launcher.run(prompt, { sessionId, resume, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
 
-      if (!resume) setTaskSession(db, taskId, sessionId); // created → next send resumes
+      if (!resume && stageModel) setLaneSession(db, taskId, stageModel, sessionId); // new lane → next stage on this model resumes it
+      setTaskSession(db, taskId, sessionId); // active lane = the task's current conversation (interject/terminal/relocate target)
       turns += 1;
       return res;
     },

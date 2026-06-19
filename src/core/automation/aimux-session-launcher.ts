@@ -36,6 +36,8 @@ export interface AimuxLiveLauncherDeps {
 interface RunOpts {
   sessionId: string;
   resume: boolean;
+  /** Model for this stage's lane (per-stage policy). Falls back to deps.model. */
+  model?: string;
   cwd?: string;
   env?: Record<string, string>;
   bypassPermissions?: boolean;
@@ -114,7 +116,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
       : spawnProcess) as typeof spawn;
 
     const session = open(cfg, profile, {
-      model: deps.model,
+      model: opts.model ?? deps.model,
       sessionId: opts.sessionId,
       resume: opts.resume,
       cwd: opts.cwd,
