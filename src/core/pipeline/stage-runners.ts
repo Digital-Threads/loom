@@ -4,7 +4,7 @@
 // agent call is injected (StageAgent) so the logic is testable without a model.
 import { randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
-import { STAGE_KEYS } from "../store/db.js";
+import { STAGE_KEYS, getStages, updateStageStatus } from "../store/db.js";
 import {
   createArtifact,
   latestArtifact,
@@ -44,6 +44,18 @@ export async function runAnalysis(
       Date.now(),
       taskId,
     );
+    // Reconcile the stage rows to the new route: stages dropped from the route are
+    // marked "skipped" so the engine's pending-walk (completeStage/currentStage)
+    // passes over them. The rows were seeded from the creation-time route (often
+    // the full pipeline), so without this the adaptive re-route is cosmetic — the
+    // pipeline would still run the dropped stages (loom-kk00). Done stages are
+    // left as-is; only not-yet-run, no-longer-in-route stages are skipped.
+    const keep = new Set(parsed.route);
+    for (const s of getStages(db, taskId)) {
+      if (!keep.has(s.stage_key) && s.status !== "done" && s.status !== "skipped") {
+        updateStageStatus(db, taskId, s.stage_key, "skipped");
+      }
+    }
   }
   return parsed;
 }
