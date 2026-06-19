@@ -93,6 +93,7 @@ import { computeLessons, lessonsPromptBlock, lessonToSkillDescription, type Less
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
 import { isValidMarketplaceSource } from "../core/install/install.js";
 import { INSTALL_UNITS, runInstallPlan } from "../core/install/bootstrap.js";
+import { installBundledSkills, type SkillsInstallResult } from "../core/install/bundled-skills.js";
 import { makeShellRunner } from "../core/install/shell-runner.js";
 import type { CmdRunner, InstallDeps } from "../core/install/types.js";
 import { loomDataDir } from "../core/paths.js";
@@ -147,6 +148,9 @@ export interface ApiDeps {
   claudePlugin?: (args: string[]) => Promise<{ code: number; stdout: string }>;
   /** Command runner for the onboarding auto-installer (default: makeShellRunner — long timeout + shell). */
   installRunner?: CmdRunner;
+  /** Install Loom's bundled skills into ~/.claude/skills (default: the real copy).
+   *  Injectable so onboarding tests stay hermetic (no writes to the real home). */
+  installSkills?: () => SkillsInstallResult;
   /** Git runner for worktree/branch cleanup (default: sync `git`). Override for tests. */
   worktreeGit?: GitRunner;
 }
@@ -232,6 +236,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
   const doctorReport = deps.prereqs ?? (() => checkPrerequisites());
   const installRunner = deps.installRunner ?? makeShellRunner();
+  const installSkills = deps.installSkills ?? installBundledSkills;
   // Guards the auto-installer: only one install run at a time. The shell installs
   // are synchronous and cannot be aborted, so a second concurrent stream (a retry
   // after a transient disconnect, or a second tab) must not launch parallel
@@ -1109,6 +1114,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       try {
         const ideps: InstallDeps = { dataDir: loomDataDir(), run: installRunner };
         await runInstallPlan(INSTALL_UNITS, ideps, send);
+        // Loom's bundled skills → ~/.claude/skills (idempotent; never clobbers a
+        // user's own skill of the same name).
+        const sk = installSkills();
+        const skillsEv = {
+          kind: "step",
+          id: "skills",
+          title: "Loom skills",
+          state: "done",
+          message: sk.installed.length ? `installed ${sk.installed.join(", ")}` : "already present",
+        };
+        await send(skillsEv);
       } finally {
         installInFlight = false;
       }

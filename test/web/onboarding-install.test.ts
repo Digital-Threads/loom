@@ -15,6 +15,9 @@ const allInstall: CmdRunner = (cmd, args) => {
   return { ok: true, stdout: "", stderr: "" };
 };
 
+// Hermetic skills install: never touch the real ~/.claude/skills in tests.
+const noSkills = () => ({ installed: [], skipped: [] });
+
 let dir: string;
 let db: Database.Database;
 
@@ -29,14 +32,14 @@ afterEach(() => {
 
 describe("GET /api/onboarding/install/stream", () => {
   it("streams per-step progress and a final done event", async () => {
-    const app = createApi(db, { installRunner: allInstall });
+    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills });
     const res = await app.request("/api/onboarding/install/stream");
     expect(res.status).toBe(200);
     const text = await res.text();
     // every unit reports progress, ending in a done summary
     expect(text).toContain("event: step");
     expect(text).toContain("event: done");
-    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary"]) {
+    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode"]) {
       expect(text).toContain(`"id":"${id}"`);
     }
     expect(text).toContain('"state":"done"');
@@ -45,10 +48,10 @@ describe("GET /api/onboarding/install/stream", () => {
   it("idempotent: already-present tools/plugins stream as skipped", async () => {
     const present: CmdRunner = (cmd, args) => {
       if (cmd === "which" || cmd === "where") return { ok: true, stdout: "", stderr: "" };
-      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace", stderr: "" };
+      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace\ncontext-mode@context-mode", stderr: "" };
       return { ok: true, stdout: "", stderr: "" };
     };
-    const app = createApi(db, { installRunner: present });
+    const app = createApi(db, { installRunner: present, installSkills: noSkills });
     const res = await app.request("/api/onboarding/install/stream");
     const text = await res.text();
     expect(text).toContain('"state":"skipped"');
@@ -57,7 +60,7 @@ describe("GET /api/onboarding/install/stream", () => {
   });
 
   it("releases the in-flight lock: a second sequential request also runs", async () => {
-    const app = createApi(db, { installRunner: allInstall });
+    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills });
     const first = await (await app.request("/api/onboarding/install/stream")).text();
     const second = await (await app.request("/api/onboarding/install/stream")).text();
     expect(first).toContain("event: done");

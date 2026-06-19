@@ -101,6 +101,17 @@ export const INSTALL_UNITS: InstallUnit[] = [
     ],
     requires: ["claude"],
   },
+  {
+    id: "context-mode",
+    title: "Context Mode",
+    why: "Context-management tools Token Pilot uses to keep the agent's context lean.",
+    detect: { probe: { cmd: "claude", args: ["plugin", "list"] }, presenceMatch: "context-mode@context-mode" },
+    steps: [
+      { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/mksglu/context-mode"] },
+      { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "context-mode@context-mode"], scoped: true },
+    ],
+    requires: ["claude"],
+  },
 ];
 
 // One progress event emitted as the plan runs. The SSE route forwards these to
