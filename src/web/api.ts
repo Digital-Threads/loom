@@ -10,6 +10,7 @@ import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
 import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
+import { STAGE_MODEL, MODEL_TIERS } from "../core/pipeline/stage-model.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, openTask, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
@@ -513,6 +514,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
       stage,
       relocations: loadResult<{ n: number }>(id, "relocate-count")?.n ?? 0, // escalates a stubborn impl to opus
+      // A model the user pinned by hand wins over the policy: per-task-stage first,
+      // else the per-column (stage) default.
+      modelOverride:
+        getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
+        getSetting<string>(db, `model.col.${stage}`, "") ||
+        undefined,
       raw: opts?.raw,
       cwd: taskCwd(id),
       env: spineEnv(ids),
@@ -1230,6 +1237,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // Board view-model: 9 stage columns with their cards.
   app.get("/api/board", (c) => c.json({ columns: boardColumns(db) }));
+  // The per-stage model policy + the tiers a user can pick by hand. The UI shows
+  // the default per stage and writes overrides via /api/settings (model.col.<stage>
+  // for a column, model.task.<id>.<stage> for one task).
+  app.get("/api/model-config", (c) =>
+    c.json({
+      stageDefaults: STAGE_MODEL,
+      tiers: MODEL_TIERS,
+      columns: Object.fromEntries(
+        Object.keys(STAGE_MODEL).map((s) => [s, getSetting<string>(db, `model.col.${s}`, "")]).filter(([, v]) => v),
+      ),
+    }),
+  );
 
   // Attention queue: tasks parked at a gated stage.
   app.get("/api/attention", (c) => c.json({ items: attentionQueue(db) }));

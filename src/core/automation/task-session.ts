@@ -116,6 +116,8 @@ export interface SendOptions {
   /** How many times this task has been relocated back a stage — escalates a
    *  stubborn impl to a stronger model (see resolveStageModel). */
   relocations?: number;
+  /** A model the user picked by hand for this stage — wins over the policy. */
+  modelOverride?: string;
   /** Send the message verbatim — skip the per-stage instruction wrapper. Used
    *  for free-form chat where the user talks to the agent directly. */
   raw?: boolean;
@@ -159,7 +161,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // lanes). A raw/verbatim message (the user chatting with the agent) or a
       // stageless send continues the task's ACTIVE conversation instead of forking
       // a new lane. The model is fixed per session, so each model is its own one.
-      const stageModel = !opts.raw && opts.stage ? resolveStageModel(opts.stage, { relocations: opts.relocations }) : undefined;
+      const stageModel = !opts.raw && opts.stage ? resolveStageModel(opts.stage, { relocations: opts.relocations, override: opts.modelOverride }) : undefined;
       const lane = stageModel ? getLaneSession(db, taskId, stageModel) : getTaskSession(db, taskId);
       const model = stageModel;
       const resume = lane.started;

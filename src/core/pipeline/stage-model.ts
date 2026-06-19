@@ -13,6 +13,9 @@
 
 export type ModelTier = "opus" | "sonnet" | "haiku";
 
+/** The tiers a user can pick by hand, strongest → cheapest. */
+export const MODEL_TIERS: ModelTier[] = ["opus", "sonnet", "haiku"];
+
 export const STAGE_MODEL: Record<string, ModelTier> = {
   analysis: "opus", // understand the task + choose the route — get this right
   brainstorm: "opus", // surface assumptions / questions
