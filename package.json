@@ -1,6 +1,6 @@
 {
   "name": "@digital-threads/loom",
-  "version": "0.3.3",
+  "version": "0.4.1",
   "type": "module",
   "description": "Loom — local AI-dev orchestrator: give it a task and it runs the work through an analysis → spec → code → review → PR pipeline on a board, with cost, reasoning memory and multi-account support. Public beta.",
   "license": "MIT",
@@ -49,7 +49,8 @@
     "test": "vitest run",
     "prepublishOnly": "npm run build",
     "prepack": "node scripts/prepare-publish.mjs --prepack",
-    "postpack": "node scripts/prepare-publish.mjs --restore"
+    "postpack": "node scripts/prepare-publish.mjs --restore",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@digital-threads/aimux": "file:../aimux",
