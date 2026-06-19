@@ -36,7 +36,7 @@ describe("GET /api/onboarding/install/stream", () => {
     // every unit reports progress, ending in a done summary
     expect(text).toContain("event: step");
     expect(text).toContain("event: done");
-    for (const id of ["cargo", "claude", "token-pilot", "task-journal"]) {
+    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary"]) {
       expect(text).toContain(`"id":"${id}"`);
     }
     expect(text).toContain('"state":"done"');
@@ -45,7 +45,7 @@ describe("GET /api/onboarding/install/stream", () => {
   it("idempotent: already-present tools/plugins stream as skipped", async () => {
     const present: CmdRunner = (cmd, args) => {
       if (cmd === "which" || cmd === "where") return { ok: true, stdout: "", stderr: "" };
-      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal", stderr: "" };
+      if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace", stderr: "" };
       return { ok: true, stdout: "", stderr: "" };
     };
     const app = createApi(db, { installRunner: present });

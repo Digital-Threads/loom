@@ -29,17 +29,20 @@ async function plan(run: CmdRunner) {
   return { events, summary };
 }
 
-it("nothing present -> installs all 4 units in order", async () => {
+it("nothing present -> installs all units in order", async () => {
   const { run } = fake();
   const { summary } = await plan(run);
-  expect(summary.installed).toEqual(["cargo", "claude", "token-pilot", "task-journal"]);
+  expect(summary.installed).toEqual(["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary"]);
   expect(summary.failed).toEqual([]);
 });
 
 it("idempotent: everything already present -> all skipped, nothing installed", async () => {
-  const { run, calls } = fake({ tools: ["cargo", "claude"], plugins: ["token-pilot@token-pilot", "task-journal@task-journal"] });
+  const { run, calls } = fake({
+    tools: ["cargo", "claude"],
+    plugins: ["token-pilot@token-pilot", "task-journal@task-journal", "caveman@caveman", "qa-skills@neonwatty-qa", "canary@canary-marketplace"],
+  });
   const { summary } = await plan(run);
-  expect(summary.skipped).toEqual(["cargo", "claude", "token-pilot", "task-journal"]);
+  expect(summary.skipped).toEqual(["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary"]);
   expect(summary.installed).toEqual([]);
   expect(calls).toEqual([]); // no install command ran
 });
@@ -48,7 +51,7 @@ it("rustup step fails -> cargo failed, task-journal skipped (needs cargo), claud
   const { run } = fake({ failSh: true });
   const { events, summary } = await plan(run);
   expect(summary.failed).toEqual(["cargo"]);
-  expect(summary.installed).toEqual(["claude", "token-pilot"]);
+  expect(summary.installed).toEqual(["claude", "token-pilot", "caveman", "qa-skills", "canary"]);
   expect(summary.skipped).toEqual(["task-journal"]);
   const tj = events.find((e) => e.kind === "step" && e.id === "task-journal" && e.state === "skipped");
   expect(tj && "message" in tj ? tj.message : "").toContain("needs cargo");
@@ -72,7 +75,7 @@ it("claude install fails -> token-pilot & task-journal skipped (needs claude), n
   const { run } = fake({ failNpm: true });
   const { events, summary } = await plan(run);
   expect(summary.failed).toEqual(["claude"]);
-  expect(summary.skipped).toEqual(["token-pilot", "task-journal"]);
+  expect(summary.skipped).toEqual(["token-pilot", "task-journal", "caveman", "qa-skills", "canary"]);
   const tp = events.find((e) => e.kind === "step" && e.id === "token-pilot" && e.state === "skipped");
   expect(tp && "message" in tp ? tp.message : "").toContain("needs claude");
 });

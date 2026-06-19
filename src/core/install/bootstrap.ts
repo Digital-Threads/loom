@@ -65,6 +65,42 @@ export const INSTALL_UNITS: InstallUnit[] = [
     steps: taskJournal.install,
     requires: ["cargo", "claude"],
   },
+  // Mandatory third-party plugins Loom's pipeline relies on: code review
+  // (caveman) and QA (qa-skills, canary). Installed as Claude plugins from their
+  // GitHub marketplaces, the same way as token-pilot / task-journal.
+  {
+    id: "caveman",
+    title: "Caveman (code review)",
+    why: "Code-review capability Loom drives at the review stage.",
+    detect: { probe: { cmd: "claude", args: ["plugin", "list"] }, presenceMatch: "caveman@caveman" },
+    steps: [
+      { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/JuliusBrussee/caveman"] },
+      { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "caveman@caveman"], scoped: true },
+    ],
+    requires: ["claude"],
+  },
+  {
+    id: "qa-skills",
+    title: "QA Skills",
+    why: "QA capability Loom drives at the QA stage (smoke / UX / security checks).",
+    detect: { probe: { cmd: "claude", args: ["plugin", "list"] }, presenceMatch: "qa-skills@neonwatty-qa" },
+    steps: [
+      { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/neonwatty/qa-skills"] },
+      { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "qa-skills@neonwatty-qa"], scoped: true },
+    ],
+    requires: ["claude"],
+  },
+  {
+    id: "canary",
+    title: "Canary (browser QA)",
+    why: "Browser-based QA (record + verify user flows) for the QA stage.",
+    detect: { probe: { cmd: "claude", args: ["plugin", "list"] }, presenceMatch: "canary@canary-marketplace" },
+    steps: [
+      { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/wizenheimer/canary"] },
+      { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "canary@canary-marketplace"], scoped: true },
+    ],
+    requires: ["claude"],
+  },
 ];
 
 // One progress event emitted as the plan runs. The SSE route forwards these to
