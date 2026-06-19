@@ -36,15 +36,17 @@ it("nothing present -> installs all units in order", async () => {
   expect(summary.failed).toEqual([]);
 });
 
-it("idempotent: everything already present -> all skipped, nothing installed", async () => {
+it("already present: system tools skip; plugins refresh to latest (claude plugin update)", async () => {
   const { run, calls } = fake({
     tools: ["cargo", "claude"],
     plugins: ["token-pilot@token-pilot", "task-journal@task-journal", "caveman@caveman", "qa-skills@neonwatty-qa", "canary@canary-marketplace", "context-mode@context-mode"],
   });
   const { summary } = await plan(run);
-  expect(summary.skipped).toEqual(["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode"]);
-  expect(summary.installed).toEqual([]);
-  expect(calls).toEqual([]); // no install command ran
+  expect(summary.skipped).toEqual(["cargo", "claude"]); // toolchain not version-forced
+  expect(summary.installed).toEqual(["token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode"]);
+  expect(summary.failed).toEqual([]);
+  // every present plugin was refreshed via `claude plugin update <ref>`
+  expect(calls.filter((c) => c[0] === "claude" && c[2] === "update").length).toBe(6);
 });
 
 it("rustup step fails -> cargo failed, task-journal skipped (needs cargo), claude & token-pilot still install", async () => {

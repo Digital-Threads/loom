@@ -45,7 +45,7 @@ describe("GET /api/onboarding/install/stream", () => {
     expect(text).toContain('"state":"done"');
   });
 
-  it("idempotent: already-present tools/plugins stream as skipped", async () => {
+  it("already present: tools stream skipped, plugins stream a refresh to latest", async () => {
     const present: CmdRunner = (cmd, args) => {
       if (cmd === "which" || cmd === "where") return { ok: true, stdout: "", stderr: "" };
       if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace\ncontext-mode@context-mode", stderr: "" };
@@ -54,9 +54,9 @@ describe("GET /api/onboarding/install/stream", () => {
     const app = createApi(db, { installRunner: present, installSkills: noSkills });
     const res = await app.request("/api/onboarding/install/stream");
     const text = await res.text();
-    expect(text).toContain('"state":"skipped"');
+    expect(text).toContain('"state":"skipped"'); // cargo/claude — no version-force
     expect(text).toContain("already installed");
-    expect(text).not.toContain('"state":"installing"');
+    expect(text).toContain("updated to latest"); // present plugins refreshed
   });
 
   it("releases the in-flight lock: a second sequential request also runs", async () => {

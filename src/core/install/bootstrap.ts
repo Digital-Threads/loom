@@ -16,8 +16,17 @@ export interface InstallUnit {
   why: string;
   detect: DetectSpec;
   steps: RecipeStep[];
+  /** Steps run when the unit is ALREADY present, to refresh it to the latest
+   *  (e.g. `claude plugin update`). Omit → an already-present unit is just
+   *  skipped. So Loom keeps its mandatory plugins current, not only installs
+   *  the missing ones. */
+  update?: RecipeStep[];
   requires?: string[];
 }
+
+// A claude plugin's "update" step: refresh it to the marketplace's latest. The
+// command is a no-op when already current, so it's safe to run every onboarding.
+const pluginUpdate = (ref: string): RecipeStep[] => [{ cmd: "claude", args: ["plugin", "update", ref] }];
 
 // Pull a bundled plugin's install recipe straight from its plugin.json — the
 // single source of truth, so we never duplicate the steps here.
@@ -55,6 +64,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
     why: "Token-efficient code reading so the agent uses far fewer tokens.",
     detect: tokenPilot.detect,
     steps: tokenPilot.install,
+    update: pluginUpdate("token-pilot@token-pilot"),
     requires: ["claude"], // its steps call `claude plugin add/install`
   },
   {
@@ -63,6 +73,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
     why: "Persistent task memory that survives across sessions.",
     detect: taskJournal.detect,
     steps: taskJournal.install,
+    update: pluginUpdate("task-journal@task-journal"),
     requires: ["cargo", "claude"],
   },
   // Mandatory third-party plugins Loom's pipeline relies on: code review
@@ -77,6 +88,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
       { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/JuliusBrussee/caveman"] },
       { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "caveman@caveman"], scoped: true },
     ],
+    update: pluginUpdate("caveman@caveman"),
     requires: ["claude"],
   },
   {
@@ -88,6 +100,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
       { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/neonwatty/qa-skills"] },
       { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "qa-skills@neonwatty-qa"], scoped: true },
     ],
+    update: pluginUpdate("qa-skills@neonwatty-qa"),
     requires: ["claude"],
   },
   {
@@ -99,6 +112,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
       { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/wizenheimer/canary"] },
       { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "canary@canary-marketplace"], scoped: true },
     ],
+    update: pluginUpdate("canary@canary-marketplace"),
     requires: ["claude"],
   },
   {
@@ -110,6 +124,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
       { cmd: "claude", args: ["plugin", "marketplace", "add", "https://github.com/mksglu/context-mode"] },
       { cmd: "claude", args: ["plugin", "install", "--scope", "{scope}", "context-mode@context-mode"], scoped: true },
     ],
+    update: pluginUpdate("context-mode@context-mode"),
     requires: ["claude"],
   },
 ];
@@ -147,8 +162,23 @@ export async function runInstallPlan(
   for (const u of units) {
     if (detect(u.detect, deps).installed) {
       available.add(u.id);
-      skipped.push(u.id);
-      await emit({ kind: "step", id: u.id, title: u.title, state: "skipped", message: "already installed" });
+      // Already present: refresh it to the latest if the unit knows how (plugins),
+      // otherwise just skip (system tools). This keeps mandatory plugins current
+      // instead of leaving a stale version in place.
+      if (u.update?.length) {
+        await emit({ kind: "step", id: u.id, title: u.title, why: u.why, state: "installing" });
+        const upd = runRecipe(u.update, ctx, deps);
+        if (upd.ok) {
+          installed.push(u.id);
+          await emit({ kind: "step", id: u.id, title: u.title, state: "done", message: "updated to latest" });
+        } else {
+          failed.push(u.id);
+          await emit({ kind: "step", id: u.id, title: u.title, state: "failed", message: trimErr(upd.error) });
+        }
+      } else {
+        skipped.push(u.id);
+        await emit({ kind: "step", id: u.id, title: u.title, state: "skipped", message: "already installed" });
+      }
       continue;
     }
     const missingReq = (u.requires ?? []).filter((r) => !available.has(r));
