@@ -1251,6 +1251,8 @@ describe("web api — fs browse + PR connector", () => {
     await a.request("/api/tasks/pm/analysis/run", { method: "POST", body: "{}" });
     expect(seenAllowed).toContain("Read");
     expect(seenAllowed).toContain("Bash(git *)");
+    expect(seenAllowed).toContain("mcp__token-pilot__*"); // token-pilot tools allowed by default in gated/manual
+    expect(seenAllowed).not.toContain("Bash"); // unrestricted Bash is NOT in the default allowlist
 
     const p1 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { denials: string[]; allowed: string[] };
     expect(p1.denials).toContain("Bash"); // agent tried Bash → blocked, awaiting approval
