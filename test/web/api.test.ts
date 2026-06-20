@@ -125,8 +125,13 @@ describe("web api", () => {
 
   it("GET /api/memory/board/:id falls back to the snapshot when the worktree journal is gone", async () => {
     // A git-repo task → its journal project is the (absent) worktree, so the
-    // live read is empty and the Done-time snapshot must be used instead.
-    createTask(db, { id: "t-snap", title: "Snapshot task", repo: process.cwd() });
+    // live read is empty and the Done-time snapshot must be used instead. Use a
+    // DEDICATED temp repo (not process.cwd()) so isGitRepo + the live journal read
+    // are deterministic — process.cwd()'s git status varied across suite runs and
+    // made this flake.
+    const snapRepo = mkdtempSync(join(tmpdir(), "loom-snap-"));
+    mkdirSync(join(snapRepo, ".git"), { recursive: true }); // isGitRepo(repo) → true
+    createTask(db, { id: "t-snap", title: "Snapshot task", repo: snapRepo });
     const events = [
       { event_id: "e1", task_id: "tj-z", type: "open", timestamp: "2026-06-18T10:00:00.000Z", text: "Snapshot reasoning task" },
       { event_id: "e2", task_id: "tj-z", type: "decision", timestamp: "2026-06-18T10:01:00.000Z", text: "snapshot decision kept" },
