@@ -1,3 +1,4 @@
+// Web UI i18n layer: en/ru dictionaries, t() helper, LangProvider, and useT hook.
 // Lightweight i18n for the web UI. English is the source of truth; Russian is a
 // translation overlay. Strings are keyed by flat dotted keys (e.g. "nav.board").
 // Untranslated keys fall back to English, then to the key itself — t() never
