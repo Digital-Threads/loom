@@ -50,13 +50,16 @@ export function worktreePath(taskId: string): string {
   return join(securityDataDir(), "worktrees", taskId);
 }
 
-/** Impl-swarm: each attempt gets its OWN worktree + branch under the task, so N
- *  candidate implementations don't collide. Slot is the attempt index. */
+/** Impl-swarm: each attempt gets its OWN worktree + branch, so N candidate
+ *  implementations don't collide. SIBLINGS of the task's worktree/branch (a "-sw<k>"
+ *  suffix, NOT a "/sw<k>" child): the task branch loom/<id> is a file ref, so a
+ *  nested loom/<id>/sw<k> would hit git's directory/file ref conflict, and a nested
+ *  path would live inside the task worktree. Slot is the attempt index. */
 export function swarmWorktreeBranch(taskId: string, slot: number): string {
-  return `loom/${taskId}/sw${slot}`;
+  return `loom/${taskId}-sw${slot}`;
 }
 export function swarmWorktreePath(taskId: string, slot: number): string {
-  return join(securityDataDir(), "worktrees", taskId, `sw${slot}`);
+  return join(securityDataDir(), "worktrees", `${taskId}-sw${slot}`);
 }
 
 export interface SandboxOptions {

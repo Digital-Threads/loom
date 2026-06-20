@@ -63,9 +63,10 @@ describe("ensureWorktree (one worktree per task, idempotent + branch-safe)", () 
 
 describe("impl-swarm worktrees (one per attempt)", () => {
   it("each slot gets a distinct path + branch under the task", () => {
-    expect(swarmWorktreeBranch("t1", 0)).toBe("loom/t1/sw0");
-    expect(swarmWorktreeBranch("t1", 2)).toBe("loom/t1/sw2");
-    expect(swarmWorktreePath("t1", 0)).toContain("worktrees/t1/sw0");
+    expect(swarmWorktreeBranch("t1", 0)).toBe("loom/t1-sw0"); // sibling of loom/t1 (no D/F ref conflict)
+    expect(swarmWorktreeBranch("t1", 2)).toBe("loom/t1-sw2");
+    expect(swarmWorktreePath("t1", 0)).toContain("worktrees/t1-sw0");
+    expect(swarmWorktreePath("t1", 0).startsWith(worktreePath("t1") + "/")).toBe(false); // NOT inside the task worktree
     expect(swarmWorktreePath("t1", 0)).not.toBe(swarmWorktreePath("t1", 1)); // isolated
     expect(swarmWorktreePath("t1", 0)).not.toBe(worktreePath("t1")); // separate from the task worktree
   });
