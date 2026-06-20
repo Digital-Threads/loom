@@ -5,7 +5,8 @@
     "": {
       "name": "@digital-threads/loom",
       "dependencies": {
-        "@digital-threads/aimux": "file:../aimux",
+        "@digital-threads/aimux": "^0.15.0",
+        "@hono/node-server": "^2.0.5",
         "better-sqlite3": "^12.10.1",
         "hono": "^4.12.25",
         "ink": "^7.0.1",
@@ -25,7 +26,7 @@
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.3.0", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA=="],
 
-    "@digital-threads/aimux": ["@digital-threads/aimux@file:../aimux", { "dependencies": { "commander": "^14.0.3", "ink": "^7.0.1", "ink-ui": "^0.4.0", "react": "^19.2.5", "yaml": "^2.8.3" }, "devDependencies": { "@types/node": "^25.6.0", "@types/react": "^19.2.14", "tsx": "^4.21.0", "typescript": "^6.0.3", "vitest": "^4.1.4" }, "bin": { "aimux": "dist/cli.js" } }],
+    "@digital-threads/aimux": ["@digital-threads/aimux@0.15.0", "", { "dependencies": { "commander": "^14.0.3", "ink": "^7.0.1", "ink-ui": "^0.4.0", "react": "^19.2.5", "yaml": "^2.8.3" }, "bin": { "aimux": "dist/cli.js" } }, "sha512-ngz+BsL6FwmlNaXaUA0AR4wC54CWRTgOEfZSKZ0PCDnybx+kE0kkla81bkZuH0hZCF1yLvenmCDfB9O+J8YEiQ=="],
 
     "@emnapi/core": ["@emnapi/core@1.10.0", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.1", "tslib": "^2.4.0" } }, "sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw=="],
 
@@ -84,6 +85,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-zF3ag/gfiCe6U2iczcRzSYJKH1DCI+ByzSENHlM2FcDbEeo5Zd2C86Aq0tKUYAJJ1obRP84ymxIAksZUcdztHA=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.0", "", { "os": "win32", "cpu": "x64" }, "sha512-pEl1bO9mfAmIC+tW5btTmrKaujg3zGtUmWNdCw/xs70FBjwAL3o9OEKNHvNmnyylD6ubxUERiEhdsL0xBQ9efw=="],
+
+    "@hono/node-server": ["@hono/node-server@2.0.5", "", { "peerDependencies": { "hono": "^4" } }, "sha512-yQFvDmyDo3y6rEOJZDUYPJ49DIKTPpIk4kGvm40xx4Ejne0Pu9a1+exxPN+C1UppWK/WGZX9F++/Xs231tE86g=="],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
