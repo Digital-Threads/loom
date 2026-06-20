@@ -1063,8 +1063,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       try {
         const wt = prepareSwarmWorktree(repo, id, slot, { base });
         const body = `${stageInstruction("impl", perspectivePrompt(IMPL_PROMPT, perspective))}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
-        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: `${id}-sw${slot}`, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
-        costs.push(sessionLauncher.costOf?.(`${id}-sw${slot}`)); // fresh session → this attempt's spend
+        // The session id is passed to claude as `--session-id <uuid>`, which MUST be
+        // a valid UUID — a slug like `${id}-sw${slot}` makes claude exit immediately
+        // ("agent process ended before replying"). Use a fresh UUID per attempt.
+        const sid = randomUUID();
+        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: sid, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
+        costs.push(sessionLauncher.costOf?.(sid)); // fresh session → this attempt's spend
         if (isFatalAgentError(r.text)) throw new Error(`agent error: ${r.text.trim().slice(0, 120)}`);
         const c = commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
         if (!c.committed) throw new Error("no change committed (agent made no edit)");
