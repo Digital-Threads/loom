@@ -11,7 +11,7 @@ import { join, dirname } from "node:path";
 import { loomDataDir } from "../paths.js";
 import type Database from "better-sqlite3";
 import { DEFAULT_DENY, type CommandPolicy } from "./policy.js";
-import { scanSecrets, type SecretFinding } from "./secrets.js";
+import { scanSecrets, redactSecrets, type SecretFinding } from "./secrets.js";
 import { getSetting, setSetting } from "../store/settings.js";
 
 export interface SecretRule {
@@ -196,6 +196,23 @@ export function writeCommandPolicyFile(cfg: SecurityConfig): void {
 function redact(value: string): string {
   if (value.length <= 8) return "…";
   return `${value.slice(0, 4)}…${value.slice(-2)}`;
+}
+
+/** Redact likely secrets OUT of text (built-in patterns + custom rules), returning
+ *  the cleaned text — for the live agent stream and generated PR/commit bodies,
+ *  which secure-executor's scan never sees. Bounded like scanWithCustom. */
+export function redactWithCustom(text: string, rules: SecretRule[]): string {
+  let out = redactSecrets(text); // built-in credential patterns
+  for (const rule of rules) {
+    const re = compileRegex(rule.source, "g");
+    if (!re) continue;
+    let hits = 0;
+    out = out.replace(re, (m) => {
+      if (++hits > MAX_MATCHES_PER_RULE) return m; // bound work
+      return m.length <= 8 ? "…" : `${m.slice(0, 4)}…${m.slice(-2)}`;
+    });
+  }
+  return out;
 }
 
 /** Scan text with the built-in patterns plus any custom rules. Custom-rule

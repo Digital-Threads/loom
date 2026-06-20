@@ -78,6 +78,7 @@ import {
   policySummary,
   defaultDenySources,
   scanWithCustom,
+  redactWithCustom,
   writeCommandPolicyFile,
   DEFAULT_SECRET_KINDS,
 } from "../core/security/policy-config.js";
@@ -556,6 +557,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Live output sinks per task: when a stage runs via the run-manager, its
   // session output streams here → run-manager record → SSE to the UI.
   const streamSinks = new Map<string, (chunk: string) => void>();
+  // Redact likely secrets out of agent output the secure-executor scan never sees:
+  // the LIVE stream (chunks → transcript/SSE) and generated PR bodies (M3). Gated
+  // by the secret-scan toggle. Best-effort — a secret split across two stream
+  // chunks can slip through, but stored turns + PR text go through whole-string.
+  const redactOut = (text: string): string => {
+    try {
+      const cfg = loadSecurityConfig(db);
+      return cfg.secretScanEnabled ? redactWithCustom(text, cfg.secretRules) : text;
+    } catch { return text; }
+  };
+  const redactedSink = (sink: (c: string) => void) => (chunk: string) => sink(redactOut(chunk));
   const sessionSend = async (id: string, stage: string, prompt: string, opts?: { raw?: boolean }): Promise<string> => {
     if (deps.stageAgent) return deps.stageAgent(prompt);
     const t = getTask(db, id);
@@ -1111,6 +1123,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         branch: worktreeBranch(id),
       };
       const pr = await runPr(db, id, prOpts);
+      pr.description = redactOut(pr.description); // M3: never store/show secrets in the PR body
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
       // Pushed (autopilot) → Loom's part is done, advance. Otherwise — description
@@ -1181,7 +1194,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     ((taskId: string, stageKey: string) => {
       const projectId = projectActive()?.projectId ?? "default";
       return rm.start({ projectId, taskId }, async (ctx) => {
-        streamSinks.set(taskId, ctx.appendOutput);
+        streamSinks.set(taskId, redactedSink(ctx.appendOutput));
         ctx.onInput((data) => {
           const sid = getTaskSession(db, taskId).sessionId;
           if (sid) sessionLauncher.interject?.(sid, data);
@@ -1480,7 +1493,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const projectId = projectActive()?.projectId ?? "default";
     const isAutopilot = getTask(db, id)?.run_mode === "autopilot";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       ctx.onInput((data) => { const s = getTaskSession(db, id).sessionId; if (s) sessionLauncher.interject?.(s, data); });
       try {
         if (isAutopilot) {
@@ -1566,7 +1579,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const stage = typeof body.stage === "string" && body.stage ? body.stage : "chat";
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
         if (sid) sessionLauncher.interject?.(sid, data);
@@ -1790,7 +1803,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       updateTaskStatus(db, id, "running"); // live while the pipeline advances
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
@@ -2225,7 +2238,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!findings.length) return c.json({ error: "no findings to fix" }, 400);
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       try {
         moveToStage(db, id, "impl"); // back to implementation: the card shows the fix is dev work
         await fixAllFindings(id, findings as Finding[]); // fix every accumulated finding at once
@@ -2440,7 +2453,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "advance", "stop-reason", { kind: "none" });
     const projectId = projectActive()?.projectId ?? "default";
     rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       try {
         updateTaskStatus(db, id, "running");
         const res = await advanceTask(db, id, runners, advanceOpts());
