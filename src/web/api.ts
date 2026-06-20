@@ -58,7 +58,13 @@ import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from ".
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
-import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, type GitRunner } from "../core/security/sandbox.js";
+import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
+import { resolveSwarmConfig, type StageSwarmConfig } from "../core/layers/swarm/config.js";
+import { runImplSwarm } from "../core/layers/swarm/impl-swarm.js";
+import { perspectivePrompt } from "../core/layers/swarm/discrete-swarm.js";
+import { swarmRunEvent, sumAttemptCost } from "../core/layers/swarm/events.js";
+import { appendLoomEvent } from "../core/spine/event-bus.js";
+import { SESSION_PREAMBLE, TOOLS_ANCHOR, stageInstruction } from "../core/automation/task-session.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -1030,6 +1036,60 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     "Continue the implementation: take the NEXT unfinished items of the plan and carry them through (real changes in the code + verification). When the whole plan is implemented and verified — 'RESULT: DONE'; otherwise 'RESULT: NOT DONE — <what's left>'.";
   const IMPL_MAX_CONTINUES = 6; // bound the auto-continue loop so a huge/looping plan parks instead of running forever
   const doneProjectId = () => projectActive()?.projectId ?? "default";
+
+  // ── Impl-as-swarm (preview, gated by swarm.impl.enabled) ──────────────────────
+  const swarmConfigFor = (stage: string): StageSwarmConfig =>
+    resolveSwarmConfig(getSetting<unknown>(db, "swarm.default", {}), getSetting<unknown>(db, `swarm.${stage}`, {}));
+  const JUDGE_PROMPT =
+    "You are judging candidate implementations of the SAME task — each already passed the objective QA checks. Pick the ONE best: simplest correct change, cleanest diff, least risk. Reply with the winner as 'sw<N>' on the first line, then one short sentence why.";
+  // Run impl as a swarm of N candidates (each in its own worktree), gate each on
+  // QA, let a judge elect the winner, then promote it onto the task branch (git
+  // reset --hard) and drop the losers. Autopilot-only + expensive (N impl agents).
+  // Returns the report to record, or null to fall back to the single-impl path
+  // (nothing passed QA, or promotion failed). Live agents + git promote — verify
+  // by dogfood before trusting.
+  const runImplAsSwarm = async (id: string, cfg: StageSwarmConfig): Promise<{ report: string } | null> => {
+    const t = getTask(db, id);
+    if (!t?.repo || !isGitRepo(t.repo)) return null;
+    const repo = t.repo;
+    const base = worktreeBranch(id); // each attempt branches from the task's current state
+    const ids = buildSpineIds({ repoRoot: repo, taskId: id });
+    const model = getSetting<string>(db, `model.task.${id}.impl`, "") || getSetting<string>(db, "model.col.impl", "") || undefined;
+    const lang = languageDirective(getSetting<string>(db, "ui.language", "en"));
+    const git: GitRunner = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" });
+    const costs: Array<number | undefined> = [];
+    const implement = async (slot: number, perspective: string | undefined) => {
+      const wt = prepareSwarmWorktree(repo, id, slot, { base });
+      const body = `${stageInstruction("impl", perspectivePrompt(IMPL_PROMPT, perspective))}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
+      const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: `${id}-sw${slot}`, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
+      costs.push(sessionLauncher.costOf?.(`${id}-sw${slot}`)); // fresh session → this attempt's spend
+      if (isFatalAgentError(r.text)) throw new Error(`sw${slot}: ${r.text.trim().slice(0, 80)}`);
+      commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
+      return { branch: wt.branch, output: r.text };
+    };
+    const qaGate = async (slot: number) => {
+      const res = await runQa(buildQaChecks(resolveFlow("qa", storedFlow("qa")), { repoRoot: swarmWorktreePath(id, slot) }));
+      return { green: res.passed, summary: fmtQa(res) };
+    };
+    const judge = async (greens: { slot: number; branch: string; output: string }[]) => {
+      const summaries = greens.map((g) => `### sw${g.slot} (${g.branch})\n${g.output.trim().slice(0, 800)}`).join("\n\n");
+      const out = await sessionSend(id, "impl", `${JUDGE_PROMPT}\n\n${summaries}`);
+      const m = out.match(/sw\s*(\d+)/i);
+      const pick = m ? Number(m[1]) : greens[0].slot;
+      return { winnerSlot: greens.some((g) => g.slot === pick) ? pick : greens[0].slot, rationale: out.trim().slice(0, 200) };
+    };
+    const result = await runImplSwarm({ attempts: cfg.attempts, perspectives: cfg.perspectives, implement, qaGate, judge });
+    const survivors = result.attempts.filter((a) => a.green).length;
+    const projectId = t.project_id ?? doneProjectId();
+    appendLoomEvent(projectId, swarmRunEvent({ projectId, taskId: id, stage: "impl", attempts: result.attempts.length, survivors, agree: result.winner ? 1 : 0, winner: result.winner ? `sw${result.winner.slot}` : undefined, costUsd: sumAttemptCost(costs), ts: Date.now() }));
+    const cleanup = () => { for (let k = 0; k < cfg.attempts; k++) removeSwarmWorktree(repo, id, k); };
+    if (!result.winner) { cleanup(); return null; } // nothing passed QA → single-impl fallback
+    try {
+      git(["reset", "--hard", result.winner.branch], ensureWorktree(repo, id).path); // promote onto the task branch
+    } catch { cleanup(); return null; }
+    cleanup();
+    return { report: `Impl-swarm: ${result.attempts.length} candidates, ${survivors} passed QA → elected sw${result.winner.slot}. ${result.rationale}` };
+  };
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
     brainstorm: async (_d, id) => {
@@ -1058,6 +1118,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return complete ? { ok: true } : { ok: true, needsAttention: true, note };
     },
     impl: async (_d, id) => {
+      // Impl-as-swarm (preview): when swarm.impl.enabled and the task is autopilot,
+      // run N candidates and promote the judged winner. Falls through to single
+      // impl when disabled, not autopilot, or nothing passed QA.
+      const swCfg = swarmConfigFor("impl");
+      if (swCfg.enabled && getTask(db, id)?.run_mode === "autopilot") {
+        const sw = await runImplAsSwarm(id, swCfg);
+        if (sw) {
+          saveResult(id, "impl", "impl-report", { report: sw.report });
+          recordTurn(id, "impl", "Implementation (swarm)", sw.report);
+          return { ok: true };
+        }
+      }
       // Implement the WHOLE plan: keep continuing while the agent reports it's
       // not done OR its own text still lists leftover plan items, up to a cap.
       // This stops impl from advancing after only the first epic (the agent
