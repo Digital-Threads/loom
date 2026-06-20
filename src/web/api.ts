@@ -272,7 +272,11 @@ export function reviewersForClass(keys: string[], taskClass: string | undefined)
 export function isFatalAgentError(text: string): boolean {
   const t = (text ?? "").trim();
   if (!t || t.length > 400) return false;
-  return /failed to authenticate|invalid authentication|authentication credentials|api error:\s*[45]\d\d|agent process ended before replying|429 too many requests/i.test(t);
+  // NOTE: deliberately NOT matching 429 / rate-limit / usage-limit — those have
+  // their own recovery (detectRateLimit + auto-fallback to another account). This
+  // is only the terminal, no-existing-handler cases: auth/credentials, a 401/403/
+  // 404/5xx API error, or a dead session.
+  return /failed to authenticate|invalid authentication|authentication credentials|api error:\s*(401|403|404|5\d\d)|agent process ended before replying/i.test(t);
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
