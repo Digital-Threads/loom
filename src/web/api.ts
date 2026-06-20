@@ -368,25 +368,25 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // that's the biggest token sink, and tests are the QA stage's job. Reviewers
   // read the code + diff (token-pilot smart_diff) only.
   const REVIEW_NO_RUN =
-    " ВАЖНО (экономия токенов): НЕ запускай тесты, билд или полный тест-сьют — ревьюй ТОЛЬКО чтением кода и diff (token-pilot smart_diff/read_symbol). Прогон тестов — задача стадии QA, не ревью.";
+    " IMPORTANT (token economy): do NOT run tests, the build, or the full test suite — review ONLY by reading the code and diff (token-pilot smart_diff/read_symbol). Running tests is the QA stage's job, not review's.";
   const REVIEWERS: { key: string; label: string; instruction: string }[] = [
     {
       key: "self",
-      label: "Своё ревью",
+      label: "Self review",
       instruction:
-        "Сделай собственное ревью ТЕКУЩИХ изменений кода в этом worktree. Прочитай изменённые файлы и diff. Ищи реальные баги, а не стиль." + REVIEW_NO_RUN,
+        "Do your own review of the CURRENT code changes in this worktree following the `requesting-code-review` skill: review the diff, then run `/simplify` to flag overcomplication. Read the changed files and the diff. Look for real bugs and unnecessary complexity, not style." + REVIEW_NO_RUN,
     },
     {
       key: "ralph",
       label: "Ralph-loop",
       instruction:
-        "Запусти ralph-loop ревью с МАКСИМУМ 3 итерациями над текущими изменениями кода: на каждой итерации углубляй анализ. Верни ВСЕ найденные за все итерации проблемы." + REVIEW_NO_RUN,
+        "Do an iterative deepening review of the current code changes with a MAXIMUM of 3 passes: each pass goes deeper than the last (first the obvious issues, then logic and edge cases, then subtle correctness and interactions). Return ALL issues found across all passes." + REVIEW_NO_RUN,
     },
     {
       key: "adversarial",
       label: "Adversarial",
       instruction:
-        "Запусти скилл /adversarial-review над текущими изменениями кода — пусть он попытается сломать решение (краевые случаи, неверный ввод, гонки, обход проверок). Верни найденные проблемы." + REVIEW_NO_RUN,
+        "Use the `adversarial-review` skill on the current code changes — try to break the solution (edge cases, invalid input, races, bypassing checks). Return the issues you find." + REVIEW_NO_RUN,
     },
   ];
   const REVIEWER_KEYS = REVIEWERS.map((r) => r.key);
@@ -424,7 +424,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
    *  by /review/fix (manual) and the autopilot review runner (auto-fix). */
   const fixAllFindings = async (id: string, findings: Finding[]): Promise<void> => {
     const list = findings.map((f) => `- [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
-    await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`);
+    await sessionSend(id, "impl", `Code review found issues. Fix them in the code (real changes, delegate to subagents if needed), then report briefly. Issues:\n${list}\nEnd with the RESULT line.`);
     const t = getTask(db, id);
     if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
   };
@@ -1008,11 +1008,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // NO code) → stored for review. Implementation = execute the plan in the task
   // worktree → auto-commit so PR has content. Both honour the completeness-gate.
   const RD_PROMPT =
-    "Стадия R&D — планирование. Разбей задачу на самодостаточные подзадачи (план/DAG): для каждой опиши что именно реализуется, какие файлы затрагиваются и критерий готовности. Код пока НЕ пиши. В конце укажи статус строкой ИТОГ.";
+    "R&D stage — planning. Follow the `writing-plans` skill. Break the task into self-sufficient subtasks (a plan/DAG): for each, describe exactly what gets implemented, which files it touches, and the done criterion. Do NOT write code yet. At the end state the status on the RESULT line.";
   const IMPL_PROMPT =
-    "Стадия реализации. Реализуй ВЕСЬ план целиком — все подзадачи/эпики, а НЕ только первый. Вноси реальные изменения в код (при необходимости делегируй субагентам), проверяй результат. Не останавливайся после одного эпика. Если по любой причине не успел доделать всё — в конце ОБЯЗАТЕЛЬНО строкой 'ИТОГ: НЕ ГОТОВО — <что осталось>'. Ставь 'ИТОГ: ГОТОВО' ТОЛЬКО когда весь план реализован и проверен.";
+    "Implementation stage. Work by the `executing-plans` skill (go through the plan step by step) and `test-driven-development` (failing test first → minimal code → refactor); when stuck, `systematic-debugging`. Implement the ENTIRE plan — all subtasks/epics, NOT just the first. Make real changes to the code (delegate to subagents via `subagent-driven-development` when needed) and verify the result. Don't stop after one epic. If for any reason you couldn't finish everything — at the end you MUST add the line 'RESULT: NOT DONE — <what's left>'. Write 'RESULT: DONE' ONLY when the whole plan is implemented and verified.";
   const IMPL_CONTINUE_PROMPT =
-    "Продолжай реализацию: возьми СЛЕДУЮЩИЕ невыполненные пункты плана и доведи их до конца (реальные изменения в коде + проверка). Когда весь план реализован и проверен — 'ИТОГ: ГОТОВО'; иначе 'ИТОГ: НЕ ГОТОВО — <что осталось>'.";
+    "Continue the implementation: take the NEXT unfinished items of the plan and carry them through (real changes in the code + verification). When the whole plan is implemented and verified — 'RESULT: DONE'; otherwise 'RESULT: NOT DONE — <what's left>'.";
   const IMPL_MAX_CONTINUES = 6; // bound the auto-continue loop so a huge/looping plan parks instead of running forever
   const doneProjectId = () => projectActive()?.projectId ?? "default";
   const defaultRunners: RunnerRegistry = {
@@ -1547,7 +1547,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
         }
         // manual/gated: raw resume of the same conversation under the new subscription
-        await sessionSend(id, "chat", "Continue — продолжай с того места, где остановился.", { raw: true });
+        await sessionSend(id, "chat", "Continue from where you left off.", { raw: true });
         return { outcome: { ok: true } };
       } finally {
         streamSinks.delete(id);

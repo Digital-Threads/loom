@@ -1320,7 +1320,7 @@ describe("web api — fs browse + PR connector", () => {
     const { runId } = (await res.json()) as { runId: string };
     await rm.wait(runId);
     expect(seenPrompt).toContain("ты ошибся, глянь файл X"); // verbatim, no stage wrapper
-    expect(seenPrompt).not.toContain("Стадия:");
+    expect(seenPrompt).not.toContain("Stage:");
     expect(rm.get(runId)!.output.join("")).toContain("reply"); // streamed → SSE
     const turns = (await (await a.request("/api/tasks/ch/transcript")).json()) as { turns: { output: string }[] };
     expect(turns.turns.some((t) => t.output.includes("посмотрю файл X"))).toBe(true);
