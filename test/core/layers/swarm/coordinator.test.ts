@@ -4,7 +4,7 @@ import {
   majorityVote,
   successes,
   type SwarmTask,
-} from "../../../src/core/swarm/coordinator.js";
+} from "../../../../src/core/layers/swarm/coordinator.js";
 
 describe("runConcurrent", () => {
   it("runs all tasks and preserves order", async () => {
