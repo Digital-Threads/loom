@@ -16,6 +16,8 @@ import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import type { SessionLauncher } from "./task-session.js";
 import type { SessionControl } from "./live-session.js";
 import { detectSandbox, wrapCommand, sandboxUsable, type OsSandboxBackend } from "../security/os-sandbox.js";
+import { startEgressProxy as startEgressProxyImpl, type EgressProxy } from "../security/egress-proxy.js";
+import { createEgressObserver } from "../security/egress-audit.js";
 import { enforcedSettingsPath, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
@@ -38,6 +40,8 @@ export interface AimuxLiveLauncherDeps {
   writeMcpRunConfig?: (servers: McpServer[]) => string | null;
   /** Spawn the child process (injectable for tests). Default: node spawn. */
   spawnProcess?: typeof spawn;
+  /** Start the egress-audit proxy (injectable for tests). Default: the real one. */
+  startEgressProxy?: typeof startEgressProxyImpl;
 }
 
 interface RunOpts {
@@ -79,6 +83,9 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
 
   const load = deps.loadConfig ?? loadConfig;
   const open = deps.openSession ?? openSession;
+  const startEgress = deps.startEgressProxy ?? startEgressProxyImpl;
+  // One egress-audit proxy per live session, closed when the session stops.
+  const egressProxies = new Map<string, EgressProxy>();
   const listMcp = deps.listMcp ?? listMcpServers;
   const writeMcp = deps.writeMcpRunConfig ?? writeMcpRunConfig;
   const spawnProcess = deps.spawnProcess ?? spawn;
@@ -93,7 +100,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     if (!list.includes(what)) { list.push(what); degraded.set(sid, list); }
   };
 
-  function getOrOpen(opts: RunOpts): LiveSession {
+  async function getOrOpen(opts: RunOpts): Promise<LiveSession> {
     const existing = sessions.get(opts.sessionId);
     if (existing) return existing;
 
@@ -162,12 +169,33 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
         })
       : spawnProcess) as typeof spawn;
 
+    // Egress audit (Phase 1, loom-xclx): when the security sandbox is on, route the
+    // agent's traffic through a local proxy that LOGS each destination host and
+    // forwards it — observe-only, nothing is blocked. Works even where write-
+    // confinement is degraded (the proxy is just env). Best-effort: if the proxy
+    // can't start, run with direct access rather than break the agent's network.
+    let sessionEnv = opts.env;
+    if (sandboxOn) {
+      try {
+        const obs = createEgressObserver({
+          projectId: opts.env?.LOOM_PROJECT_ID ?? "default",
+          taskId: opts.env?.LOOM_TASK_ID,
+        });
+        const proxy = await startEgress({ onHost: obs.onHost });
+        egressProxies.set(opts.sessionId, proxy);
+        const url = `http://127.0.0.1:${proxy.port}`;
+        sessionEnv = { ...opts.env, HTTP_PROXY: url, HTTPS_PROXY: url, NO_PROXY: "127.0.0.1,localhost" };
+      } catch {
+        note(opts.sessionId, "egress audit proxy could not start — agent ran with direct network access");
+      }
+    }
+
     const session = open(cfg, profile, {
       model: opts.model ?? deps.model,
       sessionId: opts.sessionId,
       resume: opts.resume,
       cwd: opts.cwd,
-      env: opts.env, // spine env (LOOM_TASK_ID …) so plugin telemetry ties to the task
+      env: sessionEnv, // spine env (LOOM_TASK_ID …) + egress-audit proxy when sandboxed
       settingsPath: enforcedSettingsPath(),
       mcpConfigPath,
       allowedTools: opts.allowedTools,
@@ -180,7 +208,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
 
   return {
     async run(prompt, opts) {
-      const session = getOrOpen(opts);
+      const session = await getOrOpen(opts);
       // Stream assistant text/tool activity to the live view as it arrives.
       const onEvent = opts.onChunk
         ? (e: { kind: string; text?: string }) => { if (e.kind === "assistant" && e.text) opts.onChunk!(e.text); }
@@ -194,6 +222,8 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     stop: (sessionId) => {
       const s = sessions.get(sessionId);
       if (s) { s.close(); sessions.delete(sessionId); }
+      egressProxies.get(sessionId)?.close();
+      egressProxies.delete(sessionId);
     },
     degradedOf: (sessionId) => degraded.get(sessionId) ?? [],
   };
