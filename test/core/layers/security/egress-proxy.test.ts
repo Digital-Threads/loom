@@ -47,4 +47,21 @@ describe("egress proxy (audit — log host, never block)", () => {
     await expect(new Promise((_, rej) => c.once("error", rej))).rejects.toBeTruthy();
     c.destroy();
   });
+
+  it("refuses a CONNECT the allow predicate rejects (403, no tunnel) and reports the block", async () => {
+    const blocked: Array<{ host: string; port: number }> = [];
+    const proxy = await startEgressProxy({
+      onHost: () => {},
+      allow: (host) => host === "ok.example", // everything else is off-list
+      onBlock: (host, port) => blocked.push({ host, port }),
+    });
+    cleanup.push(() => proxy.close());
+
+    const client = net.connect(proxy.port, "127.0.0.1");
+    await connected(client);
+    client.write("CONNECT exfil.attacker.net:443 HTTP/1.1\r\n\r\n");
+    expect(await chunk(client)).toMatch(/403/); // refused, never tunnelled to the upstream
+    expect(blocked).toContainEqual({ host: "exfil.attacker.net", port: 443 });
+    client.destroy();
+  });
 });

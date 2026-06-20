@@ -14,6 +14,12 @@ export interface EgressProxyOptions {
   /** Called with each observed destination. Best-effort — a throwing handler
    *  must not break forwarding. */
   onHost: (host: string, port: number) => void;
+  /** Phase 2 enforcement: when present, a destination this predicate rejects is
+   *  REFUSED (the CONNECT/request gets a 403, nothing is forwarded). Absent =
+   *  observe-only (Phase 1). */
+  allow?: (host: string, port: number) => boolean;
+  /** Called when a destination is refused by `allow`. Best-effort. */
+  onBlock?: (host: string, port: number) => void;
 }
 
 export interface EgressProxy {
@@ -28,6 +34,12 @@ export async function startEgressProxy(opts: EgressProxyOptions): Promise<Egress
   const report = (host: string, port: number) => {
     try { opts.onHost(host, port); } catch { /* best-effort — never break forwarding */ }
   };
+  // True when enforcement is on and this destination is off the allowlist.
+  const refused = (host: string, port: number): boolean => {
+    if (!opts.allow || opts.allow(host, port)) return false;
+    try { opts.onBlock?.(host, port); } catch { /* best-effort */ }
+    return true;
+  };
 
   const server = net.createServer((client) => {
     client.once("data", (first) => {
@@ -40,6 +52,7 @@ export async function startEgressProxy(opts: EgressProxyOptions): Promise<Egress
         const host = connect[1];
         const port = Number(connect[2]);
         report(host, port);
+        if (refused(host, port)) { client.write("HTTP/1.1 403 Forbidden\r\n\r\n"); client.destroy(); return; }
         const upstream = net.connect(port, host, () => {
           client.write("HTTP/1.1 200 Connection established\r\n\r\n");
           client.pipe(upstream);
@@ -57,6 +70,7 @@ export async function startEgressProxy(opts: EgressProxyOptions): Promise<Egress
         const host = hostHdr[1];
         const port = hostHdr[2] ? Number(hostHdr[2]) : 80;
         report(host, port);
+        if (refused(host, port)) { client.write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"); client.destroy(); return; }
         const upstream = net.connect(port, host, () => {
           upstream.write(first);
           client.pipe(upstream);
