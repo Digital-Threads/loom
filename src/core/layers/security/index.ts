@@ -1,5 +1,7 @@
 export * from "./config.js";
 export * from "./audit.js";
+export * from "./egress-proxy.js";
+export * from "./egress-audit.js";
 export * from "./os-sandbox.js";
 export * from "./path-safety.js";
 export * from "./policy.js";
