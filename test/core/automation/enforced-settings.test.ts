@@ -77,9 +77,13 @@ describe("command-policy hook audit trail (loom-block-audit)", () => {
     // Ensure the hook script is written to disk
     enforcedSettingsPath();
     const hookPath = join(homedir(), ".loom", "hooks", "command-policy.cjs");
+    // Strip XDG_DATA_HOME so the hook's data dir is deterministically HOME/.loom
+    // unless a test sets it explicitly (the XDG-redirect case below).
+    const base = { ...process.env, HOME: tmpDir };
+    delete base.XDG_DATA_HOME;
     return spawnSync("node", [hookPath], {
       input: JSON.stringify({ tool_input: { command } }),
-      env: { ...process.env, HOME: tmpDir, ...env },
+      env: { ...base, ...env },
       encoding: "utf8",
     });
   }
@@ -112,5 +116,14 @@ describe("command-policy hook audit trail (loom-block-audit)", () => {
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
     const auditDir = join(tmpDir, ".loom", "audit");
     expect(existsSync(auditDir)).toBe(false);
+  });
+
+  it("honours XDG_DATA_HOME so writer + reader (loomDataDir) agree (loom-block-audit)", () => {
+    const xdg = join(tmpDir, "xdgdata");
+    runHook("rm -rf /", { LOOM_TASK_ID: "t-xdg", XDG_DATA_HOME: xdg });
+    // The hook writes under $XDG_DATA_HOME/loom/audit — the SAME place loomDataDir()
+    // (and thus the reader) resolves to when XDG_DATA_HOME is set; NOT ~/.loom.
+    expect(existsSync(join(xdg, "loom", "audit", "t-xdg.jsonl"))).toBe(true);
+    expect(existsSync(join(tmpDir, ".loom", "audit", "t-xdg.jsonl"))).toBe(false);
   });
 });

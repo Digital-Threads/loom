@@ -7,8 +7,8 @@
 // read-only. User patterns are stored as plain strings and compiled here, so a
 // malformed pattern is reported, never thrown at runtime.
 import { writeFileSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, dirname } from "node:path";
+import { loomDataDir } from "../paths.js";
 import type Database from "better-sqlite3";
 import { DEFAULT_DENY, type CommandPolicy } from "./policy.js";
 import { scanSecrets, type SecretFinding } from "./secrets.js";
@@ -169,9 +169,11 @@ export function effectivePolicy(cfg: SecurityConfig): CommandPolicy {
   return { deny, allow };
 }
 
-/** Where the command-policy hook reads the user's allow/deny patterns. */
+/** Where the command-policy hook reads the user's allow/deny patterns. Under the
+ *  Loom data dir (XDG_DATA_HOME/loom or ~/.loom) so the hook, the writer here, and
+ *  the audit reader all agree even when XDG_DATA_HOME is set (loom-block-audit). */
 export function commandPolicyFilePath(): string {
-  return join(homedir(), ".loom", "command-policy.json");
+  return join(loomDataDir(), "command-policy.json");
 }
 
 /** Mirror the user's command policy to ~/.loom/command-policy.json so the agent's
