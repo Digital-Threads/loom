@@ -69,6 +69,9 @@ export function Skills({ client }: { client: LoomClient }) {
           <input className="skills-search" placeholder="🔍 search skills…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <button className="btn acc sm" onClick={() => setCreating(true)}>+ Create</button>
         </div>
+        <div className="muted" style={{ padding: "4px 8px", fontSize: "var(--fs-xs)" }}>
+          Your skills in <code>~/.claude/skills</code>. Skills provided by installed plugins are managed in Connectors.
+        </div>
         {shown.length === 0 ? (
           <div className="muted" style={{ padding: 12 }}>Nothing found.</div>
         ) : shown.map((s) => (

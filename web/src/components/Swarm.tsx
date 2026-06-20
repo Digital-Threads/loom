@@ -56,6 +56,12 @@ export function Swarm({ client }: { client: LoomClient }) {
         Multi-agent coordinator. Standalone package <code>@digital-threads/loom-swarm</code>.
       </p>
 
+      <div className="banner banner-warn" role="status" style={{ marginBottom: "var(--space-3)" }}>
+        Preview — the swarm engine (concurrent attempts + consensus) is built and tested, but not yet wired into
+        the pipeline, so no stage runs as a swarm and the runs log below stays empty. The setting is saved for
+        when it is. Tracked in the backlog.
+      </div>
+
       <div className="kv">
         <b>Default attempts</b>
         <span>
@@ -92,7 +98,7 @@ export function Swarm({ client }: { client: LoomClient }) {
         </ul>
       )}
 
-      <h2>Capabilities</h2>
+      <h2>What it will do <span className="muted" style={{ fontSize: "var(--fs-xs)", fontWeight: 400 }}>(engine ready; pipeline wiring pending)</span></h2>
       <ul className="finding-list">
         {caps.map((c) => (
           <li key={c.k} className="finding sev-info">
