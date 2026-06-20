@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
 import { runPluginCli } from "./cli/plugin-cli.js";
 import { runPackCli } from "./cli/pack-cli.js";
 import { runConfigCli } from "./cli/config-cli.js";
@@ -19,8 +20,15 @@ Usage:
   loom config <doctor|merge>`;
 
 function webDistDir(): string {
-  // src/cli.tsx → ../web/dist (built frontend).
-  return join(dirname(fileURLToPath(import.meta.url)), "..", "web", "dist");
+  // Find the built frontend across run modes: node dist (dist/cli.js → ../web/dist),
+  // a `bun build --compile` single binary (import.meta.url is a virtual bunfs path,
+  // so look next to the executable), or running from the package root.
+  const candidates = [
+    join(dirname(fileURLToPath(import.meta.url)), "..", "web", "dist"),
+    join(dirname(process.execPath), "web", "dist"),
+    join(process.cwd(), "web", "dist"),
+  ];
+  return candidates.find((p) => existsSync(p)) ?? candidates[0];
 }
 
 function openBrowser(url: string): void {

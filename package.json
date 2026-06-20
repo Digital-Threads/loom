@@ -45,6 +45,7 @@
     "check:ds": "node web/scripts/check-design-system.mjs",
     "copy:manifests": "node scripts/copy-manifests.mjs",
     "build": "npm run check:ds && tsc -p tsconfig.json && npm run build:web && npm run copy:manifests",
+    "compile": "npm run build && bun build dist/cli.js --compile --outfile release/loom && rm -rf release/web && mkdir -p release/web && cp -r web/dist release/web/dist",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:web": "cd web && vitest run",
