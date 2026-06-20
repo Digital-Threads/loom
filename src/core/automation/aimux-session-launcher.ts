@@ -14,7 +14,7 @@ import { loadConfig, loadActiveProfile, openSession, type LiveSession } from "@d
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import type { SessionLauncher } from "./task-session.js";
 import type { SessionControl } from "./live-session.js";
-import { detectSandbox, wrapCommand, type OsSandboxBackend } from "../security/os-sandbox.js";
+import { detectSandbox, wrapCommand, sandboxUsable, type OsSandboxBackend } from "../security/os-sandbox.js";
 import { enforcedSettingsPath, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
@@ -29,6 +29,8 @@ export interface AimuxLiveLauncherDeps {
   sandbox?: boolean | (() => boolean);
   /** Detect the available OS-sandbox backend (injectable for tests). */
   detectSandbox?: () => OsSandboxBackend;
+  /** Verify the backend can actually run the agent (injectable for tests). */
+  sandboxUsable?: (backend: OsSandboxBackend, cli: string) => boolean;
   /** Source of the user's MCP registry (default: ~/.loom/mcp.json). */
   listMcp?: () => McpServer[];
   /** Write the enabled servers to a run-config file, return its path (or null). */
@@ -118,11 +120,16 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     // autopilot) wins over the global Settings toggle (deps.sandbox).
     const sandboxOn = opts.sandbox ?? (typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox);
     const detect = deps.detectSandbox ?? detectSandbox;
-    const backend = sandboxOn ? detect() : "none";
-    // Sandbox was asked for but no backend is available (no bwrap / Windows / WSL
-    // without bubblewrap) — surface it instead of silently running unconfined.
+    const usable = deps.sandboxUsable ?? sandboxUsable;
+    let backend = sandboxOn ? detect() : "none";
     if (sandboxOn && backend === "none") {
+      // No backend at all (no bwrap / Windows / WSL without bubblewrap).
       note(opts.sessionId, "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement");
+    } else if (sandboxOn && !usable(backend, "claude")) {
+      // Backend present but it can't run the agent on this platform (e.g. the
+      // Bun-based claude crashes under it) — degrade rather than break the agent.
+      note(opts.sessionId, "OS sandbox can't run the agent on this platform — agent ran without write-confinement");
+      backend = "none";
     }
     // Carve-outs the agent legitimately writes: Claude's session-state dir (so
     // --resume works under a read-only root), the aimux profiles, and tmp.

@@ -54,6 +54,7 @@ describe("createAimuxLiveLauncher — OS sandbox", () => {
       ...baseDeps,
       openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
       detectSandbox: () => "bubblewrap",
+      sandboxUsable: () => true,
       spawnProcess: ((cli: string, args: string[]) => { spawned.push({ cli, args }); return {}; }) as never,
     });
     await launcher.run("hi", { sessionId: "sb1", resume: false, sandbox: true });
@@ -71,6 +72,24 @@ describe("createAimuxLiveLauncher — OS sandbox", () => {
     await launcher.run("hi", { sessionId: "sb2", resume: false, sandbox: true });
     expect(launcher.degradedOf!("sb2")).toContain(
       "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement",
+    );
+  });
+
+  it("degrades (not breaks) when a backend exists but can't run the agent under it", async () => {
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { cli: string }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap", // present…
+      sandboxUsable: () => false, // …but the agent crashes under it (e.g. Bun segfault)
+      spawnProcess: ((cli: string) => { spawned.push({ cli }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "sb4", resume: false, sandbox: true });
+    captured.spawnFn!("claude", ["-p"], { cwd: "/wt" });
+    expect(spawned[0].cli).toBe("claude"); // ran UNWRAPPED — agent not broken
+    expect(launcher.degradedOf!("sb4")).toContain(
+      "OS sandbox can't run the agent on this platform — agent ran without write-confinement",
     );
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSandbox, wrapCommand } from "../../../../src/core/layers/security/os-sandbox.js";
+import { detectSandbox, wrapCommand, sandboxUsable } from "../../../../src/core/layers/security/os-sandbox.js";
 
 describe("os-sandbox (experimental, opt-in)", () => {
   it("detects the backend per platform + availability", () => {
@@ -19,6 +19,14 @@ describe("os-sandbox (experimental, opt-in)", () => {
     expect(w.args).toContain("--share-net"); // model API reachable
     expect(w.args.join(" ")).toContain("--ro-bind / /"); // read-only host
     expect(w.args.join(" ")).toContain("--bind /wt /wt"); // writable worktree
+    // ORDER: --ro-bind / / must come BEFORE --dev-bind/--proc, else it re-binds the
+    // host's read-only /dev over the special one and the Bun-based claude segfaults.
+    const roIdx = w.args.indexOf("--ro-bind");
+    const devIdx = w.args.indexOf("--dev-bind");
+    const procIdx = w.args.indexOf("--proc");
+    expect(roIdx).toBeGreaterThanOrEqual(0);
+    expect(roIdx).toBeLessThan(devIdx); // ro-bind before dev-bind
+    expect(roIdx).toBeLessThan(procIdx); // ro-bind before proc
     // the real command is preserved after `--`
     const sep = w.args.indexOf("--");
     expect(w.args.slice(sep + 1)).toEqual(["claude", "-p", "--resume", "x"]);
@@ -43,5 +51,13 @@ describe("os-sandbox (experimental, opt-in)", () => {
     expect(w.args[1]).toContain('(deny file-write* (subpath "/"))');
     expect(w.args[1]).toContain("/wt");
     expect(w.args.slice(2)).toEqual(["claude", "-p"]);
+  });
+
+  it("sandboxUsable: true on a version probe, false on a crash banner (degrade signal)", () => {
+    const versionOk = () => ({ ok: true, out: "2.1.183 (Claude Code)\n" });
+    const bunCrash = () => ({ ok: true, out: "Bun v1.4.0\npanic(main thread): Segmentation fault\noh no: Bun has crashed." });
+    expect(sandboxUsable("bubblewrap", "claude-ok", versionOk)).toBe(true);
+    expect(sandboxUsable("bubblewrap", "claude-crash", bunCrash)).toBe(false); // exit 0 but crashed → not usable
+    expect(sandboxUsable("none", "claude", versionOk)).toBe(false); // no backend → never usable
   });
 });
