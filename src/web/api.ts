@@ -263,6 +263,18 @@ export function reviewersForClass(keys: string[], taskClass: string | undefined)
   return taskClass === "chore" && keys.length > 1 ? keys.slice(0, 1) : keys;
 }
 
+/** True when the agent's reply is ENTIRELY a fatal error — auth/credentials, a
+ *  4xx/5xx API error, or a dead session — i.e. the stage never produced real
+ *  work. The pipeline uses this to PARK the stage (degraded) instead of marking
+ *  it "done" on a fake-empty result: otherwise a totally-failed run (e.g. a 401
+ *  on every stage) marches to "done" having done nothing. Length-bounded so a
+ *  long legitimate output that merely mentions an error doesn't trip it. */
+export function isFatalAgentError(text: string): boolean {
+  const t = (text ?? "").trim();
+  if (!t || t.length > 400) return false;
+  return /failed to authenticate|invalid authentication|authentication credentials|api error:\s*[45]\d\d|agent process ended before replying|429 too many requests/i.test(t);
+}
+
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
   // Mirror the stored command policy to the file the agent's PreToolUse(Bash)
@@ -569,7 +581,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   };
   const redactedSink = (sink: (c: string) => void) => (chunk: string) => sink(redactOut(chunk));
   const sessionSend = async (id: string, stage: string, prompt: string, opts?: { raw?: boolean }): Promise<string> => {
-    if (deps.stageAgent) return deps.stageAgent(prompt);
+    if (deps.stageAgent) {
+      const out = await deps.stageAgent(prompt);
+      // A fatal agent error must park the stage, not complete it (see below).
+      if (isFatalAgentError(out)) { markDegraded(id, `agent error: ${out.trim().slice(0, 140)}`); throw new Error(`agent send failed at ${stage}`); }
+      return out;
+    }
     const t = getTask(db, id);
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
@@ -597,6 +614,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       onChunk: streamSinks.get(id),
       profile: t?.profile ?? undefined, // run under the task's current subscription
     });
+    // A fatal agent/API error (auth/credentials/429/dead session) comes back AS
+    // the reply text — the stage never really ran. Don't let the pipeline mark it
+    // "done" on this fake-empty result: record it, flag the task degraded, and
+    // throw so startRun records a failed run and the stage PARKS for the user to
+    // fix (re-auth / switch account / retry) instead of a task that reads
+    // "completed" having done nothing (loom-authfail).
+    if (isFatalAgentError(text)) {
+      saveResult(id, stage, "turn", { input: prompt, output: text });
+      markDegraded(id, `agent error: ${text.trim().slice(0, 140)}`);
+      throw new Error(`agent send failed at ${stage}: ${text.trim().slice(0, 160)}`);
+    }
     // Read token-pilot stats from where the agent actually ran — its worktree —
     // not the main repo. token-pilot writes .token-pilot/hook-events.jsonl under
     // the session cwd (the worktree, which lives outside the repo in ~/.loom),

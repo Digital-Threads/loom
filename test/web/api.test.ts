@@ -10,7 +10,7 @@ import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
 import { createArtifact } from "../../src/core/store/artifacts.js";
 import { startTask, attentionQueue } from "../../src/core/pipeline/engine.js";
-import { createApi, reviewersForClass } from "../../src/web/api.js";
+import { createApi, reviewersForClass, isFatalAgentError } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
@@ -678,6 +678,15 @@ describe("web api", () => {
     expect(settings["analysis.class.t1"]).toBe("chore");
   });
 
+  it("isFatalAgentError flags a whole-reply auth/API/dead-session error, not a long real output (loom-authfail)", () => {
+    expect(isFatalAgentError("Failed to authenticate. API Error: 401 Invalid authentication credentials")).toBe(true);
+    expect(isFatalAgentError("⚠ The agent process ended before replying. Re-run the stage.")).toBe(true);
+    expect(isFatalAgentError("API Error: 429 Too Many Requests")).toBe(true);
+    expect(isFatalAgentError("")).toBe(false); // empty handled elsewhere
+    expect(isFatalAgentError("Done. ИТОГ: ГОТОВО — implemented the fix and tests pass.")).toBe(false); // real work
+    expect(isFatalAgentError("x".repeat(450) + " invalid authentication")).toBe(false); // long real output, not a bare error
+  });
+
   // ── dialog stages (L12) ──
   it("analysis/brainstorm/spec endpoints drive the dialog stages (L12.5)", async () => {
     let n = 0;
@@ -1050,6 +1059,18 @@ describe("web api — fs browse + PR connector", () => {
     createTask(database, { id: "rf0", title: "RF0" });
     const a = createApi(database);
     expect((await a.request("/api/tasks/rf0/review/fix", { method: "POST" })).status).toBe(400);
+  });
+
+  it("parks the stage (degraded, NOT done) when the agent returns a fatal auth error (loom-authfail)", async () => {
+    createTask(database, { id: "af", title: "AF", run_mode: "manual" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm, stageAgent: async () => "Failed to authenticate. API Error: 401 Invalid authentication credentials" });
+    await a.request("/api/tasks/af/start", { method: "POST" });
+    const { runId } = (await (await a.request("/api/tasks/af/stages/analysis/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const detail = (await (await a.request("/api/tasks/af")).json()) as { stages: { stage_key: string; status: string }[]; degraded: string[] };
+    expect(detail.stages.find((s) => s.stage_key === "analysis")!.status).not.toBe("done"); // not fake-completed
+    expect(detail.degraded.some((d) => /agent error/i.test(d))).toBe(true); // surfaced, not silent
   });
 
   it("qa run leaves a readable turn (check results visible)", async () => {
