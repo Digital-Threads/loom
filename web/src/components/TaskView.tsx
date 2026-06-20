@@ -442,7 +442,7 @@ export function TaskView({
               ⚠ Degraded: {detail.degraded.join("; ")}. The task ran but something silently failed — see History for details.
             </div>
           ) : null}
-          <Approvals client={client} taskId={taskId} onChanged={refreshLocal} />
+          <Approvals client={client} taskId={taskId} onChanged={refreshLocal} running={detail.task.status === "running"} />
           <StageResult client={client} taskId={taskId} stage={active} reloadKey={reload} onFix={fixFindings} />
           <Transcript client={client} taskId={taskId} live={live} runId={runId} reconnecting={reconnecting} reloadKey={reload} onOpenFile={(p) => setOpenFile({ path: p, mode: "file" })} />
         </div>

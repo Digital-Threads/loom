@@ -67,6 +67,10 @@ export function Quality({ client }: { client: LoomClient }) {
       </p>
 
       <h2>Review pipeline <span className="muted" style={{ fontSize: "var(--fs-xs)", fontWeight: 400 }}>(toggle &amp; reorder; findings accumulate → one fix)</span></h2>
+      <p className="muted" style={{ marginTop: 0, fontSize: "var(--fs-xs)" }}>
+        Applies to features and bugs. A task the analysis classifies as a <strong>chore</strong> (a trivial change)
+        runs only the first reviewer, to keep cost proportional — the rest are skipped for that task.
+      </p>
       {!reviewers ? <StateView kind="loading" /> : (
         <ul className="finding-list">
           {[...reviewers.map((k) => REVIEWERS.find((r) => r.key === k)).filter(Boolean) as typeof REVIEWERS,
