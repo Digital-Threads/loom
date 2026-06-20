@@ -91,6 +91,7 @@ import { resolveFlow } from "../core/quality/flow-config.js";
 import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
+import { resolveQaMode } from "../core/quality/qa-mode.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
 import { computeLessons, lessonsPromptBlock, lessonToSkillDescription, type Lesson, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
@@ -805,6 +806,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, taskId);
     return buildQaChecks(keys, { repoRoot: t?.repo || process.cwd() });
   };
+  // QA depth: a per-task override (qa.mode.<id> = inherit|minimal|full) over the
+  // global default (qa.mode). "full" adds an agent verification pass on top of the
+  // objective checks (see the qa runner).
+  const qaModeFor = (taskId: string) =>
+    resolveQaMode(getSetting<string>(db, "qa.mode", "minimal"), getSetting<string>(db, `qa.mode.${taskId}`, "inherit"));
+  // Full-QA agent pass: deep verification beyond tests/build. Uses the bundled
+  // verification-before-completion skill; adds browser qa-skills only when the task
+  // is a reachable web app (degrades cleanly otherwise — no hard plugin dep). JSON
+  // findings out (same shape as review) so a `bug` finding fails QA.
+  const QA_FULL_PROMPT =
+    'Run a thorough QA pass on the CURRENT change. Follow the `verification-before-completion` skill: prove it actually works — exercise the real behaviour, edge cases, and error paths; don\'t assume. The objective tests/build already ran separately, so go beyond them. If (and only if) this is a web app with a reachable local URL, also run `/qa-skills:run-qa smoke` for browser checks; if it is not a web app or there is no URL, skip that and say so briefly. Return ONLY a JSON array of findings: [{ "severity": "bug|warn|info", "message": "...", "file": "..."? }]. Empty array if everything holds. No prose.';
   // Persist a stage result so the panel can re-display it on revisit (history).
   const saveResult = (taskId: string, stage: string, kind: string, data: unknown) =>
     createArtifact(db, { id: `art_${randomUUID().slice(0, 8)}`, taskId, stage, kind, content: JSON.stringify(data), status: "accepted" });
@@ -1127,9 +1139,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
-      saveResult(id, "qa", "qa-result", { result: res });
-      recordTurn(id, "qa", "Run the repo's checks", fmtQa(res));
-      return { ok: res.passed, needsAttention: !res.passed };
+      // Full mode adds an agent verification pass on top of the objective checks;
+      // a `bug` finding fails QA just like a failed check. Minimal mode = checks only.
+      const mode = qaModeFor(id);
+      let findings: Finding[] = [];
+      if (mode === "full") findings = parseFindings("qa", await sessionSend(id, "qa", QA_FULL_PROMPT));
+      const passed = res.passed && findings.filter((f) => f.severity === "bug").length === 0;
+      saveResult(id, "qa", "qa-result", { result: res, mode, findings });
+      recordTurn(id, "qa", mode === "full" ? "QA: objective checks + verification pass" : "Run the repo's checks", fmtQa(res));
+      return { ok: passed, needsAttention: !passed };
     },
     pr: async (_d, id) => {
       // Rebase the worktree onto the current base first, so the PR/diff shows only
