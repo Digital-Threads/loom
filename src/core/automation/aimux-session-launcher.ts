@@ -131,9 +131,19 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
       note(opts.sessionId, "OS sandbox can't run the agent on this platform — agent ran without write-confinement");
       backend = "none";
     }
-    // Carve-outs the agent legitimately writes: Claude's session-state dir (so
-    // --resume works under a read-only root), the aimux profiles, and tmp.
-    const writable = [join(homedir(), ".claude"), join(homedir(), ".aimux"), tmpdir()];
+    // Carve-outs the agent's own tooling legitimately writes under a read-only
+    // root: Claude's session-state dir (--resume), the aimux profiles, the XDG
+    // data dir (task-journal's SQLite + events), the XDG cache dir (token-pilot's
+    // ast-index, claude-cli MCP logs), and tmp. The jail still protects ~/.ssh,
+    // ~/.config (gh/aws creds), dotfiles, /etc, /usr and the real repo outside the
+    // worktree. (XDG_DATA_HOME/XDG_CACHE_HOME override the defaults when set.)
+    const writable = [
+      join(homedir(), ".claude"),
+      join(homedir(), ".aimux"),
+      process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+      process.env.XDG_CACHE_HOME || join(homedir(), ".cache"),
+      tmpdir(),
+    ];
     const spawnFn = (backend !== "none"
       ? ((cli: string, args: string[], o: { cwd?: string }) => {
           const w = o.cwd ? wrapCommand(backend, cli, args, o.cwd, writable) : { cli, args };
