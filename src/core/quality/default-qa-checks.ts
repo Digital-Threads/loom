@@ -14,13 +14,29 @@ import type { QaCheck } from "../layers/quality/index.js";
  *  event loop and freeze every other request until it finished. */
 export type ShRun = (cmd: string, args: string[], cwd: string) => Promise<{ code: number; output: string }>;
 
+/** Hard ceiling per QA command. The suite/build can take minutes, but a command
+ *  that runs past this is a hang (a watch mode, a wedged test, a prompt) — without
+ *  a cap it parks the whole task forever (seen: a 45-min stuck qa). On timeout the
+ *  child is SIGKILLed and the check is reported as a failure, not left hanging. */
+export const QA_CMD_TIMEOUT_MS = 12 * 60_000;
+
 const defaultSh: ShRun = (cmd, args, cwd) =>
   new Promise((resolve) => {
-    execFile(cmd, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (!err) return resolve({ code: 0, output: stdout });
-      const e = err as { code?: number };
-      resolve({ code: typeof e.code === "number" ? e.code : 1, output: `${stdout ?? ""}${stderr ?? ""}` });
-    });
+    execFile(
+      cmd,
+      args,
+      { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: QA_CMD_TIMEOUT_MS, killSignal: "SIGKILL" },
+      (err, stdout, stderr) => {
+        if (!err) return resolve({ code: 0, output: stdout });
+        const e = err as { code?: number; killed?: boolean };
+        const out = `${stdout ?? ""}${stderr ?? ""}`;
+        if (e.killed === true) {
+          // Killed by the timeout — surface it clearly so QA fails loud, not silent.
+          return resolve({ code: 124, output: `${out}\n[QA: '${cmd} ${args.join(" ")}' exceeded ${QA_CMD_TIMEOUT_MS / 60_000}m and was killed — treated as a failure (likely a hang).]` });
+        }
+        resolve({ code: typeof e.code === "number" ? e.code : 1, output: out });
+      },
+    );
   });
 
 function readScripts(repoRoot: string): Record<string, string> {
