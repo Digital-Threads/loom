@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient } from "../api";
 import { StateView } from "./StateView";
+import { Select } from "./Select";
 import { toast } from "../toast";
 
 // Quality module — @digital-threads/loom-quality. The review pipeline and the QA
@@ -22,10 +23,17 @@ export function Quality({ client }: { client: LoomClient }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rBusy, setRBusy] = useState(false);
+  const [qaMode, setQaMode] = useState("minimal"); // global default QA depth
   useEffect(() => {
     client.flowConfig("qa").then(setQa).catch((e) => setErr(String(e)));
     client.flowConfig("review").then(setReviewers).catch((e) => setErr(String(e)));
+    client.settings().then((s) => { if (s["qa.mode"] === "full") setQaMode("full"); }).catch(() => {});
   }, [client]);
+
+  function saveQaMode(v: string) {
+    setQaMode(v);
+    client.saveSetting("qa.mode", v).then(() => toast.success("QA depth saved")).catch((e) => toast.error(`Couldn't save: ${e}`));
+  }
 
   function toggle(key: string) {
     if (!qa) return;
@@ -96,6 +104,15 @@ export function Quality({ client }: { client: LoomClient }) {
         </ul>
       )}
       <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 8 }}>Runs in order, top to bottom. Empty → default (self → ralph → adversarial).</p>
+
+      <h2>QA depth</h2>
+      <label className="fld" style={{ maxWidth: 360 }}>
+        <Select block value={qaMode} onChange={(e) => saveQaMode(e.target.value)}>
+          <option value="minimal">Minimal — tests &amp; build only</option>
+          <option value="full">Full — + agent verification pass (and browser QA for web apps)</option>
+        </Select>
+        <span className="fld-hint">Default for new tasks. A task can override this when you create it.</span>
+      </label>
 
       <h2>QA checks <span className="muted" style={{ fontSize: "var(--fs-xs)", fontWeight: 400 }}>(click to toggle)</span></h2>
       {!qa ? <StateView kind="loading" /> : (

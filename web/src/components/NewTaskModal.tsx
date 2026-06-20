@@ -20,6 +20,7 @@ export function NewTaskModal({
   const [branch, setBranch] = useState("");
   const [description, setDescription] = useState("");
   const [runMode, setRunMode] = useState("gated");
+  const [qaMode, setQaMode] = useState("inherit"); // inherit | minimal | full
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [profiles, setProfiles] = useState<string[]>([]);
   const [profile, setProfile] = useState("");
@@ -59,6 +60,7 @@ export function NewTaskModal({
         description: description.trim() || undefined,
         run_mode: runMode,
         profile: profile || undefined,
+        qaMode: qaMode === "inherit" ? undefined : qaMode,
       });
       onCreated();
       onClose();
@@ -120,6 +122,15 @@ export function NewTaskModal({
               <option value="gated">Gated — auto-run, stop at approval gates</option>
               <option value="autopilot">Autopilot — run end-to-end</option>
             </Select>
+          </label>
+          <label className="fld">
+            <span>QA depth</span>
+            <Select block value={qaMode} onChange={(e) => setQaMode(e.target.value)}>
+              <option value="inherit">Default (Settings)</option>
+              <option value="minimal">Minimal — tests &amp; build only</option>
+              <option value="full">Full — + agent verification pass</option>
+            </Select>
+            <span className="fld-hint">Full adds a deep verification pass (and browser QA for web apps) on top of the objective checks.</span>
           </label>
           {profiles.length ? (
             <label className="fld">

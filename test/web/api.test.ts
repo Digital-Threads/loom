@@ -891,6 +891,16 @@ describe("web api mutations", () => {
     expect(task.run_mode).toBe("autopilot"); // not the hardcoded "gated"
   });
 
+  it("persists a per-task QA depth override on create, ignores inherit/garbage (QA depth)", async () => {
+    const full = await app.request("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "QA full", qaMode: "full" }) });
+    const fullId = ((await full.json()) as { task: { id: string } }).task.id;
+    const inh = await app.request("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "QA inherit", qaMode: "inherit" }) });
+    const inhId = ((await inh.json()) as { task: { id: string } }).task.id;
+    const settings = (await (await app.request("/api/settings")).json()) as Record<string, unknown>;
+    expect(settings[`qa.mode.${fullId}`]).toBe("full"); // real override persisted
+    expect(settings[`qa.mode.${inhId}`]).toBeUndefined(); // inherit → no override row
+  });
+
   it("GET /api/tasks/:id/dossier weaves stages, cost and artifacts into the history", async () => {
     upsertCost(db, "t1", "claude", "tokens", 1200, true);
     addAttachment(db, { id: "att1", taskId: "t1", kind: "file", name: "plan.md", pathOrUrl: "/repo/plan.md" });

@@ -1482,6 +1482,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       profile: typeof body.profile === "string" && body.profile ? body.profile : (loadActiveProfile() ?? undefined),
       projectId,
     });
+    // Per-task QA depth override (inherit|minimal|full). "inherit"/absent → the
+    // task follows the global qa.mode default; only persist a real override.
+    if (body.qaMode === "minimal" || body.qaMode === "full") setSetting(db, `qa.mode.${id}`, body.qaMode);
     return c.json({ task }, 201);
   });
 

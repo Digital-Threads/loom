@@ -109,6 +109,8 @@ export interface NewTask {
   run_mode?: string;
   profile?: string;
   projectId?: string;
+  /** Per-task QA depth override: "minimal" | "full". Omit to inherit the global default. */
+  qaMode?: string;
 }
 
 // ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────
