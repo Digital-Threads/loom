@@ -7,6 +7,10 @@ describe("swarm spine events (L5)", () => {
     expect(sumAttemptCost([])).toBe(0);
   });
 
+  it("sumAttemptCost skips Infinity (not finite)", () => {
+    expect(sumAttemptCost([Infinity, 2])).toBe(2);
+  });
+
   it("swarmRunEvent builds a swarm.* event with the metrics the UI reads", () => {
     const e = swarmRunEvent({ projectId: "p", taskId: "t", stage: "review", attempts: 3, survivors: 3, agree: 2, winner: "attempt-1", costUsd: 1.2, ts: 100 });
     expect(e.schema).toBe("loom.event.v1");
