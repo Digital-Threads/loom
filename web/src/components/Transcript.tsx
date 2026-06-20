@@ -48,6 +48,18 @@ export function Transcript({
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [turns, live, runId]);
 
+  // Review reviewers return a JSON findings array (rendered structured + scannable
+  // in the StageResult card above). Dumping that raw array in the transcript is the
+  // unreadable wall users hit — keep only the agent's prose summary here, with a
+  // pointer to the card. Other stages render unchanged.
+  const displayOutput = (stage: string, output: string): string => {
+    if (stage !== "review") return output;
+    const m = output.match(/\[\s*\{[\s\S]*\}\s*\]\s*$/); // trailing JSON array of finding objects
+    if (!m || m.index === undefined) return output;
+    const prose = output.slice(0, m.index).trim();
+    return prose ? `${prose}\n\n_See the findings card above for the full list._` : "_Findings are shown in the review card above._";
+  };
+
   const empty = turns.length === 0 && !(runId && live.length);
 
   return (
@@ -78,7 +90,7 @@ export function Transcript({
                 <div className="ready-reason">Use “Done → Spec” above to continue.</div>
               </div>
             ) : (
-              <div className="turn-out">{t.output ? <Markdown text={t.output} /> : <span className="muted">(no output)</span>}</div>
+              <div className="turn-out">{t.output ? <Markdown text={displayOutput(t.stage, t.output)} /> : <span className="muted">(no output)</span>}</div>
             )}
             {files.length ? (
               <div className="turn-files">
