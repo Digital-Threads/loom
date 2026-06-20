@@ -180,12 +180,12 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     // the proxy can't start, run with direct access rather than break the network.
     let sessionEnv = opts.env;
     if (sandboxOn) {
+      const policy = deps.egressPolicy?.();
       try {
         const obs = createEgressObserver({
           projectId: opts.env?.LOOM_PROJECT_ID ?? "default",
           taskId: opts.env?.LOOM_TASK_ID,
         });
-        const policy = deps.egressPolicy?.();
         const proxy = await startEgress({
           onHost: obs.onHost,
           onBlock: obs.onBlock,
@@ -195,7 +195,16 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
         const url = `http://127.0.0.1:${proxy.port}`;
         sessionEnv = { ...opts.env, HTTP_PROXY: url, HTTPS_PROXY: url, NO_PROXY: "127.0.0.1,localhost" };
       } catch {
-        note(opts.sessionId, "egress audit proxy could not start — agent ran with direct network access");
+        if (policy?.enforce) {
+          // FAIL CLOSED: enforcement is on but the filtering proxy didn't start.
+          // Point the agent at a dead local port so its HTTP(S) egress is refused,
+          // rather than handing it open network (the fail-open hole).
+          const dead = "http://127.0.0.1:1"; // nothing listens → connection refused
+          sessionEnv = { ...opts.env, HTTP_PROXY: dead, HTTPS_PROXY: dead, NO_PROXY: "127.0.0.1,localhost" };
+          note(opts.sessionId, "egress enforcement is on but the proxy failed to start — denied all network (fail-closed)");
+        } else {
+          note(opts.sessionId, "egress audit proxy could not start — agent ran with direct network access");
+        }
       }
     }
 

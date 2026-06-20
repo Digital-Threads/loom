@@ -66,4 +66,26 @@ describe("egress audit wiring (Phase 1)", () => {
     await mk(false).run("hi", { sessionId: "e2", resume: false, sandbox: true, env: {} });
     expect(optsSeen[1].allow).toBeUndefined(); // enforce off → observe-only, no predicate
   });
+
+  it("fails CLOSED when enforcement is on but the proxy can't start (no open network)", async () => {
+    const mk = (enforce: boolean) => {
+      let env: Record<string, string> | undefined;
+      const launcher = createAimuxLiveLauncher({
+        loadConfig: (() => ({})) as never, profile: "p1", listMcp: () => [],
+        openSession: ((_c: unknown, _p: string, o: { env?: Record<string, string> }) => { env = o.env; return { send: async () => ({ text: "ok", costUsd: 0, denials: [] }), interject: () => false, relocate: () => {}, cost: () => 0, denials: () => [], close: () => {} }; }) as never,
+        sandbox: true, detectSandbox: () => "none",
+        egressPolicy: () => ({ enforce, allow: ["github.com"] }),
+        startEgressProxy: (async () => { throw new Error("port in use"); }) as never, // proxy fails
+      });
+      return { launcher, env: () => env };
+    };
+
+    const on = mk(true);
+    await on.launcher.run("hi", { sessionId: "f1", resume: false, sandbox: true, env: { LOOM_TASK_ID: "t" } });
+    expect(on.env()?.HTTPS_PROXY).toBe("http://127.0.0.1:1"); // dead port → egress refused, not open
+
+    const off = mk(false);
+    await off.launcher.run("hi", { sessionId: "f2", resume: false, sandbox: true, env: { LOOM_TASK_ID: "t" } });
+    expect(off.env()?.HTTPS_PROXY).toBeUndefined(); // observe-only → direct access is acceptable
+  });
 });
