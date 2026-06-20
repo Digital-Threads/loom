@@ -1059,10 +1059,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const git: GitRunner = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" });
     const costs: Array<number | undefined> = [];
     const failures: string[] = []; // why each dropped attempt failed (observability)
+    // A swarm attempt is a FRESH session with no accumulated task context (unlike
+    // the single-impl which resumes the lane that ran analysis/rd). Inject the task
+    // + analysis + spec so the agent knows WHAT to build instead of re-exploring
+    // from scratch (which times out).
+    const implContext = [
+      `TASK:\n${taskSpec(id)}`,
+      (latestArtifact(db, id, "analysis")?.content ?? "").trim() && `ANALYSIS:\n${latestArtifact(db, id, "analysis")!.content}`,
+      (latestArtifact(db, id, "spec-md")?.content ?? "").trim() && `SPEC:\n${latestArtifact(db, id, "spec-md")!.content}`,
+    ].filter(Boolean).join("\n\n");
     const implement = async (slot: number, perspective: string | undefined) => {
       try {
         const wt = prepareSwarmWorktree(repo, id, slot, { base });
-        const body = `${stageInstruction("impl", perspectivePrompt(IMPL_PROMPT, perspective))}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
+        const instruction = `${perspectivePrompt(IMPL_PROMPT, perspective)}\n\n${implContext}`;
+        const body = `${stageInstruction("impl", instruction)}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
         // The session id is passed to claude as `--session-id <uuid>`, which MUST be
         // a valid UUID — a slug like `${id}-sw${slot}` makes claude exit immediately
         // ("agent process ended before replying"). Use a fresh UUID per attempt.
