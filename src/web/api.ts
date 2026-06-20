@@ -575,6 +575,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       env: spineEnv(ids),
       bypassPermissions: autopilot,
       allowedTools: autopilot ? undefined : allowedToolsFor(id),
+      // Autopilot grants bypassPermissions, so confine its writes with the OS
+      // sandbox regardless of the global toggle; other modes honour the Settings
+      // toggle. Unavailable backend → the launcher records a degraded marker.
+      sandbox: autopilot || getSetting<boolean>(db, "sandbox.enabled", false),
       onChunk: streamSinks.get(id),
       profile: t?.profile ?? undefined, // run under the task's current subscription
     });

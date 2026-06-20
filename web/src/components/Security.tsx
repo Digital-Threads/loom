@@ -143,7 +143,7 @@ export function Security({ client }: { client: LoomClient }) {
             onClick={() => { const v = !sandbox; setSandbox(v); client.saveSetting("sandbox.enabled", v).catch(() => setSandbox(!v)); }}>
             {sandbox === null ? "…" : sandbox ? "on" : "off"}
           </button>
-          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>Confines agent writes to the worktree (bubblewrap / sandbox-exec).</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>Confines agent writes to the worktree (bubblewrap on Linux/WSL, sandbox-exec on macOS). This toggle covers manual/gated runs; <strong>autopilot always runs sandboxed</strong>. If no backend is available the task is marked degraded and runs unconfined — install <code>bubblewrap</code>.</span>
         </span>
       </div>
 

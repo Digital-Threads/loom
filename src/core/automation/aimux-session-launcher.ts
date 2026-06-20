@@ -8,11 +8,13 @@
 // wrote, the spine env — and tracks per-session degradations for the task.
 
 import { spawn } from "node:child_process";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadConfig, loadActiveProfile, openSession, type LiveSession } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import type { SessionLauncher } from "./task-session.js";
 import type { SessionControl } from "./live-session.js";
-import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
+import { detectSandbox, wrapCommand, type OsSandboxBackend } from "../security/os-sandbox.js";
 import { enforcedSettingsPath, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
@@ -25,6 +27,8 @@ export interface AimuxLiveLauncherDeps {
   /** EXPERIMENTAL: confine writes to the worktree (cwd) via an OS sandbox. A
    *  function is resolved per session so a Settings toggle takes effect next run. */
   sandbox?: boolean | (() => boolean);
+  /** Detect the available OS-sandbox backend (injectable for tests). */
+  detectSandbox?: () => OsSandboxBackend;
   /** Source of the user's MCP registry (default: ~/.loom/mcp.json). */
   listMcp?: () => McpServer[];
   /** Write the enabled servers to a run-config file, return its path (or null). */
@@ -44,6 +48,9 @@ interface RunOpts {
   allowedTools?: string[];
   onChunk?: (chunk: string) => void;
   profile?: string;
+  /** Confine the agent's writes to the worktree via the OS sandbox for THIS run
+   *  (per-task override — autopilot forces it on). Falls back to deps.sandbox. */
+  sandbox?: boolean;
 }
 
 /** A LiveSession that yields one empty turn — used when there is no aimux
@@ -105,12 +112,24 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     if (enforcedSettingsWriteFailed()) note(opts.sessionId, "token-pilot enforcement settings not written");
     if (tokenPilotMissing) note(opts.sessionId, "token-pilot not on PATH — session ran without enforced tools");
 
-    // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd). Stays a Loom
-    // concern by injecting a wrapping spawnFn — aimux just spawns what it's given.
-    const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
-    const spawnFn = (sandboxOn
+    // OS sandbox: confine the agent's writes to the worktree (cwd) via bubblewrap/
+    // sandbox-exec. Stays a Loom concern by injecting a wrapping spawnFn — aimux
+    // just spawns what it's given. The per-task flag (opts.sandbox, set on by
+    // autopilot) wins over the global Settings toggle (deps.sandbox).
+    const sandboxOn = opts.sandbox ?? (typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox);
+    const detect = deps.detectSandbox ?? detectSandbox;
+    const backend = sandboxOn ? detect() : "none";
+    // Sandbox was asked for but no backend is available (no bwrap / Windows / WSL
+    // without bubblewrap) — surface it instead of silently running unconfined.
+    if (sandboxOn && backend === "none") {
+      note(opts.sessionId, "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement");
+    }
+    // Carve-outs the agent legitimately writes: Claude's session-state dir (so
+    // --resume works under a read-only root), the aimux profiles, and tmp.
+    const writable = [join(homedir(), ".claude"), join(homedir(), ".aimux"), tmpdir()];
+    const spawnFn = (backend !== "none"
       ? ((cli: string, args: string[], o: { cwd?: string }) => {
-          const w = o.cwd ? wrapCommand(detectSandbox(), cli, args, o.cwd) : { cli, args };
+          const w = o.cwd ? wrapCommand(backend, cli, args, o.cwd, writable) : { cli, args };
           return (spawnProcess as unknown as (c: string, a: string[], oo: unknown) => unknown)(w.cli, w.args, o);
         })
       : spawnProcess) as typeof spawn;

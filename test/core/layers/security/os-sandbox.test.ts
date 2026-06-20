@@ -24,6 +24,18 @@ describe("os-sandbox (experimental, opt-in)", () => {
     expect(w.args.slice(sep + 1)).toEqual(["claude", "-p", "--resume", "x"]);
   });
 
+  it("binds the extra writable carve-outs (so ~/.claude stays writable for --resume)", () => {
+    const w = wrapCommand("bubblewrap", "claude", ["-p"], "/wt", ["/home/u/.claude", "/tmp", "/wt"]);
+    const s = w.args.join(" ");
+    expect(s).toContain("--bind /wt /wt"); // worktree first
+    expect(s).toContain("--bind /home/u/.claude /home/u/.claude"); // session state writable
+    expect(s).toContain("--bind /tmp /tmp");
+    expect(w.args.filter((a) => a === "/wt").length).toBe(2); // de-duped → exactly one "--bind /wt /wt"
+    const sx = wrapCommand("sandbox-exec", "claude", ["-p"], "/wt", ["/home/u/.claude"]).args[1];
+    expect(sx).toContain('(subpath "/wt")');
+    expect(sx).toContain('(subpath "/home/u/.claude")');
+  });
+
   it("sandbox-exec denies writes outside the worktree", () => {
     const w = wrapCommand("sandbox-exec", "claude", ["-p"], "/wt");
     expect(w.cli).toBe("sandbox-exec");

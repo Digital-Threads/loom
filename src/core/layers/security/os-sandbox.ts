@@ -35,19 +35,33 @@ export interface WrapResult {
   args: string[];
 }
 
-/** Wrap a command so writes are confined to `worktree`. Read-only host + network
- *  stay available (the model API needs the net). `none` returns the command
- *  unchanged. */
-export function wrapCommand(backend: OsSandboxBackend, cli: string, args: string[], worktree: string): WrapResult {
+/** Wrap a command so writes are confined to `worktree` plus `extraWritable`
+ *  (paths the agent legitimately needs to write: Claude's session-state dir for
+ *  --resume, the aimux profile, a tmpdir). The rest of the FS is read-only; the
+ *  network stays available (the model API + package installs need it). `none`
+ *  returns the command unchanged.
+ *
+ *  The writable carve-outs matter: `--ro-bind / /` alone makes ~/.claude
+ *  read-only, which breaks Claude Code's resumable sessions — so the caller passes
+ *  those dirs in `extraWritable`. Paths are de-duped; empties dropped. */
+export function wrapCommand(
+  backend: OsSandboxBackend,
+  cli: string,
+  args: string[],
+  worktree: string,
+  extraWritable: string[] = [],
+): WrapResult {
+  const writable = [...new Set([worktree, ...extraWritable].filter(Boolean))];
   if (backend === "bubblewrap") {
-    // read-only whole FS, writable worktree on top, /proc + /dev, network shared.
+    // read-only whole FS, writable carve-outs on top, /proc + /dev, network shared.
+    const binds = writable.flatMap((p) => ["--bind", p, p]);
     const bwrap = [
       "--die-with-parent",
       "--share-net",
       "--proc", "/proc",
       "--dev", "/dev",
       "--ro-bind", "/", "/",
-      "--bind", worktree, worktree,
+      ...binds,
       "--",
       cli,
       ...args,
@@ -59,7 +73,7 @@ export function wrapCommand(backend: OsSandboxBackend, cli: string, args: string
       "(version 1)",
       "(allow default)",
       '(deny file-write* (subpath "/"))',
-      `(allow file-write* (subpath ${JSON.stringify(worktree)}))`,
+      ...writable.map((p) => `(allow file-write* (subpath ${JSON.stringify(p)}))`),
     ].join(" ");
     return { cli: "sandbox-exec", args: ["-p", profile, cli, ...args] };
   }

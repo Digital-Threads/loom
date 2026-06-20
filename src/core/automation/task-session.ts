@@ -15,7 +15,7 @@ import { resolveStageModel } from "../pipeline/stage-model.js";
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string },
+    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string; sandbox?: boolean },
   ): Promise<{ text: string }>;
 }
 
@@ -125,6 +125,9 @@ export interface SendOptions {
   env?: Record<string, string>;
   bypassPermissions?: boolean;
   allowedTools?: string[];
+  /** Confine the agent's writes to the worktree via the OS sandbox (autopilot
+   *  forces this on, regardless of the global Settings toggle). */
+  sandbox?: boolean;
   onChunk?: (chunk: string) => void;
   /** aimux subscription to run this turn under (else the launcher's default). */
   profile?: string;
@@ -176,7 +179,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // otherwise decay). Keeps token-pilot + task-journal non-optional.
       const body = opts.raw ? instruction : `${stageInstruction(opts.stage, instruction)}\n\n${TOOLS_ANCHOR}`;
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
-      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, sandbox: opts.sandbox, onChunk: opts.onChunk, profile: opts.profile });
 
       if (!resume && stageModel) setLaneSession(db, taskId, stageModel, sessionId); // new lane → next stage on this model resumes it
       setTaskSession(db, taskId, sessionId); // active lane = the task's current conversation (interject/terminal/relocate target)

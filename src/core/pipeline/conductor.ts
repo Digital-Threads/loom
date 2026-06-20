@@ -67,9 +67,11 @@ export interface AdvanceOptions {
  * Drive the task per its run_mode:
  *  - manual    — never auto-runs; parks at the current stage (UI runs each).
  *  - gated     — auto-runs gate=0 stages, parks at the first gate=1 (approval).
- *  - autopilot — runs through, ignoring gates, until done/fail. NOTE: this grants
- *    the agent full access (bypassPermissions); it is NOT gated on the OS sandbox.
- *    Enable the sandbox (Settings) to isolate it — the UI warns at task creation.
+ *  - autopilot — runs through, ignoring gates, until done/fail. Grants the agent
+ *    full access (bypassPermissions), so its writes are confined by the OS sandbox
+ *    by default (forced on for autopilot in sessionSend, regardless of the Settings
+ *    toggle). If no sandbox backend is available, the task is marked degraded and
+ *    still runs — install bubblewrap for write-confinement.
  * Stops on the first failed/needs-attention stage.
  */
 export async function advanceTask(
