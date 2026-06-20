@@ -498,6 +498,7 @@ const en: Dict = {
   "security.cat.command": "Commands",
   "security.cat.secret": "Secrets",
   "security.cat.worktree": "Worktree",
+  "security.cat.egress": "Egress",
   "security.empty.audit": "No audit events in this category.",
 };
 
@@ -976,6 +977,7 @@ const ru: Dict = {
   "security.cat.command": "Команды",
   "security.cat.secret": "Секреты",
   "security.cat.worktree": "Worktree",
+  "security.cat.egress": "Сеть",
   "security.empty.audit": "В этой категории нет событий аудита.",
 };
 

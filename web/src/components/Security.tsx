@@ -7,15 +7,16 @@ import { useT } from "../i18n";
 // and filterable audit trail (blocked/warned commands, secret findings, worktree
 // lifecycle), plus configuration of the command policy (allow/deny) and the
 // secret-scan rules with an on/off switch and a policy summary.
-type Cat = "all" | "command" | "secret" | "worktree";
+type Cat = "all" | "command" | "secret" | "worktree" | "egress";
 const CATS: { key: Cat; label: string }[] = [
   { key: "all", label: "All" },
   { key: "command", label: "Commands" },
   { key: "secret", label: "Secrets" },
   { key: "worktree", label: "Worktree" },
+  { key: "egress", label: "Egress" },
 ];
 const catOf = (type: string): Cat =>
-  type.includes("command") ? "command" : type.includes("secret") ? "secret" : type.includes("worktree") ? "worktree" : "all";
+  type.includes("command") ? "command" : type.includes("secret") ? "secret" : type.includes("worktree") ? "worktree" : type.includes("egress") ? "egress" : "all";
 
 const isValidRegex = (s: string): boolean => {
   try { new RegExp(s); return true; } catch { return false; }
