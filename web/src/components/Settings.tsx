@@ -19,9 +19,9 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
     try {
       await client.saveSetting(key, value);
       setS((cur) => ({ ...(cur ?? {}), [key]: value }));
-      toast.success("Saved");
+      toast.success(t("settings.saved"));
     } catch (e) {
-      toast.error(`Couldn’t save: ${e}`);
+      toast.error(`${t("settings.saveFailed")}: ${e}`);
     }
   }
 
@@ -50,7 +50,7 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
           {(["en", "ru"] as const).map((l) => (
             <button key={l} className={`btn ${language === l ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => { setLang(l); save("ui.language", l); }}>{l === "en" ? "English" : "Русский"}</button>
           ))}
-          <span className="fld-hint" style={{ display: "block", marginTop: 4 }}>UI language and the language the agent replies in. Instructions to the agent stay English.</span>
+          <span className="fld-hint" style={{ display: "block", marginTop: 4 }}>{t("settings.language.hint")}</span>
         </span>
       </div>
       <div className="kv">
@@ -62,35 +62,35 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
               e.target.value = String(capped);
               save("cost.capUsd", capped);
             }} />
-          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>0 = no limit (default)</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>{t("settings.costCap.noLimit")}</span>
         </span>
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
-        Useful with Anthropic API-key billing (pay-per-token) — caps spend per task; autopilot stops when reached. On a flat-rate subscription, leave 0.
+        {t("settings.costCap.hint")}
       </div>
       <div className="kv">
         <b>{t("settings.notifications")}</b>
         <span><button className="btn" onClick={() => save("notify.enabled", !notify)}>{notify ? t("settings.on") : t("settings.off")}</button></span>
       </div>
       <div className="kv">
-        <b>{t("settings.sandbox")} <span className="chip" style={{ marginLeft: 6 }}>experimental</span></b>
+        <b>{t("settings.sandbox")} <span className="chip" style={{ marginLeft: 6 }}>{t("settings.experimental")}</span></b>
         <span>
           <button className={`btn ${sandbox ? "acc" : ""}`} onClick={() => save("sandbox.enabled", !sandbox)}>{sandbox ? t("settings.on") : t("settings.off")}</button>
         </span>
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
-        Confines agent writes to the task worktree (bubblewrap / sandbox-exec). Requires the tool installed; verify in your environment.
+        {t("settings.sandbox.hint")}
       </div>
       <div className="kv">
         <b>{t("settings.flowDefaults")}</b>
         <span>
           {onNav
-            ? <button className="btn" onClick={() => onNav("quality")}>Open Quality →</button>
-            : <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Set per-stage checks on the Quality page.</span>}
+            ? <button className="btn" onClick={() => onNav("quality")}>{t("settings.openQuality")} →</button>
+            : <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.flowDefaults.fallback")}</span>}
         </span>
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
-        Per-stage quality checks and review passes are configured on the Quality page.
+        {t("settings.flowDefaults.hint")}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, TimelineEvent, SecretRule, SecurityPolicyData, SecuritySecretsData } from "../api";
 import { StateView } from "./StateView";
+import { useT } from "../i18n";
 
 // Security module — @digital-threads/loom-security. Sandbox toggle, a summary
 // and filterable audit trail (blocked/warned commands, secret findings, worktree
@@ -32,6 +33,7 @@ function PatternList({
   onRemove: (i: number) => void;
   placeholder: string;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState("");
   const valid = draft.trim() === "" || isValidRegex(draft);
   return (
@@ -41,7 +43,7 @@ function PatternList({
         <ul className="finding-list">
           {builtin.map((b, i) => (
             <li key={`b${i}`} className="finding sev-info">
-              <span className="finding-sev">built-in</span>
+              <span className="finding-sev">{t("security.builtin")}</span>
               <span className="finding-msg"><code className="finding-file">{b}</code></span>
             </li>
           ))}
@@ -51,10 +53,10 @@ function PatternList({
         <ul className="finding-list">
           {items.map((it, i) => (
             <li key={`u${i}`} className="finding sev-bug">
-              <span className="finding-sev">custom</span>
+              <span className="finding-sev">{t("security.custom")}</span>
               <span className="finding-msg">
                 <code className="finding-file">{it}</code>
-                <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => onRemove(i)}>remove</button>
+                <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => onRemove(i)}>{t("security.action.remove")}</button>
               </span>
             </li>
           ))}
@@ -64,14 +66,15 @@ function PatternList({
         <input className="inp" placeholder={placeholder} value={draft} onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && draft.trim() && valid) { onAdd(draft.trim()); setDraft(""); } }} style={{ flex: 1 }} />
         <button className="btn sm acc" disabled={!draft.trim() || !valid}
-          onClick={() => { onAdd(draft.trim()); setDraft(""); }}>add</button>
+          onClick={() => { onAdd(draft.trim()); setDraft(""); }}>{t("security.action.add")}</button>
       </div>
-      {!valid ? <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>Invalid regular expression.</div> : null}
+      {!valid ? <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>{t("security.invalidRegex")}</div> : null}
     </div>
   );
 }
 
 export function Security({ client }: { client: LoomClient }) {
+  const t = useT();
   const [events, setEvents] = useState<TimelineEvent[] | null>(null);
   const [sandbox, setSandbox] = useState<boolean | null>(null);
   const [filter, setFilter] = useState<Cat>("all");
@@ -115,14 +118,14 @@ export function Security({ client }: { client: LoomClient }) {
     setSaveMsg(null);
     client.saveSecurityPolicy(allow, deny).then((r) => {
       if (r.error) setSaveMsg(r.error);
-      else { setSaveMsg("Command policy saved."); if (r.summary && policy) setPolicy({ ...policy, allow, deny, summary: r.summary }); }
+      else { setSaveMsg(t("security.toast.policySaved")); if (r.summary && policy) setPolicy({ ...policy, allow, deny, summary: r.summary }); }
     }).catch((e) => setSaveMsg(String(e)));
   };
   const saveRules = () => {
     setSaveMsg(null);
     client.saveSecuritySecrets(rules, scanOn).then((r) => {
       if (r.error) setSaveMsg(r.error);
-      else { setSaveMsg("Secret-scan rules saved."); if (secrets) setSecrets({ ...secrets, custom: r.custom ?? rules }); }
+      else { setSaveMsg(t("security.toast.rulesSaved")); if (secrets) setSecrets({ ...secrets, custom: r.custom ?? rules }); }
     }).catch((e) => setSaveMsg(String(e)));
   };
 
@@ -132,74 +135,71 @@ export function Security({ client }: { client: LoomClient }) {
   return (
     <div className="panel">
       <p className="muted" style={{ marginTop: 0 }}>
-        Agent sandbox: worktree isolation, command policy, secret scanning, audit.
-        Standalone package <code>@digital-threads/loom-security</code>.
+        {t("security.intro")}
+        {" "}<code>@digital-threads/loom-security</code>.
       </p>
 
       <div className="kv">
-        <b>OS sandbox</b>
+        <b>{t("security.osSandbox")}</b>
         <span>
           <button className={`btn ${sandbox ? "acc" : ""}`} disabled={sandbox === null}
             onClick={() => { const v = !sandbox; setSandbox(v); client.saveSetting("sandbox.enabled", v).catch(() => setSandbox(!v)); }}>
-            {sandbox === null ? "…" : sandbox ? "on" : "off"}
+            {sandbox === null ? "…" : sandbox ? t("security.on") : t("security.off")}
           </button>
-          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>Confines agent writes to the worktree (bubblewrap on Linux/WSL, sandbox-exec on macOS). This toggle covers manual/gated runs; <strong>autopilot always runs sandboxed</strong>. If no backend is available the task is marked degraded and runs unconfined — install <code>bubblewrap</code>.</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>{t("security.osSandbox.hint1")} <strong>{t("security.osSandbox.hint2")}</strong> {t("security.osSandbox.hint3")} <code>bubblewrap</code>.</span>
         </span>
       </div>
 
       <div className="kv">
-        <b>Secret scanning</b>
+        <b>{t("security.secretScanning")}</b>
         <span>
           <button className={`btn ${scanOn ? "acc" : ""}`} disabled={!secrets} onClick={toggleScan}>
-            {!secrets ? "…" : scanOn ? "on" : "off"}
+            {!secrets ? "…" : scanOn ? t("security.on") : t("security.off")}
           </button>
-          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>Redacts and audits likely credentials in agent output on every turn.</span>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>{t("security.secretScanning.hint")}</span>
         </span>
       </div>
 
       {policy && secrets ? (
         <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>
-          Policy summary: {allow.length} allow · {deny.length} custom deny (+{builtinDeny} built-in) ·
-          {" "}{rules.length} custom secret rule(s) (+{builtinKinds} built-in) ·
-          {" "}secret scanning {scanOn ? "on" : "off"}
+          {t("security.summary.label")}: {allow.length} {t("security.summary.allow")} · {deny.length} {t("security.summary.customDeny")} (+{builtinDeny} {t("security.summary.builtin")}) ·
+          {" "}{rules.length} {t("security.summary.customRules")} (+{builtinKinds} {t("security.summary.builtin")}) ·
+          {" "}{t("security.summary.secretScanning")} {scanOn ? t("security.on") : t("security.off")}
         </div>
       ) : null}
 
       <div className="stat-row" style={{ marginTop: 14 }}>
-        <div className="stat"><div className="big">{count("command")}</div><div className="stat-sub">commands blocked / warned</div></div>
-        <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">secrets found</div></div>
-        <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">worktree events</div></div>
+        <div className="stat"><div className="big">{count("command")}</div><div className="stat-sub">{t("security.stat.commands")}</div></div>
+        <div className="stat"><div className="big">{count("secret")}</div><div className="stat-sub">{t("security.stat.secrets")}</div></div>
+        <div className="stat"><div className="big">{count("worktree")}</div><div className="stat-sub">{t("security.stat.worktree")}</div></div>
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>
-        Secret scanning runs on every agent turn. Command-blocking and worktree events require the OS sandbox (above) — those counters stay 0 until it's enabled.
+        {t("security.stat.note")}
       </div>
 
-      <h3 style={{ marginTop: 18, marginBottom: 0 }}>Command policy</h3>
+      <h3 style={{ marginTop: 18, marginBottom: 0 }}>{t("security.commandPolicy.title")}</h3>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
-        Allow / deny RegExp patterns enforced on the agent's shell. Every Bash command an agent runs is
-        checked by a PreToolUse hook: the built-in deny list (shown below) always applies — even in autopilot —
-        and your patterns layer on top (deny wins over allow; if you add any allow rule, a command must match
-        one). Edits take effect on the next command. The OS sandbox adds OS-level isolation on top.
+        {t("security.commandPolicy.desc")}
       </div>
-      <PatternList title="Deny (built-in + custom)" builtin={policy?.defaults.deny ?? []} items={deny}
+      <PatternList title={t("security.commandPolicy.denyTitle")} builtin={policy?.defaults.deny ?? []} items={deny}
         onAdd={(v) => setDeny((d) => [...d, v])} onRemove={(i) => setDeny((d) => d.filter((_, j) => j !== i))}
-        placeholder="deny pattern, e.g. \\bgit\\s+push\\b" />
-      <PatternList title="Allow (a command must match one if any allow is set)" items={allow}
+        placeholder={`${t("security.placeholder.denyPattern")} \\bgit\\s+push\\b`} />
+      <PatternList title={t("security.commandPolicy.allowTitle")} items={allow}
         onAdd={(v) => setAllow((a) => [...a, v])} onRemove={(i) => setAllow((a) => a.filter((_, j) => j !== i))}
-        placeholder="allow pattern, e.g. ^npm\\s+(run|test)" />
+        placeholder={`${t("security.placeholder.allowPattern")} ^npm\\s+(run|test)`} />
       <div className="row" style={{ gap: 6, marginTop: 8 }}>
-        <button className="btn acc" disabled={!policy} onClick={savePolicy}>Save command policy</button>
+        <button className="btn acc" disabled={!policy} onClick={savePolicy}>{t("security.action.savePolicy")}</button>
       </div>
 
-      <h3 style={{ marginTop: 18, marginBottom: 0 }}>Secret-scan rules</h3>
+      <h3 style={{ marginTop: 18, marginBottom: 0 }}>{t("security.secretRules.title")}</h3>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
-        Built-in detectors always run; custom rules add more RegExp matchers. Matches are redacted, never echoed.
+        {t("security.secretRules.desc")}
       </div>
       {secrets?.defaults.length ? (
         <ul className="finding-list" style={{ marginTop: 8 }}>
           {secrets.defaults.map((k, i) => (
             <li key={`dk${i}`} className="finding sev-info">
-              <span className="finding-sev">built-in</span>
+              <span className="finding-sev">{t("security.builtin")}</span>
               <span className="finding-msg">{k}</span>
             </li>
           ))}
@@ -212,35 +212,35 @@ export function Security({ client }: { client: LoomClient }) {
               <span className="finding-sev">{r.kind}</span>
               <span className="finding-msg">
                 <code className="finding-file">{r.source}</code>
-                <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}>remove</button>
+                <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}>{t("security.action.remove")}</button>
               </span>
             </li>
           ))}
         </ul>
       ) : null}
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
-        <input className="inp" placeholder="kind, e.g. internal-token" value={ruleKind} onChange={(e) => setRuleKind(e.target.value)} style={{ flex: 1 }} />
-        <input className="inp" placeholder="RegExp source" value={ruleSrc} onChange={(e) => setRuleSrc(e.target.value)} style={{ flex: 2 }} />
+        <input className="inp" placeholder={t("security.placeholder.kind")} value={ruleKind} onChange={(e) => setRuleKind(e.target.value)} style={{ flex: 1 }} />
+        <input className="inp" placeholder={t("security.placeholder.regexSource")} value={ruleSrc} onChange={(e) => setRuleSrc(e.target.value)} style={{ flex: 2 }} />
         <button className="btn sm acc" disabled={!ruleKind.trim() || !ruleSrc.trim() || !isValidRegex(ruleSrc)}
-          onClick={() => { setRules((rs) => [...rs, { kind: ruleKind.trim(), source: ruleSrc.trim() }]); setRuleKind(""); setRuleSrc(""); }}>add</button>
+          onClick={() => { setRules((rs) => [...rs, { kind: ruleKind.trim(), source: ruleSrc.trim() }]); setRuleKind(""); setRuleSrc(""); }}>{t("security.action.add")}</button>
       </div>
-      {ruleSrc.trim() && !isValidRegex(ruleSrc) ? <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>Invalid regular expression.</div> : null}
+      {ruleSrc.trim() && !isValidRegex(ruleSrc) ? <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>{t("security.invalidRegex")}</div> : null}
       <div className="row" style={{ gap: 6, marginTop: 8 }}>
-        <button className="btn acc" disabled={!secrets} onClick={saveRules}>Save secret-scan rules</button>
+        <button className="btn acc" disabled={!secrets} onClick={saveRules}>{t("security.action.saveRules")}</button>
       </div>
       {saveMsg ? <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>{saveMsg}</div> : null}
 
-      <h3 style={{ marginTop: 18, marginBottom: 0 }}>Audit trail</h3>
+      <h3 style={{ marginTop: 18, marginBottom: 0 }}>{t("security.auditTrail.title")}</h3>
       <div className="row" style={{ gap: 6, margin: "8px 0 8px" }}>
         {CATS.map((c) => (
           <button key={c.key} className={`btn sm ${filter === c.key ? "acc" : ""}`} onClick={() => setFilter(c.key)}>
-            {c.label}{c.key !== "all" ? ` (${count(c.key)})` : ""}
+            {t(`security.cat.${c.key}`)}{c.key !== "all" ? ` (${count(c.key)})` : ""}
           </button>
         ))}
       </div>
 
       {shown.length === 0 ? (
-        <StateView kind="empty" msg="No audit events in this category." />
+        <StateView kind="empty" msg={t("security.empty.audit")} />
       ) : (
         <ul className="finding-list">
           {shown.slice(0, 150).map((e, i) => (

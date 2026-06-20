@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import type { LoomClient, TimelineEvent, AgentPerf, FailureReason } from "../api";
 import { StateView } from "./StateView";
+import { useT } from "../i18n";
 
 // L9.5 — unified timeline (event stream) + board totals + agent performance.
 export function Timeline({ client }: { client: LoomClient }) {
+  const t = useT();
   const [events, setEvents] = useState<TimelineEvent[] | null>(null);
   const [board, setBoard] = useState<{ used: number; saved: number } | null>(null);
   const [agents, setAgents] = useState<AgentPerf[]>([]);
@@ -23,16 +25,16 @@ export function Timeline({ client }: { client: LoomClient }) {
     <div className="panel">
       {board && (board.used || board.saved) ? (
         <div className="row tl-metrics">
-          <div><div className="grp">Spent</div><div className="big">{board.used.toLocaleString()}</div></div>
-          <div><div className="grp">Saved ≈</div><div className="big">{board.saved.toLocaleString()}</div></div>
+          <div><div className="grp">{t("timeline.spent")}</div><div className="big">{board.used.toLocaleString()}</div></div>
+          <div><div className="grp">{t("timeline.saved")}</div><div className="big">{board.saved.toLocaleString()}</div></div>
         </div>
       ) : null}
 
       {agents.length ? (
         <>
-          <h2>Agent performance</h2>
+          <h2>{t("timeline.agentPerformance")}</h2>
           <table className="tbl">
-            <thead><tr><th>Profile</th><th>Runs</th><th>Failures</th><th>Duration ms</th></tr></thead>
+            <thead><tr><th>{t("timeline.col.profile")}</th><th>{t("timeline.col.runs")}</th><th>{t("timeline.col.failures")}</th><th>{t("timeline.col.durationMs")}</th></tr></thead>
             <tbody>{agents.map((a) => (
               <tr key={a.profile}><td>{a.profile}</td><td>{a.runs}</td><td>{a.failures}</td><td>{a.durationMs}</td></tr>
             ))}</tbody>
@@ -42,14 +44,14 @@ export function Timeline({ client }: { client: LoomClient }) {
 
       {failures.length ? (
         <>
-          <h2>Failure reasons</h2>
+          <h2>{t("timeline.failureReasons")}</h2>
           {failures.map((fr, i) => <div className="kv" key={i}><b>{fr.count}×</b><span>{fr.message}</span></div>)}
         </>
       ) : null}
 
-      <h2>Timeline <span className="n">{events.length}</span></h2>
+      <h2>{t("timeline.heading")} <span className="n">{events.length}</span></h2>
       {events.length === 0 ? (
-        <div className="state-empty">No events yet — run a task to see its trail.</div>
+        <div className="state-empty">{t("timeline.empty")}</div>
       ) : (
         events.map((e, i) => (
           <div className={`tl-row ${e.severity === "error" ? "warn" : ""}`} key={i}>

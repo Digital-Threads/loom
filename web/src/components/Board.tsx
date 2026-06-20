@@ -32,7 +32,7 @@ export function Board({
     client.board().then(setCols).catch((e) => setErr(String(e)));
   }, [client]);
 
-  if (err) return <StateView kind="error" msg={`Can’t reach the core: ${err}`} />;
+  if (err) return <StateView kind="error" msg={`${t("board.err.unreachable")}: ${err}`} />;
   if (!cols) return <StateView kind="loading" />;
 
   const projName = (id: string) => projects.find((p) => p.projectId === id)?.name;
@@ -46,8 +46,8 @@ export function Board({
     return (
       <StateView
         kind="empty"
-        msg={anyTask ? "No tasks in this project yet." : "No tasks yet. Create one to get started."}
-        action={onNew ? <button className="btn acc" onClick={onNew}>+ New task</button> : undefined}
+        msg={anyTask ? t("board.empty.project") : t("board.empty.all")}
+        action={onNew ? <button className="btn acc" onClick={onNew}>{t("board.newTask")}</button> : undefined}
       />
     );
   }
@@ -62,7 +62,7 @@ export function Board({
     client
       .moveTask(taskId, stageKey, true)
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
+      .catch((er) => toast.error(`${t("board.err.move")}: ${er}`));
   }
 
   function onDrop(stageKey: string, e: DragEvent) {
@@ -94,7 +94,7 @@ export function Board({
         if (!/→ 404$/.test(er.message)) throw er;
       })
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t delete the task: ${er}`))
+      .catch((er) => toast.error(`${t("board.err.delete")}: ${er}`))
       .finally(() => setDeleting((s) => { const n = new Set(s); n.delete(id); return n; }));
   }
 
@@ -107,7 +107,7 @@ export function Board({
     client
       .stopTask(id)
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t stop the task: ${er}`))
+      .catch((er) => toast.error(`${t("board.err.stop")}: ${er}`))
       .finally(() => setStopping((s) => { const n = new Set(s); n.delete(id); return n; }));
   }
 
@@ -134,15 +134,15 @@ export function Board({
                   draggable
                   role="button"
                   tabIndex={0}
-                  aria-label={`Open task: ${card.title}`}
+                  aria-label={`${t("board.openTask")}: ${card.title}`}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
                   onClick={() => onOpen(card.id)}
                   onKeyDown={(e) => { if (e.key === "Enter") onOpen(card.id); }}
                 >
                   <button
                     className="card-del"
-                    title="Delete task"
-                    aria-label="Delete task"
+                    title={t("board.deleteTask")}
+                    aria-label={t("board.deleteTask")}
                     disabled={deleting.has(card.id)}
                     onClick={(e) => askDelete(card.id, card.title, e)}
                   >
@@ -151,8 +151,8 @@ export function Board({
                   {card.status === "running" ? (
                     <button
                       className="card-stop"
-                      title="Stop task"
-                      aria-label="Stop task"
+                      title={t("board.stopTask")}
+                      aria-label={t("board.stopTask")}
                       disabled={stopping.has(card.id)}
                       onClick={(e) => onStop(card.id, e)}
                     >
@@ -173,13 +173,13 @@ export function Board({
                     block
                     size="sm"
                     wrapClassName="card-move"
-                    aria-label="Move to stage"
+                    aria-label={t("board.moveToStage")}
                     value=""
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => { e.stopPropagation(); moveCard(card.id, e.target.value); }}
                   >
-                    <option value="" disabled>Move…</option>
+                    <option value="" disabled>{t("board.move")}</option>
                     {cols.map((c) => (
                       <option key={c.stageKey} value={c.stageKey}>{STAGE_LABELS[c.stageKey] ?? c.stageKey}</option>
                     ))}
@@ -187,14 +187,14 @@ export function Board({
                 </div>
               ))
             ) : (
-              <div className="dropzone">Drop a task here</div>
+              <div className="dropzone">{t("board.dropHere")}</div>
             )}
           </div>
         </div>
       ))}
       {confirm ? (
-        <Modal title="Delete task" onClose={() => setConfirm(null)}>
-          <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
+        <Modal title={t("board.deleteTask")} onClose={() => setConfirm(null)}>
+          <div className="modal-b">{t("board.deleteConfirmPre")} "{confirm.title}"? {t("board.deleteConfirmPost")}</div>
           <div className="modal-f">
             <button className="btn" onClick={() => setConfirm(null)}>{t("action.cancel")}</button>
             <button className="btn acc" onClick={() => doDelete(confirm.id)}>{t("action.delete")}</button>

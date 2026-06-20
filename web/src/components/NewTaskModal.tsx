@@ -49,7 +49,7 @@ export function NewTaskModal({
 
   async function submit() {
     if (!title.trim()) {
-      setErr("Title is required");
+      setErr(t("newTask.titleRequired"));
       return;
     }
     setBusy(true);
@@ -78,17 +78,17 @@ export function NewTaskModal({
   // no repo is chosen or it looks like a temp dir, so the agent isn't pointed at
   // empty/scratch code.
   const repoWarning = !repo.trim()
-    ? "No project selected — Browse to your code folder, or the agent will have nothing to work on."
+    ? t("newTask.repoWarning.none")
     : /(^|\/)(tmp|temp)(\/|$)/i.test(repo)
-      ? "This looks like a temporary folder. Pick your real project unless you meant a scratch repo."
+      ? t("newTask.repoWarning.temp")
       : null;
 
   return (
-    <Modal title="New task" onClose={onClose}>
+    <Modal title={t("newTask.modalTitle")} onClose={onClose}>
         <div className="modal-b">
           <label className="fld">
             <span>{t("newTask.title")}</span>
-            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add refund endpoint…" />
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("newTask.title.placeholder")} />
           </label>
           <label className="fld">
             <span>{t("newTask.repository")}</span>
@@ -103,9 +103,9 @@ export function NewTaskModal({
                   <option key={p.projectId} value={p.root}>{p.name} — {p.root}</option>
                 ))}
                 {!repoInList && repo ? <option value="__custom__">{repo}</option> : null}
-                {projects.length === 0 ? <option value="">no projects — browse…</option> : null}
+                {projects.length === 0 ? <option value="">{t("newTask.noProjects")}</option> : null}
               </Select>
-              <button type="button" className="btn" onClick={() => setPicking(true)}>Browse…</button>
+              <button type="button" className="btn" onClick={() => setPicking(true)}>{t("newTask.browse")}</button>
             </div>
             {repoWarning ? <span className="fld-warn">⚠ {repoWarning}</span> : null}
           </label>
@@ -115,24 +115,24 @@ export function NewTaskModal({
           </label>
           <label className="fld">
             <span>{t("newTask.description")}</span>
-            <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What needs to happen…" />
+            <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("newTask.description.placeholder")} />
           </label>
           <label className="fld">
             <span>{t("newTask.runMode")}</span>
             <Select block value={runMode} onChange={(e) => setRunMode(e.target.value)}>
-              <option value="manual">Manual — run each stage yourself</option>
-              <option value="gated">Gated — auto-run, stop at approval gates</option>
-              <option value="autopilot">Autopilot — run end-to-end</option>
+              <option value="manual">{t("newTask.runMode.manual")}</option>
+              <option value="gated">{t("newTask.runMode.gated")}</option>
+              <option value="autopilot">{t("newTask.runMode.autopilot")}</option>
             </Select>
           </label>
           <label className="fld">
             <span>{t("newTask.qaDepth")}</span>
             <Select block value={qaMode} onChange={(e) => setQaMode(e.target.value)}>
-              <option value="inherit">Default (Settings)</option>
-              <option value="minimal">Minimal — tests &amp; build only</option>
-              <option value="full">Full — + agent verification pass</option>
+              <option value="inherit">{t("newTask.qaDepth.inherit")}</option>
+              <option value="minimal">{t("newTask.qaDepth.minimal")}</option>
+              <option value="full">{t("newTask.qaDepth.full")}</option>
             </Select>
-            <span className="fld-hint">Full adds a deep verification pass (and browser QA for web apps) on top of the objective checks.</span>
+            <span className="fld-hint">{t("newTask.qaDepth.hint")}</span>
           </label>
           {profiles.length ? (
             <label className="fld">
@@ -142,12 +142,12 @@ export function NewTaskModal({
                   <option key={p} value={p}>{p}</option>
                 ))}
               </Select>
-              <span className="fld-hint">Subscription this task runs under. You can switch it any time while it runs.</span>
+              <span className="fld-hint">{t("newTask.account.hint")}</span>
             </label>
           ) : null}
           {runMode === "autopilot" ? (
             <div className="modal-warn">
-              ⚠ Autopilot grants the agent <b>full host access</b> — it runs end-to-end without per-action approval and is <b>not</b> confined unless the OS sandbox is on. Enable the sandbox (Settings) to isolate it, or use only on a repo you trust.
+              ⚠ {t("newTask.autopilotWarning.before")}<b>{t("newTask.autopilotWarning.fullAccess")}</b>{t("newTask.autopilotWarning.mid")}<b>{t("newTask.autopilotWarning.not")}</b>{t("newTask.autopilotWarning.after")}
             </div>
           ) : null}
           {err ? <div className="modal-err">{err}</div> : null}
@@ -155,7 +155,7 @@ export function NewTaskModal({
         <div className="modal-f">
           <button className="btn" onClick={onClose} disabled={busy}>{t("action.cancel")}</button>
           <button className="btn acc" onClick={submit} disabled={busy}>
-            {busy ? "Creating…" : t("action.create")}
+            {busy ? t("newTask.creating") : t("action.create")}
           </button>
         </div>
       {picking ? (

@@ -16,21 +16,21 @@ import { toast } from "../toast";
 import { useT } from "../i18n";
 
 const STAGE_DESC: Record<string, string> = {
-  analysis: "Classify the task and propose its pipeline route.",
-  brainstorm: "The agent asks clarifying questions until the goal is clear.",
-  spec: "Draft an SDD from the brainstorm; review and accept it.",
-  rd: "Decompose the spec into self-sufficient subtasks (a plan / DAG) — no code yet.",
-  impl: "Execute the plan in the task worktree and commit the changes.",
-  review: "Review the implementation; surface findings to triage.",
-  qa: "Run the repo's checks (tests / build).",
-  pr: "Generate the PR description; optionally push and open the PR.",
-  done: "Finalize and close the task.",
+  analysis: "taskView.descAnalysis",
+  brainstorm: "taskView.descBrainstorm",
+  spec: "taskView.descSpec",
+  rd: "taskView.descRd",
+  impl: "taskView.descImpl",
+  review: "taskView.descReview",
+  qa: "taskView.descQa",
+  pr: "taskView.descPr",
+  done: "taskView.descDone",
 };
 
 // The review stage runs three reviewers in order, accumulating findings; the
 // user approves & runs the next between them, then fixes all findings once.
 const REVIEWER_ORDER = ["self", "ralph", "adversarial"] as const;
-const REVIEWER_LABELS: Record<string, string> = { self: "Self review", ralph: "Ralph-loop", adversarial: "Adversarial" };
+const REVIEWER_LABELS: Record<string, string> = { self: "taskView.reviewerSelf", ralph: "taskView.reviewerRalph", adversarial: "taskView.reviewerAdversarial" };
 
 function badgeClass(status: string): string {
   if (status === "active") return "badge-acc";
@@ -262,7 +262,7 @@ export function TaskView({
   }, [client, taskId]);
 
   if (err) return <StateView kind="error" msg={err} />;
-  if (!detail) return <StateView kind="loading" msg="Loading task…" />;
+  if (!detail) return <StateView kind="loading" msg={t("taskView.loadingTask")} />;
 
   const task = detail.task;
   const costs = detail.costs;
@@ -315,7 +315,7 @@ export function TaskView({
                 return (
                   <select
                     className="rail-profile"
-                    title={pinned ? "Subscription this task runs under — switch any time; the session resumes under the new account" : `Not pinned — runs under the active account (${effective || "default"}). Pick one to pin it.`}
+                    title={pinned ? t("taskView.profilePinnedTitle") : `${t("taskView.profileUnpinnedTitle")} (${effective || "default"}).`}
                     value={effective}
                     disabled={busy}
                     onChange={(e) => {
@@ -331,14 +331,14 @@ export function TaskView({
                       }).catch((err) => toast.error(`Couldn’t switch account: ${err}`));
                     }}
                   >
-                    {!effective ? <option value="">account…</option> : null}
-                    {profiles.map((p) => <option key={p} value={p}>◦ {p}{!pinned && p === effective ? " (default)" : ""}</option>)}
+                    {!effective ? <option value="">{t("taskView.accountPlaceholder")}</option> : null}
+                    {profiles.map((p) => <option key={p} value={p}>◦ {p}{!pinned && p === effective ? ` (${t("taskView.default")})` : ""}</option>)}
                   </select>
                 );
               })()
             ) : null}
             {task.session_id ? (
-              <span className="chip" title="One live Claude session for the whole task">◦ {task.session_id.slice(0, 8)}</span>
+              <span className="chip" title={t("taskView.sessionChipTitle")}>◦ {task.session_id.slice(0, 8)}</span>
             ) : null}
           </div>
         </div>
@@ -363,20 +363,20 @@ export function TaskView({
         {/* Always-visible artifacts of the task — jump to the stage's output
             (spec / R&D / the PR link) or open the full history / changes. */}
         <div className="rail-artifacts">
-          <div className="rail-art-h">Artifacts</div>
+          <div className="rail-art-h">{t("taskView.artifacts")}</div>
           {detail.stages.some((s) => s.stage_key === "spec") ? (
-            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("spec"); }}>📄 Spec</button>
+            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("spec"); }}>📄 {t("taskView.spec")}</button>
           ) : null}
           {detail.stages.some((s) => s.stage_key === "rd") ? (
             <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("rd"); }}>🔬 R&amp;D</button>
           ) : null}
           {detail.stages.some((s) => s.stage_key === "pr") ? (
-            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("pr"); }}>🔗 PR link</button>
+            <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("pr"); }}>🔗 {t("taskView.prLink")}</button>
           ) : null}
           {task.repo ? (
             <button className="rail-art" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ {t("action.changes")}</button>
           ) : null}
-          <button className="rail-art" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("action.history")} &amp; journal</button>
+          <button className="rail-art" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("taskView.historyAndJournal")}</button>
         </div>
       </aside>
 
@@ -402,46 +402,46 @@ export function TaskView({
                   <StageModelPicker client={client} taskId={taskId} stage={active} />
                   <StageActions client={client} taskId={taskId} stage={active} status={activeStatus} onRunLive={runStageLive} onChanged={refreshAndFollow} />
                   {active === "review" && reviewersDone.length > 0 && reviewNext ? (
-                    <button className="btn acc sm" disabled={reviewerBusy} title="Approve the current reviewer and run the next one (findings accumulate)" onClick={runNextReviewer}>
-                      {reviewerBusy ? "⏳ Running…" : `▶ Approve & run: ${REVIEWER_LABELS[reviewNext]}`}
+                    <button className="btn acc sm" disabled={reviewerBusy} title={t("taskView.approveRunNextTitle")} onClick={runNextReviewer}>
+                      {reviewerBusy ? `⏳ ${t("taskView.running")}` : `▶ ${t("taskView.approveAndRun")}: ${t(REVIEWER_LABELS[reviewNext])}`}
                     </button>
                   ) : null}
                   {active === "review" && !reviewNext && reviewFindings > 0 ? (
-                    <button className="btn acc sm" title="All reviewers ran — fix every accumulated finding in one pass, then re-review" onClick={fixFindings}>🔧 Fix all findings ({reviewFindings})</button>
+                    <button className="btn acc sm" title={t("taskView.fixAllFindingsTitle")} onClick={fixFindings}>🔧 {t("taskView.fixAllFindings")} ({reviewFindings})</button>
                   ) : null}
                   {activeStatus === "active" ? (
-                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ {t("action.approveContinue")}</button>
+                    <button className="btn sm" title={t("taskView.approveContinueTitle")} onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ {t("action.approveContinue")}</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ {t("action.advance")}</button>
+                  <button className="btn sm" title={t("taskView.advanceTitle")} onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ {t("action.advance")}</button>
                 </>
               ) : null}
               {runId || task.status === "running" ? (
-                <button className="btn stop sm" title="Stop the running agent" onClick={async () => { await client.stopTask(taskId); setRunId(null); refreshAndFollow(); onChanged?.(); }}>⏹ Stop</button>
+                <button className="btn stop sm" title={t("taskView.stopTitle")} onClick={async () => { await client.stopTask(taskId); setRunId(null); refreshAndFollow(); onChanged?.(); }}>⏹ {t("taskView.stop")}</button>
               ) : null}
               {task.repo ? (
-                <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ {t("action.changes")}</button>
+                <button className="btn sm" title={t("taskView.changesTitle")} onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ {t("action.changes")}</button>
               ) : null}
-              <button className="btn sm" title="The task's full history — goal, decisions, stages, cost, artifacts and changes" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("action.history")}</button>
+              <button className="btn sm" title={t("taskView.historyTitle")} onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("action.history")}</button>
             </div>
           </div>
-          <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>
+          <p className="ph-desc">{STAGE_DESC[active] ? t(STAGE_DESC[active]) : ""}</p>
         </header>
 
         <div className="pb">
           {detail.stopReason?.kind === "rate_limit" ? (
             <div className="banner banner-warn" role="status">
-              ⚠ Run stopped: account{detail.stopReason.profile ? ` "${detail.stopReason.profile}"` : ""} limit reached
-              {detail.stopReason.resetsAt ? ` — resets ${detail.stopReason.resetsAt}` : ""}. Switch account (above) or wait, then ▶▶ Advance.
+              ⚠ {t("taskView.runStoppedAccount")}{detail.stopReason.profile ? ` "${detail.stopReason.profile}"` : ""} {t("taskView.limitReached")}
+              {detail.stopReason.resetsAt ? ` — ${t("taskView.resets")} ${detail.stopReason.resetsAt}` : ""}. {t("taskView.switchOrWait")}
             </div>
           ) : detail.stopReason?.kind === "cost_cap" ? (
             <div className="banner banner-warn" role="status">
-              ⚠ Run stopped: cost limit ${detail.stopReason.cap}
-              {detail.stopReason.spent != null ? ` (spent $${detail.stopReason.spent.toFixed(2)})` : ""}. Raise the limit in Settings or ▶▶ Advance to continue.
+              ⚠ {t("taskView.runStoppedCost")} ${detail.stopReason.cap}
+              {detail.stopReason.spent != null ? ` (${t("taskView.spent")} $${detail.stopReason.spent.toFixed(2)})` : ""}. {t("taskView.raiseLimit")}
             </div>
           ) : null}
           {detail.degraded && detail.degraded.length ? (
             <div className="banner banner-warn" role="status">
-              ⚠ Degraded: {detail.degraded.join("; ")}. The task ran but something silently failed — see History for details.
+              ⚠ {t("taskView.degraded")}: {detail.degraded.join("; ")}. {t("taskView.degradedHint")}
             </div>
           ) : null}
           <Approvals client={client} taskId={taskId} onChanged={refreshLocal} running={detail.task.status === "running"} />
@@ -456,15 +456,15 @@ export function TaskView({
               disabled={busy}
               placeholder={
                 inputMode === "intervene"
-                  ? "Intervene — send guidance to the live agent…"
+                  ? t("taskView.placeholderIntervene")
                   : inputMode === "brainstorm"
-                    ? "Answer the agent (or send empty to get the first question)…"
-                    : "Message the agent — answer it, correct it, or point it somewhere…"
+                    ? t("taskView.placeholderBrainstorm")
+                    : t("taskView.placeholderChat")
               }
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") submitInput(); }}
             />
-            <button className="btn acc" disabled={busy} onClick={submitInput}>{inputMode === "brainstorm" ? "▶" : "Send"}</button>
+            <button className="btn acc" disabled={busy} onClick={submitInput}>{inputMode === "brainstorm" ? "▶" : t("action.send")}</button>
           </div>
         ) : null}
 
@@ -486,17 +486,17 @@ export function TaskView({
         />
       ) : null}
       {history !== undefined ? (
-        <Modal title={`📖 Task history — ${task.title}`} className="modal-wide" onClose={() => setHistory(undefined)}>
+        <Modal title={`📖 ${t("taskView.taskHistory")} — ${task.title}`} className="modal-wide" onClose={() => setHistory(undefined)}>
             <div className="modal-b" style={{ maxHeight: "70vh", overflow: "auto" }}>
               {history === null ? (
                 <StateView kind="loading" />
               ) : history.trim() === "" ? (
-                <div className="muted">No history recorded yet — it fills in as the agent works on this task.</div>
+                <div className="muted">{t("taskView.noHistory")}</div>
               ) : (
                 <Markdown text={history} />
               )}
             </div>
-            <div className="modal-f"><button className="btn" onClick={() => setHistory(undefined)}>Close</button></div>
+            <div className="modal-f"><button className="btn" onClick={() => setHistory(undefined)}>{t("taskView.close")}</button></div>
         </Modal>
       ) : null}
     </div>

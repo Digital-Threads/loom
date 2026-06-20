@@ -13,64 +13,45 @@ function mkClient(over: Partial<LoomClient> = {}) {
   } as unknown as LoomClient;
 }
 
-describe("Swarm", () => {
-  it("shows Default attempts from the swarm.attempts setting", async () => {
-    const client = mkClient({ settings: vi.fn(() => Promise.resolve({ "swarm.attempts": 5 })) });
+describe("Swarm (impl-as-swarm config)", () => {
+  it("reflects swarm.impl from settings (enabled + attempts)", async () => {
+    const client = mkClient({ settings: vi.fn(() => Promise.resolve({ "swarm.impl": { enabled: true, attempts: 4 } })) });
     render(<Swarm client={client} />);
-    const input = (await screen.findByLabelText("Default attempts")) as HTMLInputElement;
-    expect(input.value).toBe("5");
+    expect(((await screen.findByLabelText("Attempts")) as HTMLInputElement).value).toBe("4");
+    expect(screen.getByText("on")).toBeInTheDocument(); // toggle reflects enabled
   });
 
-  it("falls back to 3 attempts when the setting is absent", async () => {
+  it("defaults attempts to 3 when swarm.impl is unset", async () => {
     render(<Swarm client={mkClient()} />);
-    const input = (await screen.findByLabelText("Default attempts")) as HTMLInputElement;
-    expect(input.value).toBe("3");
+    expect(((await screen.findByLabelText("Attempts")) as HTMLInputElement).value).toBe("3");
   });
 
-  it("saves a new attempts value on blur", async () => {
+  it("toggling on saves swarm.impl.enabled", async () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    const input = await screen.findByLabelText("Default attempts");
-    await user.clear(input);
-    await user.type(input, "7");
-    await user.tab();
-    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.attempts", 7));
+    await screen.findByLabelText("Attempts");
+    await user.click(screen.getByText("off"));
+    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ enabled: true })));
   });
 
-  it("normalises an invalid attempts value to at least 1", async () => {
+  it("clamps attempts to the cap (5) on blur", async () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    const input = await screen.findByLabelText("Default attempts");
-    await user.clear(input);
-    await user.type(input, "0");
-    await user.tab();
-    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.attempts", 1));
+    const input = await screen.findByLabelText("Attempts");
+    await user.clear(input); await user.type(input, "100"); await user.tab();
+    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ attempts: 5 })));
   });
 
-  it("clamps an oversized attempts value to the upper cap", async () => {
+  it("saves perspectives as a trimmed, non-empty list", async () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    const input = await screen.findByLabelText("Default attempts");
-    await user.clear(input);
-    await user.type(input, "100000");
+    const input = await screen.findByLabelText("Perspectives");
+    await user.type(input, " simplest , robust ,");
     await user.tab();
-    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.attempts", 50));
-  });
-
-  it("keeps the typed value when saving fails (does not show it as saved)", async () => {
-    const user = userEvent.setup();
-    const client = mkClient({ saveSetting: vi.fn(() => Promise.reject(new Error("nope"))) });
-    render(<Swarm client={client} />);
-    const input = (await screen.findByLabelText("Default attempts")) as HTMLInputElement;
-    await user.clear(input);
-    await user.type(input, "9");
-    await user.tab();
-    await waitFor(() => expect(client.saveSetting).toHaveBeenCalled());
-    // the field is NOT rewritten to a "saved" value — the raw input stays for retry
-    expect(input.value).toBe("9");
+    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ perspectives: ["simplest", "robust"] })));
   });
 
   it("shows an empty-state when there are no swarm runs", async () => {
