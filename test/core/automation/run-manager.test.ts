@@ -20,6 +20,30 @@ describe("run-manager (L4.3)", () => {
     expect(rec.output).toEqual(["hello"]);
   });
 
+  it("serializes per task — a concurrent second start returns the existing run, doesn't double-run", async () => {
+    const rm = createRunManager();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let secondRan = false;
+    const id1 = rm.start({ projectId: "p1", taskId: "t1", toBus: false }, async () => { await gate; return { n: 1 }; });
+    const id2 = rm.start({ projectId: "p1", taskId: "t1", toBus: false }, async () => { secondRan = true; return { n: 2 }; });
+    expect(id2).toBe(id1); // same run — the second start was rejected (no two stages at once)
+    release();
+    await rm.wait(id1);
+    expect(secondRan).toBe(false); // the duplicate task fn never ran
+  });
+
+  it("a child run (parentRunId) is exempt from the per-task guard", async () => {
+    const rm = createRunManager();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const parent = rm.start({ projectId: "p1", taskId: "t1", toBus: false }, async () => { await gate; return {}; });
+    const child = rm.start({ projectId: "p1", taskId: "t1", parentRunId: parent, toBus: false }, async () => ({ child: 1 }));
+    expect(child).not.toBe(parent); // a sub-run starts alongside its parent
+    release();
+    await Promise.all([rm.wait(parent), rm.wait(child)]);
+  });
+
   it("captures failure as status failed + error", async () => {
     const rm = createRunManager();
     const runId = rm.start({ projectId: "p1", toBus: false }, async () => {
