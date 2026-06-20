@@ -276,7 +276,7 @@ export function isFatalAgentError(text: string): boolean {
   // their own recovery (detectRateLimit + auto-fallback to another account). This
   // is only the terminal, no-existing-handler cases: auth/credentials, a 401/403/
   // 404/5xx API error, or a dead session.
-  return /failed to authenticate|invalid authentication|authentication credentials|authentication.?failed|not logged in|please run \/login|api error:\s*(401|403|404|5\d\d)|agent process ended before replying/i.test(t);
+  return /failed to authenticate|invalid authentication|authentication credentials|authentication.?failed|not logged in|please run \/login|api error:\s*(401|403|404|5\d\d)|agent process ended before replying|did not respond within the time limit|the session was stopped/i.test(t);
 }
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {

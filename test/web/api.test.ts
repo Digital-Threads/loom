@@ -683,6 +683,7 @@ describe("web api", () => {
     expect(isFatalAgentError("⚠ The agent process ended before replying. Re-run the stage.")).toBe(true);
     expect(isFatalAgentError("API Error: 503 Service Unavailable")).toBe(true);
     expect(isFatalAgentError("Not logged in · Please run /login")).toBe(true); // unauthenticated profile
+    expect(isFatalAgentError("⏱ The agent did not respond within the time limit — the session was stopped. Re-run the stage or switch the subscription.")).toBe(true); // per-turn timeout: impl never ran → must park, not fake-Done
     expect(isFatalAgentError("API Error: 429 Too Many Requests")).toBe(false); // rate limit → existing auto-fallback, not park
     expect(isFatalAgentError("")).toBe(false); // empty handled elsewhere
     expect(isFatalAgentError("Done. ИТОГ: ГОТОВО — implemented the fix and tests pass.")).toBe(false); // real work
