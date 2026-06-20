@@ -5,6 +5,7 @@ import { StateView } from "./StateView";
 import { Modal } from "./Modal";
 import { Select } from "./Select";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 export function Board({
   client,
@@ -19,6 +20,7 @@ export function Board({
   projects?: ProjectEntry[];
   projectFilter?: string; // "" = all
 }) {
+  const t = useT();
   const [cols, setCols] = useState<BoardColumn[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -218,8 +220,8 @@ export function Board({
         <Modal title="Delete task" onClose={() => setConfirm(null)}>
           <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
           <div className="modal-f">
-            <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
-            <button className="btn acc" onClick={() => doDelete(confirm.id)}>Delete</button>
+            <button className="btn" onClick={() => setConfirm(null)}>{t("action.cancel")}</button>
+            <button className="btn acc" onClick={() => doDelete(confirm.id)}>{t("action.delete")}</button>
           </div>
         </Modal>
       ) : null}

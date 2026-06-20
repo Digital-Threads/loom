@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import type { LoomClient } from "../api";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
+import { useLang, useT } from "../i18n";
 
 // D6.2 — Settings: default run_mode, token-pilot on/off, notifications on/off.
 // Per-stage flow defaults live in the L6 flow-config (the Quality page); surfaced
 // here as a shortcut so they're discoverable from Settings.
 export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view: string) => void }) {
+  const t = useT();
+  const { setLang } = useLang();
   const [s, setS] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -34,24 +37,24 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
   return (
     <div className="panel">
       <div className="kv">
-        <b>Default run mode</b>
+        <b>{t("settings.defaultRunMode")}</b>
         <span>
           {(["manual", "gated", "autopilot"] as const).map((m) => (
-            <button key={m} className={`btn ${runMode === m ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("run_mode", m)}>{m}</button>
+            <button key={m} className={`btn ${runMode === m ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("run_mode", m)}>{t(`settings.runMode.${m}`)}</button>
           ))}
         </span>
       </div>
       <div className="kv">
-        <b>Language</b>
+        <b>{t("settings.language")}</b>
         <span>
           {(["en", "ru"] as const).map((l) => (
-            <button key={l} className={`btn ${language === l ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("ui.language", l)}>{l === "en" ? "English" : "Русский"}</button>
+            <button key={l} className={`btn ${language === l ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => { setLang(l); save("ui.language", l); }}>{l === "en" ? "English" : "Русский"}</button>
           ))}
           <span className="fld-hint" style={{ display: "block", marginTop: 4 }}>UI language and the language the agent replies in. Instructions to the agent stay English.</span>
         </span>
       </div>
       <div className="kv">
-        <b>Cost cap (per task, $)</b>
+        <b>{t("settings.costCap")}</b>
         <span>
           <input className="inp" type="number" min={0} step={1} defaultValue={costCap} style={{ width: 80, minWidth: 0 }}
             onBlur={(e) => {
@@ -66,20 +69,20 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
         Useful with Anthropic API-key billing (pay-per-token) — caps spend per task; autopilot stops when reached. On a flat-rate subscription, leave 0.
       </div>
       <div className="kv">
-        <b>Notifications</b>
-        <span><button className="btn" onClick={() => save("notify.enabled", !notify)}>{notify ? "on" : "off"}</button></span>
+        <b>{t("settings.notifications")}</b>
+        <span><button className="btn" onClick={() => save("notify.enabled", !notify)}>{notify ? t("settings.on") : t("settings.off")}</button></span>
       </div>
       <div className="kv">
-        <b>OS sandbox <span className="chip" style={{ marginLeft: 6 }}>experimental</span></b>
+        <b>{t("settings.sandbox")} <span className="chip" style={{ marginLeft: 6 }}>experimental</span></b>
         <span>
-          <button className={`btn ${sandbox ? "acc" : ""}`} onClick={() => save("sandbox.enabled", !sandbox)}>{sandbox ? "on" : "off"}</button>
+          <button className={`btn ${sandbox ? "acc" : ""}`} onClick={() => save("sandbox.enabled", !sandbox)}>{sandbox ? t("settings.on") : t("settings.off")}</button>
         </span>
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
         Confines agent writes to the task worktree (bubblewrap / sandbox-exec). Requires the tool installed; verify in your environment.
       </div>
       <div className="kv">
-        <b>Flow defaults</b>
+        <b>{t("settings.flowDefaults")}</b>
         <span>
           {onNav
             ? <button className="btn" onClick={() => onNav("quality")}>Open Quality →</button>

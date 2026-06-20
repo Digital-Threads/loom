@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { LoomClient, AttentionItem } from "../api";
 import { NAV } from "../nav";
+import { useT } from "../i18n";
 import loomMark from "../assets/loom-mark.svg";
+
+// Group header ("Modules" etc.) → i18n key. Falls back to the raw label.
+const GROUP_KEYS: Record<string, string> = {
+  Modules: "nav.group.modules",
+  Connections: "nav.group.connections",
+  Capabilities: "nav.group.capabilities",
+  More: "nav.group.more",
+};
 
 export function Sidebar({
   client,
@@ -18,6 +27,7 @@ export function Sidebar({
 }) {
   const [attn, setAttn] = useState<AttentionItem[]>([]);
   const seen = useRef(0); // last count we notified about — avoids re-firing
+  const t = useT();
 
   useEffect(() => {
     let cancelled = false;
@@ -58,13 +68,13 @@ export function Sidebar({
       <nav className="nav">
         {NAV.map((n) => (
           <div key={n.key}>
-            {"group" in n && n.group ? <div className="grp">{n.group}</div> : null}
+            {"group" in n && n.group ? <div className="grp">{t(GROUP_KEYS[n.group] ?? n.group)}</div> : null}
             <button
               className={view === n.key ? "active" : ""}
               aria-current={view === n.key ? "page" : undefined}
               onClick={() => onNav(n.key)}
             >
-              <span className="nav-ico" aria-hidden="true">{n.icon}</span> {n.label}
+              <span className="nav-ico" aria-hidden="true">{n.icon}</span> {t(`nav.${n.key}`)}
             </button>
           </div>
         ))}
@@ -72,7 +82,7 @@ export function Sidebar({
       <div className="spacer" />
       <div className="attn">
         <div className="h">
-          <span aria-hidden="true">🔔</span> Needs attention
+          <span aria-hidden="true">🔔</span> {t("nav.attention")}
           {attn.length > 0 ? <span className="badge">{attn.length}</span> : null}
         </div>
         {attn.length ? (

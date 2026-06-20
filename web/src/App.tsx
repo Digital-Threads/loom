@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createClient, type ProjectEntry } from "./api";
+import { createClient, type LoomClient, type ProjectEntry } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { Board } from "./components/Board";
 import { TaskView } from "./components/TaskView";
@@ -21,6 +21,7 @@ import { Swarm } from "./components/Swarm";
 import { Onboarding } from "./components/Onboarding";
 import { Select } from "./components/Select";
 import { Toaster } from "./components/Toaster";
+import { LangProvider, useT } from "./i18n";
 
 const SECTION_TITLES: Record<string, string> = {
   board: "Board",
@@ -38,6 +39,26 @@ const SECTION_TITLES: Record<string, string> = {
   layers: "Layers",
   timeline: "Timeline",
   settings: "Settings",
+};
+
+// i18n key per section for the header title. Most map to their nav label;
+// connectors has a distinct title. Falls back to SECTION_TITLES when absent.
+const SECTION_TITLE_KEYS: Record<string, string> = {
+  board: "nav.board",
+  projects: "nav.projects",
+  accounts: "nav.accounts",
+  tokens: "nav.tokens",
+  memory: "nav.memory",
+  security: "nav.security",
+  quality: "nav.quality",
+  swarm: "nav.swarm",
+  learning: "nav.learning",
+  connectors: "section.connectors.title",
+  knowledge: "nav.knowledge",
+  skills: "nav.skills",
+  layers: "nav.layers",
+  timeline: "nav.timeline",
+  settings: "nav.settings",
 };
 
 // One-line "what is this" per section, shown under the title so a screen reads
@@ -60,8 +81,19 @@ const SECTION_DESC: Record<string, string> = {
   settings: "Loom configuration.",
 };
 
+// Thin shell: own the client, mount the language provider so every component
+// (including AppInner's header) can use useT().
 export function App() {
   const client = useMemo(() => createClient(), []);
+  return (
+    <LangProvider client={client}>
+      <AppInner client={client} />
+    </LangProvider>
+  );
+}
+
+function AppInner({ client }: { client: LoomClient }) {
+  const t = useT();
   const [view, setView] = useState<string>("board");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
@@ -106,12 +138,12 @@ export function App() {
           {inTask ? (
             <h1>
               <span style={{ cursor: "pointer", color: "var(--mut)" }} onClick={() => setTaskId(null)}>
-                ‹ Board
+                ‹ {t("nav.board")}
               </span>
             </h1>
           ) : (
             <div className="page-title">
-              <h1>{SECTION_TITLES[view] ?? view}</h1>
+              <h1>{SECTION_TITLE_KEYS[view] ? t(SECTION_TITLE_KEYS[view]) : (SECTION_TITLES[view] ?? view)}</h1>
               {SECTION_DESC[view] ? <span className="page-sub">{SECTION_DESC[view]}</span> : null}
             </div>
           )}

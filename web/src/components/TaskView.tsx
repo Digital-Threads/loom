@@ -13,6 +13,7 @@ import { Modal } from "./Modal";
 import { LimitModal } from "./LimitModal";
 import { Markdown } from "./Markdown";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 const STAGE_DESC: Record<string, string> = {
   analysis: "Classify the task and propose its pipeline route.",
@@ -47,6 +48,7 @@ export function TaskView({
   taskId: string;
   onChanged?: () => void;
 }) {
+  const t = useT();
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<string>(""); // set to the task's current stage on first load (see task() effect)
@@ -372,9 +374,9 @@ export function TaskView({
             <button className="rail-art" onClick={() => { followLiveRef.current = false; setActive("pr"); }}>🔗 PR link</button>
           ) : null}
           {task.repo ? (
-            <button className="rail-art" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
+            <button className="rail-art" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ {t("action.changes")}</button>
           ) : null}
-          <button className="rail-art" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History &amp; journal</button>
+          <button className="rail-art" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("action.history")} &amp; journal</button>
         </div>
       </aside>
 
@@ -394,7 +396,7 @@ export function TaskView({
                     client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t start the run: ${e}`));
                   }
                   refreshAndFollow(); onChanged?.();
-                }}>▶ Start task</button>
+                }}>▶ {t("action.startTask")}</button>
               ) : task.status !== "done" ? (
                 <>
                   <StageModelPicker client={client} taskId={taskId} stage={active} />
@@ -408,18 +410,18 @@ export function TaskView({
                     <button className="btn acc sm" title="All reviewers ran — fix every accumulated finding in one pass, then re-review" onClick={fixFindings}>🔧 Fix all findings ({reviewFindings})</button>
                   ) : null}
                   {activeStatus === "active" ? (
-                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ Approve &amp; continue</button>
+                    <button className="btn sm" title="Mark this stage done and move on" onClick={async () => { await client.accept(taskId, active); refreshAndFollow(); onChanged?.(); }}>✓ {t("action.approveContinue")}</button>
                   ) : null}
-                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ Advance</button>
+                  <button className="btn sm" title="Auto-run forward per run mode (streams live)" onClick={() => { followLiveRef.current = true; setLive([]); client.advance(taskId).then((rid) => attachStream(rid, true)).catch((e) => toast.error(`Couldn’t advance: ${e}`)); }}>▶▶ {t("action.advance")}</button>
                 </>
               ) : null}
               {runId || task.status === "running" ? (
                 <button className="btn stop sm" title="Stop the running agent" onClick={async () => { await client.stopTask(taskId); setRunId(null); refreshAndFollow(); onChanged?.(); }}>⏹ Stop</button>
               ) : null}
               {task.repo ? (
-                <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ Changes</button>
+                <button className="btn sm" title="Show the code changes (git diff)" onClick={() => setOpenFile({ path: "", mode: "diff" })}>⊟ {t("action.changes")}</button>
               ) : null}
-              <button className="btn sm" title="The task's full history — goal, decisions, stages, cost, artifacts and changes" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 History</button>
+              <button className="btn sm" title="The task's full history — goal, decisions, stages, cost, artifacts and changes" onClick={() => { setHistory(null); client.dossier(taskId).then((p) => setHistory(p)).catch(() => setHistory("")); }}>📖 {t("action.history")}</button>
             </div>
           </div>
           <p className="ph-desc">{STAGE_DESC[active] ?? ""}</p>
