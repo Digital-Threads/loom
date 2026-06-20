@@ -78,6 +78,7 @@ import {
   policySummary,
   defaultDenySources,
   scanWithCustom,
+  writeCommandPolicyFile,
   DEFAULT_SECRET_KINDS,
 } from "../core/security/policy-config.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -261,6 +262,10 @@ export function reviewersForClass(keys: string[], taskClass: string | undefined)
 
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
+  // Mirror the stored command policy to the file the agent's PreToolUse(Bash)
+  // hook reads, so a freshly-started server enforces the saved policy from the
+  // first run (not only after the next save).
+  writeCommandPolicyFile(loadSecurityConfig(db));
   const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
@@ -2062,6 +2067,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (body.deny !== undefined && !Array.isArray(body.deny)) return c.json({ error: "deny must be an array" }, 400);
     const r = saveCommandPolicy(db, body.allow ?? [], body.deny ?? []);
     if (!r.ok) return c.json({ error: r.error }, 400);
+    // Mirror to the file the agent's PreToolUse(Bash) hook reads, so the edit
+    // takes effect on the next command without a restart.
+    writeCommandPolicyFile(loadSecurityConfig(db));
     return c.json({ ok: true, summary: policySummary(loadSecurityConfig(db)) });
   });
   app.get("/api/security/secrets", (c) => {

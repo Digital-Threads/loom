@@ -6,6 +6,9 @@
 // Built-in defaults (DEFAULT_DENY, the package's secret patterns) are shown
 // read-only. User patterns are stored as plain strings and compiled here, so a
 // malformed pattern is reported, never thrown at runtime.
+import { writeFileSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, dirname } from "node:path";
 import type Database from "better-sqlite3";
 import { DEFAULT_DENY, type CommandPolicy } from "./policy.js";
 import { scanSecrets, type SecretFinding } from "./secrets.js";
@@ -159,13 +162,32 @@ export function saveSecretConfig(db: Database.Database, rules: unknown, enabled:
 }
 
 /** Build the effective command policy: DEFAULT_DENY always applies; valid user
- *  patterns are layered on. Invalid sources are dropped (already rejected on save).
- *  NOTE: enforcement (calling checkCommand with this policy) is not yet wired into
- *  the runtime — this is the seam a future change will use. */
+ *  patterns are layered on. Invalid sources are dropped (already rejected on save). */
 export function effectivePolicy(cfg: SecurityConfig): CommandPolicy {
   const deny = [...DEFAULT_DENY, ...cfg.deny.map((s) => compileRegex(s)).filter((re): re is RegExp => re !== null)];
   const allow = cfg.allow.map((s) => compileRegex(s)).filter((re): re is RegExp => re !== null);
   return { deny, allow };
+}
+
+/** Where the command-policy hook reads the user's allow/deny patterns. */
+export function commandPolicyFilePath(): string {
+  return join(homedir(), ".loom", "command-policy.json");
+}
+
+/** Mirror the user's command policy to ~/.loom/command-policy.json so the agent's
+ *  PreToolUse(Bash) hook (enforced-settings) can enforce it at runtime — the hook
+ *  runs in a separate process and can't read the DB. DEFAULT_DENY is baked into
+ *  the hook itself, so this file carries only the user's extra patterns. Called
+ *  on every save and at server start. Best-effort: a write failure just means the
+ *  baked DEFAULT_DENY floor still applies. */
+export function writeCommandPolicyFile(cfg: SecurityConfig): void {
+  const p = commandPolicyFilePath();
+  try {
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify({ allow: cfg.allow, deny: cfg.deny }), "utf8");
+  } catch {
+    /* best-effort — the hook's baked DEFAULT_DENY floor still enforces */
+  }
 }
 
 /** Redact a matched secret to a short head+tail; never echo the full value. */

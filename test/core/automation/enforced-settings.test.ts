@@ -31,6 +31,20 @@ describe("enforced settings", () => {
     expect(existsSync(node.command.replace(/^node /, ""))).toBe(true); // and the script exists on disk
   });
 
+  it("augments the written Bash hook with the command-policy script (loom-secpol)", () => {
+    const written = JSON.parse(readFileSync(enforcedSettingsPath(), "utf8"));
+    const bash = written.hooks.PreToolUse.find((h: { matcher: string }) => h.matcher === "Bash");
+    const node = bash.hooks.find((h: { command: string }) => /command-policy\.cjs$/.test(h.command));
+    expect(node).toBeDefined(); // the command allow/deny enforcement hook is wired
+    const scriptPath = node.command.replace(/^node /, "");
+    expect(existsSync(scriptPath)).toBe(true);
+    // the script bakes the DEFAULT_DENY floor (so dangerous commands are blocked
+    // even with no user policy / a missing policy file).
+    const body = readFileSync(scriptPath, "utf8");
+    expect(body).toContain("rm"); // a DEFAULT_DENY source (rm -rf /) is baked in
+    expect(body).toContain("permissionDecision");
+  });
+
   it("enforceFlags() returns the --settings flag pointing at the written file", () => {
     expect(enforceFlags()).toEqual(["--settings", enforcedSettingsPath()]);
   });

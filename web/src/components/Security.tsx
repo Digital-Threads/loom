@@ -176,9 +176,10 @@ export function Security({ client }: { client: LoomClient }) {
 
       <h3 style={{ marginTop: 18, marginBottom: 0 }}>Command policy</h3>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
-        Allow / deny RegExp patterns, stored for the security layer. The built-in deny list (shown below)
-        is the package default; in this policy model deny wins over allow. Note: runtime command-blocking is
-        gated by the OS sandbox — these lists are configuration, not yet enforced on the normal execution path.
+        Allow / deny RegExp patterns enforced on the agent's shell. Every Bash command an agent runs is
+        checked by a PreToolUse hook: the built-in deny list (shown below) always applies — even in autopilot —
+        and your patterns layer on top (deny wins over allow; if you add any allow rule, a command must match
+        one). Edits take effect on the next command. The OS sandbox adds OS-level isolation on top.
       </div>
       <PatternList title="Deny (built-in + custom)" builtin={policy?.defaults.deny ?? []} items={deny}
         onAdd={(v) => setDeny((d) => [...d, v])} onRemove={(i) => setDeny((d) => d.filter((_, j) => j !== i))}
