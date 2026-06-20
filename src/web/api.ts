@@ -1085,7 +1085,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const pick = m ? Number(m[1]) : greens[0].slot;
       return { winnerSlot: greens.some((g) => g.slot === pick) ? pick : greens[0].slot, rationale: out.trim().slice(0, 200) };
     };
-    const result = await runImplSwarm({ attempts: cfg.attempts, perspectives: cfg.perspectives, implement, qaGate, judge });
+    const result = await runImplSwarm({ attempts: cfg.attempts, perspectives: cfg.perspectives, implement, qaGate, judge, concurrency: 1 });
     const survivors = result.attempts.filter((a) => a.green).length;
     const projectId = t.project_id ?? doneProjectId();
     appendLoomEvent(projectId, swarmRunEvent({ projectId, taskId: id, stage: "impl", attempts: result.attempts.length, survivors, agree: result.winner ? 1 : 0, winner: result.winner ? `sw${result.winner.slot}` : undefined, costUsd: sumAttemptCost(costs), ts: Date.now() }));
