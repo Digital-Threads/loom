@@ -18,6 +18,15 @@ const CATS: { key: Cat; label: string }[] = [
 const catOf = (type: string): Cat =>
   type.includes("command") ? "command" : type.includes("secret") ? "secret" : type.includes("worktree") ? "worktree" : type.includes("egress") ? "egress" : "all";
 
+// Mirror of the backend DEFAULT_EGRESS_ALLOW — shown in the editor when the
+// operator hasn't set their own list, so they can see and extend the defaults.
+const DEFAULT_ALLOW = [
+  "api.anthropic.com", "*.anthropic.com",
+  "registry.npmjs.org", "*.npmjs.org",
+  "github.com", "*.github.com", "*.githubusercontent.com",
+  "pypi.org", "*.pypi.org", "files.pythonhosted.org",
+];
+
 const isValidRegex = (s: string): boolean => {
   try { new RegExp(s); return true; } catch { return false; }
 };
@@ -85,6 +94,8 @@ export function Security({ client }: { client: LoomClient }) {
   const [secrets, setSecrets] = useState<SecuritySecretsData | null>(null);
   const [allow, setAllow] = useState<string[]>([]);
   const [deny, setDeny] = useState<string[]>([]);
+  const [egressEnforce, setEgressEnforce] = useState<boolean | null>(null);
+  const [egressAllow, setEgressAllow] = useState<string>("");
   const [rules, setRules] = useState<SecretRule[]>([]);
   const [ruleKind, setRuleKind] = useState("");
   const [ruleSrc, setRuleSrc] = useState("");
@@ -92,8 +103,12 @@ export function Security({ client }: { client: LoomClient }) {
 
   function load() {
     client.timeline().then((all) => setEvents(all.filter((e) => e.type.startsWith("audit.")))).catch((e) => setErr(String(e)));
-    client.settings().then((s) => setSandbox((s["sandbox.enabled"] as boolean) ?? false))
-      .catch((e) => { console.warn("settings unavailable:", e); setSandbox(false); }); // fall to a usable default, not a stuck "…"
+    client.settings().then((s) => {
+      setSandbox((s["sandbox.enabled"] as boolean) ?? false);
+      setEgressEnforce((s["security.egress.enforce"] as boolean) ?? false);
+      const a = s["security.egress.allow"] as string[] | undefined;
+      setEgressAllow((a && a.length ? a : DEFAULT_ALLOW).join("\n"));
+    }).catch((e) => { console.warn("settings unavailable:", e); setSandbox(false); setEgressEnforce(false); setEgressAllow(DEFAULT_ALLOW.join("\n")); }); // usable defaults, not a stuck "…"
     client.securityPolicy().then((p) => { setPolicy(p); setAllow(p.allow); setDeny(p.deny); }).catch((e) => console.warn("policy unavailable:", e));
     client.securitySecrets().then((s) => { setSecrets(s); setRules(s.custom); }).catch((e) => console.warn("secret rules unavailable:", e));
   }
@@ -160,6 +175,29 @@ export function Security({ client }: { client: LoomClient }) {
           <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>{t("security.secretScanning.hint")}</span>
         </span>
       </div>
+
+      <div className="kv">
+        <b>{t("security.egressEnforce")}</b>
+        <span>
+          <button className={`btn ${egressEnforce ? "acc" : ""}`} disabled={egressEnforce === null}
+            onClick={() => { const v = !egressEnforce; setEgressEnforce(v); client.saveSetting("security.egress.enforce", v).catch(() => setEgressEnforce(!v)); }}>
+            {egressEnforce === null ? "…" : egressEnforce ? t("security.on") : t("security.off")}
+          </button>
+          <span className="muted" style={{ marginLeft: 8, fontSize: "var(--fs-xs)" }}>{t("security.egressEnforce.hint")}</span>
+        </span>
+      </div>
+      {egressEnforce ? (
+        <div className="kv">
+          <b>{t("security.egressAllow")}</b>
+          <span>
+            <textarea className="inp" rows={6} aria-label={t("security.egressAllow")} value={egressAllow}
+              onChange={(e) => setEgressAllow(e.target.value)}
+              onBlur={() => client.saveSetting("security.egress.allow", egressAllow.split("\n").map((l) => l.trim()).filter(Boolean)).then(() => setSaveMsg(t("security.toast.policySaved"))).catch((er) => setSaveMsg(String(er)))}
+              style={{ width: 320, maxWidth: "100%", fontFamily: "var(--font-mono)" }} />
+            <span className="fld-hint" style={{ display: "block" }}>{t("security.egressAllow.hint")}</span>
+          </span>
+        </div>
+      ) : null}
 
       {policy && secrets ? (
         <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 6 }}>

@@ -499,6 +499,10 @@ const en: Dict = {
   "security.cat.secret": "Secrets",
   "security.cat.worktree": "Worktree",
   "security.cat.egress": "Egress",
+  "security.egressEnforce": "Egress allowlist",
+  "security.egressEnforce.hint": "Refuse any host the agent connects to that isn't on the allowlist. Off = observe-only — check the Egress tab to see where it goes first.",
+  "security.egressAllow": "Allowed hosts",
+  "security.egressAllow.hint": "One host per line. *.domain matches subdomains. Defaults cover the model API, npm, GitHub and PyPI.",
   "security.empty.audit": "No audit events in this category.",
 };
 
@@ -978,6 +982,10 @@ const ru: Dict = {
   "security.cat.secret": "Секреты",
   "security.cat.worktree": "Worktree",
   "security.cat.egress": "Сеть",
+  "security.egressEnforce": "Сетевой allowlist",
+  "security.egressEnforce.hint": "Резать любой хост, в который агент стучится и которого нет в списке. Выкл = только наблюдение — сначала посмотри во вкладке Egress, куда он ходит.",
+  "security.egressAllow": "Разрешённые хосты",
+  "security.egressAllow.hint": "Один хост на строку. *.domain покрывает поддомены. По умолчанию — API модели, npm, GitHub и PyPI.",
   "security.empty.audit": "В этой категории нет событий аудита.",
 };
 
