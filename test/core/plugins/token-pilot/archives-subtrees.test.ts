@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { tokenEventsByTime, toolCallTokensForSessions } from "../../../../src/core/plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, toolCallTokensForSessions, toolCallUsageBySession } from "../../../../src/core/plugins/token-pilot/adapter.js";
 
 // helper: write a jsonl event
 const ev = (o: Record<string, unknown>) => JSON.stringify(o);
@@ -110,5 +110,20 @@ describe("LP13 token-pilot adapter: archives + subtrees + agentType", () => {
     expect(toolCallTokensForSessions(root, ["s1", "s2"]).used).toBe(983 + 311 + 50 + 100);
     expect(toolCallTokensForSessions(root, ["nope"]).used).toBe(0);
     expect(toolCallTokensForSessions(root, []).used).toBe(0);
+  });
+
+  it("groups tool-call usage per session for the Tokens dashboard (loom-tdash)", () => {
+    const root = tmp();
+    const tp = join(root, ".token-pilot");
+    mkdirSync(tp, { recursive: true });
+    writeFileSync(
+      join(tp, "tool-calls.jsonl"),
+      ev({ ts: 1, session_id: "s1", tool: "smart_read", tokensReturned: 983, tokensWouldBe: 31588 }) + "\n" +
+        ev({ ts: 2, session_id: "s1", tool: "read_symbol", tokensReturned: 311, tokensWouldBe: 31588 }) + "\n" +
+        ev({ ts: 3, session_id: "s2", tool: "smart_read", tokensReturned: 100, tokensWouldBe: 5000 }) + "\n",
+    );
+    const rows = Object.fromEntries(toolCallUsageBySession(root).map((r) => [r.sessionId, r]));
+    expect(rows.s1).toMatchObject({ used: 983 + 311, saved: (31588 - 983) + (31588 - 311) });
+    expect(rows.s2).toMatchObject({ used: 100, saved: 5000 - 100 });
   });
 });

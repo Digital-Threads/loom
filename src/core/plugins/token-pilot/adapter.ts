@@ -152,11 +152,8 @@ export function tokenEventsByTime(projectRoot: string): TokenEvent[] {
  *  hook-events.jsonl. Loom only read hook-events, so all MCP-tool savings showed
  *  as 0; this sums them for the given sessions. used = tokens actually returned;
  *  saved = what a full read would have cost minus that (loom-cust deeper layer). */
-export function toolCallTokensForSessions(projectRoot: string, sessionIds: string[]): { used: number; saved: number } {
-  const want = new Set(sessionIds.filter(Boolean));
-  if (!want.size) return { used: 0, saved: 0 };
-  let used = 0;
-  let saved = 0;
+export function toolCallUsageBySession(projectRoot: string): TokenUsageRow[] {
+  const bySession = new Map<string, TokenUsageRow>();
   for (const file of collectTokenPilotFiles(projectRoot, (n) => n === "tool-calls.jsonl" || TOOL_ARCHIVE_RE.test(n))) {
     let raw: string;
     try {
@@ -173,12 +170,27 @@ export function toolCallTokensForSessions(projectRoot: string, sessionIds: strin
       } catch {
         continue;
       }
-      if (typeof ev.session_id !== "string" || !want.has(ev.session_id)) continue;
+      if (typeof ev.session_id !== "string") continue;
       const returned = typeof ev.tokensReturned === "number" ? ev.tokensReturned : 0;
       const wouldBe = typeof ev.tokensWouldBe === "number" ? ev.tokensWouldBe : 0;
-      used += returned;
-      saved += Math.max(0, wouldBe - returned);
+      const row = bySession.get(ev.session_id) ?? { sessionId: ev.session_id, used: 0, saved: 0 };
+      row.used += returned;
+      row.saved += Math.max(0, wouldBe - returned);
+      bySession.set(ev.session_id, row);
     }
+  }
+  return [...bySession.values()];
+}
+
+export function toolCallTokensForSessions(projectRoot: string, sessionIds: string[]): { used: number; saved: number } {
+  const want = new Set(sessionIds.filter(Boolean));
+  if (!want.size) return { used: 0, saved: 0 };
+  let used = 0;
+  let saved = 0;
+  for (const r of toolCallUsageBySession(projectRoot)) {
+    if (!want.has(r.sessionId)) continue;
+    used += r.used;
+    saved += r.saved;
   }
   return { used, saved };
 }

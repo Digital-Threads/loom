@@ -32,7 +32,7 @@ import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
-import { tokenEventsByTime, tokenUsageBySession, toolCallTokensForSessions } from "../core/plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, tokenUsageBySession, toolCallTokensForSessions, toolCallUsageBySession } from "../core/plugins/token-pilot/adapter.js";
 import { listSessions } from "../core/plugins/aimux/adapter.js";
 import { loadLoomEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
@@ -1231,7 +1231,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const pid = c.req.query("project");
     const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : projectActive()?.root;
     const projectRoot = resolveProjectRoot(root ?? process.cwd());
-    const rows = tokenUsageBySession(projectRoot);
+    // Merge BOTH token-pilot sources per session: hook-events.jsonl (Read-hook
+    // denials) + tool-calls.jsonl (smart_read/read_symbol MCP savings). The
+    // dashboard previously read only hook-events, so it understated savings and
+    // disagreed with the per-task Cost block — which already sums both (loom-cust).
+    const merged = new Map<string, { sessionId: string; used: number; saved: number }>();
+    for (const r of [...tokenUsageBySession(projectRoot), ...toolCallUsageBySession(projectRoot)]) {
+      const e = merged.get(r.sessionId) ?? { sessionId: r.sessionId, used: 0, saved: 0 };
+      e.used += r.used;
+      e.saved += r.saved;
+      merged.set(r.sessionId, e);
+    }
+    const rows = [...merged.values()];
     const taskBySession = new Map(
       listTasks(db).filter((t) => t.session_id).map((t) => [t.session_id as string, t]),
     );
