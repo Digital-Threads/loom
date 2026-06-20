@@ -1058,14 +1058,21 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const lang = languageDirective(getSetting<string>(db, "ui.language", "en"));
     const git: GitRunner = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" });
     const costs: Array<number | undefined> = [];
+    const failures: string[] = []; // why each dropped attempt failed (observability)
     const implement = async (slot: number, perspective: string | undefined) => {
-      const wt = prepareSwarmWorktree(repo, id, slot, { base });
-      const body = `${stageInstruction("impl", perspectivePrompt(IMPL_PROMPT, perspective))}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
-      const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: `${id}-sw${slot}`, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
-      costs.push(sessionLauncher.costOf?.(`${id}-sw${slot}`)); // fresh session → this attempt's spend
-      if (isFatalAgentError(r.text)) throw new Error(`sw${slot}: ${r.text.trim().slice(0, 80)}`);
-      commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
-      return { branch: wt.branch, output: r.text };
+      try {
+        const wt = prepareSwarmWorktree(repo, id, slot, { base });
+        const body = `${stageInstruction("impl", perspectivePrompt(IMPL_PROMPT, perspective))}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
+        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: `${id}-sw${slot}`, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
+        costs.push(sessionLauncher.costOf?.(`${id}-sw${slot}`)); // fresh session → this attempt's spend
+        if (isFatalAgentError(r.text)) throw new Error(`agent error: ${r.text.trim().slice(0, 120)}`);
+        const c = commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
+        if (!c.committed) throw new Error("no change committed (agent made no edit)");
+        return { branch: wt.branch, output: r.text };
+      } catch (e) {
+        failures.push(`sw${slot}: ${(e as Error).message}`);
+        throw e;
+      }
     };
     const qaGate = async (slot: number) => {
       const res = await runQa(buildQaChecks(resolveFlow("qa", storedFlow("qa")), { repoRoot: swarmWorktreePath(id, slot) }));
@@ -1082,6 +1089,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const survivors = result.attempts.filter((a) => a.green).length;
     const projectId = t.project_id ?? doneProjectId();
     appendLoomEvent(projectId, swarmRunEvent({ projectId, taskId: id, stage: "impl", attempts: result.attempts.length, survivors, agree: result.winner ? 1 : 0, winner: result.winner ? `sw${result.winner.slot}` : undefined, costUsd: sumAttemptCost(costs), ts: Date.now() }));
+    // Persist the per-attempt outcome (why each failed, who survived/won) so a
+    // swarm that elects nothing is debuggable instead of a silent fallback.
+    saveResult(id, "impl", "swarm-debug", { attempts: result.attempts.map((a) => ({ slot: a.slot, green: a.green, qa: a.qa })), failures, winner: result.winner?.slot ?? null, rationale: result.rationale });
     const cleanup = () => { for (let k = 0; k < cfg.attempts; k++) removeSwarmWorktree(repo, id, k); };
     if (!result.winner) { cleanup(); return null; } // nothing passed QA → single-impl fallback
     try {
