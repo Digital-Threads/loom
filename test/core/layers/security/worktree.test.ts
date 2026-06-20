@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ensureWorktree, removeWorktree, worktreeBranch, worktreePath } from "../../../../src/core/layers/security/sandbox.js";
+import { ensureWorktree, removeWorktree, worktreeBranch, worktreePath, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreeBranch, swarmWorktreePath } from "../../../../src/core/layers/security/sandbox.js";
 
 // Fake git: records calls; `show-ref --verify` throws unless the branch is in the
 // `branches` set (mirrors real git — execFileSync throws on a non-zero exit).
@@ -58,5 +58,30 @@ describe("ensureWorktree (one worktree per task, idempotent + branch-safe)", () 
     removeWorktree("/repo", "t3", { git });
     expect(calls.some((c) => c[0] === "worktree" && c[1] === "remove")).toBe(true);
     expect(calls.some((c) => c[0] === "branch" && c[1] === "-D" && c[2] === worktreeBranch("t3"))).toBe(true);
+  });
+});
+
+describe("impl-swarm worktrees (one per attempt)", () => {
+  it("each slot gets a distinct path + branch under the task", () => {
+    expect(swarmWorktreeBranch("t1", 0)).toBe("loom/t1/sw0");
+    expect(swarmWorktreeBranch("t1", 2)).toBe("loom/t1/sw2");
+    expect(swarmWorktreePath("t1", 0)).toContain("worktrees/t1/sw0");
+    expect(swarmWorktreePath("t1", 0)).not.toBe(swarmWorktreePath("t1", 1)); // isolated
+    expect(swarmWorktreePath("t1", 0)).not.toBe(worktreePath("t1")); // separate from the task worktree
+  });
+
+  it("prepareSwarmWorktree creates the slot's worktree+branch (attach if it lingers)", () => {
+    const { git, calls } = fakeGit(); // no branch yet
+    const wt = prepareSwarmWorktree("/repo", "t7", 1, { git, exists: () => false });
+    expect(wt).toEqual({ path: swarmWorktreePath("t7", 1), branch: swarmWorktreeBranch("t7", 1) });
+    const add = calls.find((c) => c[0] === "worktree" && c[1] === "add")!;
+    expect(add).toEqual(["worktree", "add", "-b", swarmWorktreeBranch("t7", 1), swarmWorktreePath("t7", 1)]);
+  });
+
+  it("removeSwarmWorktree drops the loser's worktree + branch (cleanup)", () => {
+    const { git, calls } = fakeGit([swarmWorktreeBranch("t7", 2)]);
+    removeSwarmWorktree("/repo", "t7", 2, { git });
+    expect(calls.some((c) => c[0] === "worktree" && c[1] === "remove" && c[2] === "--force")).toBe(true);
+    expect(calls.some((c) => c[0] === "branch" && c[1] === "-D" && c[2] === swarmWorktreeBranch("t7", 2))).toBe(true);
   });
 });

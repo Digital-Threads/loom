@@ -50,6 +50,15 @@ export function worktreePath(taskId: string): string {
   return join(securityDataDir(), "worktrees", taskId);
 }
 
+/** Impl-swarm: each attempt gets its OWN worktree + branch under the task, so N
+ *  candidate implementations don't collide. Slot is the attempt index. */
+export function swarmWorktreeBranch(taskId: string, slot: number): string {
+  return `loom/${taskId}/sw${slot}`;
+}
+export function swarmWorktreePath(taskId: string, slot: number): string {
+  return join(securityDataDir(), "worktrees", taskId, `sw${slot}`);
+}
+
 export interface SandboxOptions {
   /** Base ref to branch from (default: current HEAD). */
   base?: string;
@@ -80,17 +89,36 @@ export function prepareWorktree(
   taskId: string,
   opts: SandboxOptions = {},
 ): Worktree {
+  return prepareWorktreeAt(repoRoot, worktreePath(taskId), worktreeBranch(taskId), opts);
+}
+
+/** Core worktree setup at an EXPLICIT path/branch — shared by the per-task
+ *  worktree and the per-attempt impl-swarm worktrees. */
+function prepareWorktreeAt(repoRoot: string, path: string, branch: string, opts: SandboxOptions): Worktree {
   const git = opts.git ?? defaultGit;
   const exists = opts.exists ?? ((p: string) => existsSync(p));
-  const path = worktreePath(taskId);
-  const branch = worktreeBranch(taskId);
   try { git(["worktree", "prune"], repoRoot); } catch { /* best-effort: drop ghost registrations */ }
   const args = branchExists(git, repoRoot, branch)
-    ? ["worktree", "add", path, branch] // reuse the task's existing branch
+    ? ["worktree", "add", path, branch] // reuse the existing branch
     : ["worktree", "add", "-b", branch, path, ...(opts.base ? [opts.base] : [])];
   git(args, repoRoot);
   linkNodeModules(repoRoot, path, exists, opts.link ?? defaultLink);
   return { path, branch };
+}
+
+/** Impl-swarm: prepare attempt `slot`'s isolated worktree (worktrees/<id>/sw<k>
+ *  on branch loom/<id>/sw<k>). Each candidate implementation lives in its own. */
+export function prepareSwarmWorktree(repoRoot: string, taskId: string, slot: number, opts: SandboxOptions = {}): Worktree {
+  return prepareWorktreeAt(repoRoot, swarmWorktreePath(taskId, slot), swarmWorktreeBranch(taskId, slot), opts);
+}
+
+/** Remove an impl-swarm attempt's worktree + branch (best-effort) — the losing
+ *  candidates are cleaned up after the judge elects a winner. */
+export function removeSwarmWorktree(repoRoot: string, taskId: string, slot: number, opts: SandboxOptions = {}): void {
+  const git = opts.git ?? defaultGit;
+  try { git(["worktree", "remove", "--force", swarmWorktreePath(taskId, slot)], repoRoot); } catch { /* best-effort */ }
+  try { git(["branch", "-D", swarmWorktreeBranch(taskId, slot)], repoRoot); } catch { /* best-effort */ }
+  try { git(["worktree", "prune"], repoRoot); } catch { /* best-effort */ }
 }
 
 /** Idempotent worktree for a task: one worktree per task, reused across stages
