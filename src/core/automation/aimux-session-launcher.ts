@@ -8,6 +8,7 @@
 // wrote, the spine env — and tracks per-session degradations for the task.
 
 import { spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, loadActiveProfile, openSession, type LiveSession } from "@digital-threads/aimux/core";
@@ -146,7 +147,17 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     ];
     const spawnFn = (backend !== "none"
       ? ((cli: string, args: string[], o: { cwd?: string }) => {
-          const w = o.cwd ? wrapCommand(backend, cli, args, o.cwd, writable) : { cli, args };
+          let extra = writable;
+          if (o.cwd) {
+            // The worktree's node_modules is symlinked to the shared install
+            // (outside the worktree → read-only under the jail). Build tools the
+            // agent runs (vitest → node_modules/.vite-temp, vite → .cache) write
+            // there, so bind the RESOLVED node_modules dir writable (loom-ndvo).
+            // Trade-off: the shared node_modules becomes writable to the agent —
+            // acceptable (it's not credentials, and broken tooling is worse).
+            try { extra = [...writable, realpathSync(join(o.cwd, "node_modules"))]; } catch { /* no node_modules */ }
+          }
+          const w = o.cwd ? wrapCommand(backend, cli, args, o.cwd, extra) : { cli, args };
           return (spawnProcess as unknown as (c: string, a: string[], oo: unknown) => unknown)(w.cli, w.args, o);
         })
       : spawnProcess) as typeof spawn;

@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAimuxLiveLauncher } from "../../../src/core/automation/aimux-session-launcher.js";
 
 // A fake aimux live session: each send resolves immediately, so launcher.run()
@@ -73,6 +76,25 @@ describe("createAimuxLiveLauncher — OS sandbox", () => {
     expect(launcher.degradedOf!("sb2")).toContain(
       "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement",
     );
+  });
+
+  it("binds the worktree's resolved node_modules writable so build tools work in the jail (loom-ndvo)", async () => {
+    const wt = mkdtempSync(join(tmpdir(), "loom-wt-"));
+    mkdirSync(join(wt, "node_modules"));
+    const nm = realpathSync(join(wt, "node_modules"));
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { args: string[] }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap",
+      sandboxUsable: () => true,
+      spawnProcess: ((_cli: string, args: string[]) => { spawned.push({ args }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "nm1", resume: false, sandbox: true });
+    captured.spawnFn!("claude", ["-p"], { cwd: wt });
+    expect(spawned[0].args.join(" ")).toContain(`--bind ${nm} ${nm}`); // node_modules writable
+    rmSync(wt, { recursive: true, force: true });
   });
 
   it("degrades (not breaks) when a backend exists but can't run the agent under it", async () => {
