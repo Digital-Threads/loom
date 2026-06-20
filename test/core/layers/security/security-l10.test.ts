@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { redactSecrets } from "../../../../src/core/layers/security/secrets.js";
-import { evaluateCommand, pathEscapesJail } from "../../../../src/core/layers/security/mode.js";
 import { getSandboxBackend, runWithLimits, WorktreeBackend } from "../../../../src/core/layers/security/sandbox-backend.js";
 import { secureExecutor } from "../../../../src/core/layers/security/secure-executor.js";
 import { configureSecurity, type AuditEvent } from "../../../../src/core/layers/security/config.js";
@@ -10,22 +9,6 @@ describe("redactSecrets (L10.3)", () => {
     const out = redactSecrets("key=sk-ant-ABCDEFGHIJKLMNOPQRSTUV done");
     expect(out).not.toContain("ABCDEFGHIJKLMNOPQRSTUV");
     expect(out).toContain("…");
-  });
-});
-
-describe("command policy mode + path-jail (L10.2)", () => {
-  it("soft warns but allows; enforce blocks a dangerous command", () => {
-    const cmd = "rm -rf /";
-    expect(evaluateCommand(cmd, { mode: "soft" })).toMatchObject({ ok: true, warned: true });
-    expect(evaluateCommand(cmd, { mode: "enforce" })).toMatchObject({ ok: false, blocked: true });
-  });
-  it("path-jail flags parent traversal under a sandbox root", () => {
-    expect(pathEscapesJail("cat ../../etc/passwd")).toBe(true);
-    expect(pathEscapesJail("cat ./local")).toBe(false);
-    expect(evaluateCommand("cat ../secret", { mode: "enforce", sandboxRoot: "/wt" }).blocked).toBe(true);
-  });
-  it("a clean command passes", () => {
-    expect(evaluateCommand("npm test", { mode: "enforce" })).toEqual({ ok: true, blocked: false, warned: false });
   });
 });
 

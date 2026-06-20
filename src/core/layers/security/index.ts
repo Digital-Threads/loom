@@ -1,6 +1,5 @@
 export * from "./config.js";
 export * from "./audit.js";
-export * from "./mode.js";
 export * from "./os-sandbox.js";
 export * from "./path-safety.js";
 export * from "./policy.js";
