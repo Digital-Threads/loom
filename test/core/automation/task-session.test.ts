@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -59,7 +59,7 @@ describe("TaskSession (one session per task)", () => {
     expect(SESSION_PREAMBLE).toContain("token-pilot");
     expect(SESSION_PREAMBLE).toContain("task-journal");
     expect(SESSION_PREAMBLE).toMatch(/Facts only/i);
-    expect(SESSION_PREAMBLE).toMatch(/plain English/i); // plain English, no jargon
+    expect(SESSION_PREAMBLE).toMatch(/plain human language/i); // plain language, no jargon (response language is per-step)
     expect(SESSION_PREAMBLE).toMatch(/jargon/i); // no machine/jargon-heavy text
   });
 
@@ -114,6 +114,15 @@ describe("TaskSession (one session per task)", () => {
     expect(declaresRemainingWork("осталось реализовать RD-4 и RD-5")).toBe(true);
     expect(declaresRemainingWork("remaining steps: wire the UI")).toBe(true);
     expect(declaresRemainingWork("Всё сделано и проверено, регрессий нет.")).toBe(false);
+  });
+
+  it("languageDirective sets the reply language and defaults to English (i18n loom-y14v)", () => {
+    expect(languageDirective("ru")).toContain("Russian");
+    expect(languageDirective("RU")).toContain("Russian"); // case-insensitive
+    expect(languageDirective("en")).toContain("English");
+    expect(languageDirective(undefined)).toContain("English"); // default
+    expect(languageDirective("xx")).toContain("English"); // unknown → English
+    expect(languageDirective("ru")).toMatch(/instructions remain in English/i); // prompts stay English
   });
 
   it("compacts the session once the turn threshold is reached", async () => {

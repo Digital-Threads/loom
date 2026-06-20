@@ -26,6 +26,7 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
   if (!s) return <StateView kind="loading" />;
 
   const runMode = (s["run_mode"] as string) ?? "gated";
+  const language = (s["ui.language"] as string) ?? "en";
   const notify = (s["notify.enabled"] as boolean) ?? true;
   const sandbox = (s["sandbox.enabled"] as boolean) ?? false;
   const costCap = (s["cost.capUsd"] as number) ?? 0;
@@ -38,6 +39,15 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
           {(["manual", "gated", "autopilot"] as const).map((m) => (
             <button key={m} className={`btn ${runMode === m ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("run_mode", m)}>{m}</button>
           ))}
+        </span>
+      </div>
+      <div className="kv">
+        <b>Language</b>
+        <span>
+          {(["en", "ru"] as const).map((l) => (
+            <button key={l} className={`btn ${language === l ? "acc" : ""}`} style={{ marginRight: 6 }} onClick={() => save("ui.language", l)}>{l === "en" ? "English" : "Русский"}</button>
+          ))}
+          <span className="fld-hint" style={{ display: "block", marginTop: 4 }}>UI language and the language the agent replies in. Instructions to the agent stay English.</span>
         </span>
       </div>
       <div className="kv">

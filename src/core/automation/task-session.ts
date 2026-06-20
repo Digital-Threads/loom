@@ -44,8 +44,9 @@ export const SESSION_PREAMBLE = [
   "3. Facts only. Don't hand back an uncertain or assumed result. If there's any doubt or the",
   "   result isn't final — finish it and verify (by reading the code, a test, or a run).",
   "   A step counts as done ONLY when the result is verified and complete.",
-  "4. Format. Respond in clear, plain English — simple human language, no machine jargon;",
-  "   any reader should understand what was done and how to use it.",
+  "4. Format. Reply in the response language stated in the per-step note (default English) —",
+  "   simple, plain human language, no machine jargon; any reader should understand what was",
+  "   done and how to use it. These instructions stay in English regardless.",
   "5. Finishing a step. At the end of each step give a short, clear summary and on the LAST line state",
   "   the machine-readable status exactly in this form:",
   "     RESULT: DONE            — if the step is fully done and verified;",
@@ -108,6 +109,15 @@ export function stageInstruction(stage: string | undefined, instruction: string)
     "Step task:",
     instruction,
   ].join("\n");
+}
+
+const LANGUAGE_NAMES: Record<string, string> = { en: "English", ru: "Russian" };
+/** The per-step response-language note the host appends from the ui.language
+ *  setting. The agent's INSTRUCTIONS stay English; this only sets the language of
+ *  the agent's reply to the user. Unknown/absent → English. */
+export function languageDirective(lang: string | undefined): string {
+  const name = LANGUAGE_NAMES[(lang ?? "en").toLowerCase()] ?? "English";
+  return `[Response language: reply to the user in ${name}. These instructions remain in English.]`;
 }
 
 export interface SendOptions {

@@ -50,7 +50,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../core/automation/task-session.js";
 import type { SessionControl } from "../core/automation/live-session.js";
 import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
@@ -603,7 +603,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
       getSetting<string>(db, `model.col.${stage}`, "") ||
       undefined;
-    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
+    // Append the response-language note from the UI-language setting (prompts stay
+    // English; only the agent's reply to the user follows it). i18n: loom-y14v.
+    const langPrompt = `${prompt}\n\n${languageDirective(getSetting<string>(db, "ui.language", "en"))}`;
+    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(langPrompt, {
       stage,
       relocations,
       modelOverride,
