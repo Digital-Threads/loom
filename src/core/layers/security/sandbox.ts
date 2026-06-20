@@ -59,7 +59,22 @@ export interface SandboxOptions {
   exists?: (p: string) => boolean;
 }
 
-/** Create an isolated worktree + branch for a task. Returns its path/branch. */
+/** True if a local branch already exists (the git runner throws on a non-zero
+ *  exit, so a clean return means the ref resolved). */
+function branchExists(git: GitRunner, repoRoot: string, branch: string): boolean {
+  try {
+    git(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], repoRoot);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Create an isolated worktree + branch for a task. Returns its path/branch.
+ *  Robust to a LEFTOVER branch: if a prior run's branch still exists (the worktree
+ *  dir was removed but the branch wasn't), ATTACH it instead of `-b` (which would
+ *  fail "branch already exists" and wedge the task — every run failing on worktree
+ *  setup). Prunes stale worktree registrations first. */
 export function prepareWorktree(
   repoRoot: string,
   taskId: string,
@@ -69,8 +84,10 @@ export function prepareWorktree(
   const exists = opts.exists ?? ((p: string) => existsSync(p));
   const path = worktreePath(taskId);
   const branch = worktreeBranch(taskId);
-  const args = ["worktree", "add", "-b", branch, path];
-  if (opts.base) args.push(opts.base);
+  try { git(["worktree", "prune"], repoRoot); } catch { /* best-effort: drop ghost registrations */ }
+  const args = branchExists(git, repoRoot, branch)
+    ? ["worktree", "add", path, branch] // reuse the task's existing branch
+    : ["worktree", "add", "-b", branch, path, ...(opts.base ? [opts.base] : [])];
   git(args, repoRoot);
   linkNodeModules(repoRoot, path, exists, opts.link ?? defaultLink);
   return { path, branch };
@@ -102,4 +119,9 @@ export function removeWorktree(
   } catch {
     /* best-effort cleanup */
   }
+  // Also delete the task branch + prune, so a re-run can recreate cleanly. Without
+  // this the branch lingers and `worktree add -b` fails next time (prepareWorktree
+  // now recovers by attaching, but don't leave the orphan around either).
+  try { git(["branch", "-D", worktreeBranch(taskId)], repoRoot); } catch { /* best-effort */ }
+  try { git(["worktree", "prune"], repoRoot); } catch { /* best-effort */ }
 }

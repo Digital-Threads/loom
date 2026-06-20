@@ -57,13 +57,15 @@ describe("security/sandbox", () => {
     const calls: string[][] = [];
     const git: GitRunner = (args) => {
       calls.push(args);
+      if (args[0] === "show-ref") throw new Error("ref not found"); // branch doesn't exist → create it
       return "";
     };
     const wt = prepareWorktree("/repo", "t1", { git, base: "main" });
     expect(wt.branch).toBe(worktreeBranch("t1"));
     expect(wt.branch).toBe("loom/t1");
-    expect(calls[0].slice(0, 4)).toEqual(["worktree", "add", "-b", "loom/t1"]);
-    expect(calls[0]).toContain("main");
+    const add = calls.find((c) => c[0] === "worktree" && c[1] === "add")!;
+    expect(add.slice(0, 4)).toEqual(["worktree", "add", "-b", "loom/t1"]);
+    expect(add).toContain("main");
   });
 
   it("removeWorktree swallows git errors (best-effort)", () => {

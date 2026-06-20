@@ -59,6 +59,7 @@ describe("integration: security sandbox → exec (via runSpec)", () => {
     const gitCalls: string[][] = [];
     const git: GitRunner = (args) => {
       gitCalls.push(args);
+      if (args[0] === "show-ref") throw new Error("ref not found"); // branch absent → create it
       return "";
     };
     let seenCwd: string | undefined;
@@ -73,7 +74,7 @@ describe("integration: security sandbox → exec (via runSpec)", () => {
       sandbox: { repoRoot: "/repo", base: "main", git },
     });
 
-    expect(gitCalls[0].slice(0, 3)).toEqual(["worktree", "add", "-b"]);
+    expect(gitCalls.find((c) => c[0] === "worktree" && c[1] === "add")!.slice(0, 3)).toEqual(["worktree", "add", "-b"]);
     expect(res.cwd).toContain("worktrees");
     expect(seenCwd).toBe(res.cwd); // step ran in the worktree
     expect(res.exec.advanced).toBe(true);
