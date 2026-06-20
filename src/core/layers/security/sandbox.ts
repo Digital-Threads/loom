@@ -112,6 +112,9 @@ function prepareWorktreeAt(repoRoot: string, path: string, branch: string, opts:
 /** Impl-swarm: prepare attempt `slot`'s isolated worktree (worktrees/<id>/sw<k>
  *  on branch loom/<id>/sw<k>). Each candidate implementation lives in its own. */
 export function prepareSwarmWorktree(repoRoot: string, taskId: string, slot: number, opts: SandboxOptions = {}): Worktree {
+  // Idempotent: a stale attempt worktree/branch from a prior impl run would make
+  // `git worktree add` fail ("already exists"). Drop it first → always a fresh start.
+  removeSwarmWorktree(repoRoot, taskId, slot, opts);
   return prepareWorktreeAt(repoRoot, swarmWorktreePath(taskId, slot), swarmWorktreeBranch(taskId, slot), opts);
 }
 
