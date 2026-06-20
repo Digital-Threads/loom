@@ -27,20 +27,10 @@ export function Board({
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null);
   const [stopping, setStopping] = useState<Set<string>>(new Set());
-  const [modelCfg, setModelCfg] = useState<{ stageDefaults: Record<string, string>; tiers: string[]; columns: Record<string, string> } | null>(null);
 
   useEffect(() => {
     client.board().then(setCols).catch((e) => setErr(String(e)));
   }, [client]);
-  useEffect(() => {
-    client.modelConfig?.().then(setModelCfg).catch(() => {});
-  }, [client]);
-
-  // Pin a model for a whole stage column (or "" = auto, the per-stage default).
-  function setColModel(stage: string, model: string) {
-    setModelCfg((m) => (m ? { ...m, columns: { ...m.columns, [stage]: model } } : m));
-    client.saveSetting(`model.col.${stage}`, model).catch(() => {});
-  }
 
   if (err) return <StateView kind="error" msg={`Can’t reach the core: ${err}`} />;
   if (!cols) return <StateView kind="loading" />;
@@ -134,20 +124,6 @@ export function Board({
           <h2>
             {STAGE_LABELS[col.stageKey] ?? col.stageKey}
             <span className="n">{col.cards.filter(visible).length}</span>
-            {modelCfg?.stageDefaults[col.stageKey] ? (
-              <select
-                className="col-model"
-                aria-label={`Model for ${STAGE_LABELS[col.stageKey] ?? col.stageKey}`}
-                title="Model for this stage (auto = the default policy)"
-                value={modelCfg.columns[col.stageKey] ?? ""}
-                onChange={(e) => setColModel(col.stageKey, e.target.value)}
-              >
-                <option value="">auto · {modelCfg.stageDefaults[col.stageKey]}</option>
-                {modelCfg.tiers.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            ) : null}
           </h2>
           <div className="stack">
             {col.cards.filter(visible).length ? (
