@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ENFORCED_SETTINGS, enforcedSettingsPath, enforceFlags, tokenPilotOnPath } from "../../../src/core/automation/enforced-settings.js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import type { CmdRunner } from "../../../src/core/install/types.js";
 
 describe("enforced settings", () => {
@@ -62,5 +65,52 @@ describe("enforced settings", () => {
     tokenPilotOnPath(spy, "linux");
     expect(calls[0].cmd).toBe("which");
     expect(calls[0].args).toEqual(["token-pilot"]);
+  });
+});
+
+describe("command-policy hook audit trail (loom-block-audit)", () => {
+  let tmpDir: string;
+  beforeEach(() => { tmpDir = mkdtempSync(join(tmpdir(), "loom-hook-audit-")); });
+  afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
+
+  function runHook(command: string, env: Record<string, string> = {}) {
+    // Ensure the hook script is written to disk
+    enforcedSettingsPath();
+    const hookPath = join(homedir(), ".loom", "hooks", "command-policy.cjs");
+    return spawnSync("node", [hookPath], {
+      input: JSON.stringify({ tool_input: { command } }),
+      env: { ...process.env, HOME: tmpDir, ...env },
+      encoding: "utf8",
+    });
+  }
+
+  it("writes a JSONL audit entry when a command is blocked and LOOM_TASK_ID is set", () => {
+    const result = runHook("rm -rf /", { LOOM_TASK_ID: "t-audit1", LOOM_PROJECT_ID: "proj-test" });
+    const out = JSON.parse(result.stdout);
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+
+    const auditFile = join(tmpDir, ".loom", "audit", "t-audit1.jsonl");
+    expect(existsSync(auditFile)).toBe(true);
+    const entry = JSON.parse(readFileSync(auditFile, "utf8").trim());
+    expect(entry.taskId).toBe("t-audit1");
+    expect(entry.projectId).toBe("proj-test");
+    expect(entry.command).toBe("rm -rf /");
+    expect(typeof entry.ts).toBe("number");
+    expect(typeof entry.reason).toBe("string");
+  });
+
+  it("does NOT write an audit entry when the command is allowed", () => {
+    const result = runHook("echo hello", { LOOM_TASK_ID: "t-audit2" });
+    expect(result.stdout).toBe("");
+    const auditFile = join(tmpDir, ".loom", "audit", "t-audit2.jsonl");
+    expect(existsSync(auditFile)).toBe(false);
+  });
+
+  it("does NOT write an audit entry when LOOM_TASK_ID is absent", () => {
+    const result = runHook("rm -rf /");
+    const out = JSON.parse(result.stdout);
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    const auditDir = join(tmpDir, ".loom", "audit");
+    expect(existsSync(auditDir)).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import { makeEvent } from "../../../src/core/spine/event.js";
 import {
   appendLoomEvent,
   loadLoomEvents,
+  loadCommandAuditEvents,
   eventLogPath,
 } from "../../../src/core/spine/event-bus.js";
 
@@ -121,5 +122,45 @@ describe("spine/event-bus", () => {
         `{"schema":"loom.event.v1","ts":2,"source":"loom","projectId":"p2","type":"b"}\n`,
     );
     expect(loadLoomEvents("p2").map((e) => e.type)).toEqual(["a", "b"]);
+  });
+
+  it("loadCommandAuditEvents returns [] when audit dir is missing", () => {
+    expect(loadCommandAuditEvents("p1")).toEqual([]);
+  });
+
+  it("loadCommandAuditEvents converts blocked-command entries to audit.command.blocked events", () => {
+    const auditDir = join(dir, "loom", "audit");
+    mkdirSync(auditDir, { recursive: true });
+    const entry = { ts: 42, taskId: "t-x", projectId: "p1", command: "rm -rf /", reason: "blocked by policy" };
+    writeFileSync(join(auditDir, "t-x.jsonl"), JSON.stringify(entry) + "\n");
+    const events = loadCommandAuditEvents("p1");
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("audit.command.blocked");
+    expect(events[0].taskId).toBe("t-x");
+    expect(events[0].projectId).toBe("p1");
+    expect(events[0].ts).toBe(42);
+    expect(events[0].severity).toBe("warn");
+    expect(events[0].message).toContain("rm -rf /");
+  });
+
+  it("loadCommandAuditEvents filters out entries for other projects", () => {
+    const auditDir = join(dir, "loom", "audit");
+    mkdirSync(auditDir, { recursive: true });
+    writeFileSync(join(auditDir, "t-y.jsonl"),
+      JSON.stringify({ ts: 1, taskId: "t-y", projectId: "other", command: "x", reason: "r" }) + "\n",
+    );
+    expect(loadCommandAuditEvents("p1")).toEqual([]);
+  });
+
+  it("loadCommandAuditEvents skips corrupt lines", () => {
+    const auditDir = join(dir, "loom", "audit");
+    mkdirSync(auditDir, { recursive: true });
+    writeFileSync(join(auditDir, "t-z.jsonl"),
+      `not-json\n` +
+      JSON.stringify({ ts: 5, taskId: "t-z", projectId: "p1", command: "c", reason: "r" }) + "\n",
+    );
+    const events = loadCommandAuditEvents("p1");
+    expect(events).toHaveLength(1);
+    expect(events[0].ts).toBe(5);
   });
 });

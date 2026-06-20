@@ -34,7 +34,7 @@ import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
 import { tokenEventsByTime, tokenUsageBySession, toolCallTokensForSessions, toolCallUsageBySession } from "../core/plugins/token-pilot/adapter.js";
 import { listSessions } from "../core/plugins/aimux/adapter.js";
-import { loadLoomEvents } from "../core/spine/event-bus.js";
+import { loadLoomEvents, loadCommandAuditEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
 import { recallPrior, partitionHits, askSearch, type RecallHit } from "../core/knowledge/recall.js";
@@ -115,6 +115,8 @@ export interface ApiDeps {
   startRun?: (taskId: string, stageKey: string) => string;
   /** Load the project's event stream (default: file bus). */
   loadEvents?: (projectId: string) => LoomEvent[];
+  /** Load command-policy block audit entries for the project (default: file audit dir). */
+  loadCommandAuditEvents?: (projectId: string) => LoomEvent[];
   /** Recall prior reasoning for a query (default: task-journal recall --json). */
   recall?: (query: string) => RecallHit[];
   /** Semantic search this project (default: task-journal ask --json). */
@@ -294,6 +296,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     db.prepare("UPDATE tasks SET project_id = ? WHERE project_id IS NULL OR project_id = ''").run(home);
   } catch { /* fresh db or no tasks */ }
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
+  const loadCmdAuditEvents = deps.loadCommandAuditEvents ?? ((projectId: string) => loadCommandAuditEvents(projectId));
   // Scope recall/search to the ACTIVE project (resolved per call), not the
   // server's cwd — otherwise task-journal looks in the wrong repo and recall
   // always returns 0 (loom-g2qf).
@@ -1700,8 +1703,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // ─── observability (L9) ──────────────────────────────────────────────────────
   // Unified timeline: the project's LoomEvent stream, time-ordered.
+  // Also merges command-policy block entries from ~/.loom/audit/ so the Security
+  // panel's audit trail reflects real blocked commands (audit.command.blocked).
   app.get("/api/timeline", (c) => {
-    const events = [...loadEvents(resolveProjectId(c))].sort((a, b) => a.ts - b.ts);
+    const projectId = resolveProjectId(c);
+    const events = [...loadEvents(projectId), ...loadCmdAuditEvents(projectId)].sort((a, b) => a.ts - b.ts);
     return c.json({ events });
   });
   // Board-wide token totals (provenance shown per cost row on the task view).

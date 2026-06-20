@@ -66,7 +66,7 @@ let allow=[],deny=FLOOR.map(p=>new RegExp(p));
 try{const cfg=JSON.parse(fs.readFileSync(path.join(os.homedir(),".loom","command-policy.json"),"utf8"));
 allow=(cfg.allow||[]).map(p=>{try{return new RegExp(p)}catch{return null}}).filter(Boolean);
 deny=[...deny,...(cfg.deny||[]).map(p=>{try{return new RegExp(p)}catch{return null}}).filter(Boolean)];}catch{}
-const block=r=>{process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:r}}));process.exit(0)};
+const block=r=>{process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:r}}));const tid=process.env.LOOM_TASK_ID;if(tid){try{const d=path.join(os.homedir(),".loom","audit");fs.mkdirSync(d,{recursive:true});fs.appendFileSync(path.join(d,tid+".jsonl"),JSON.stringify({ts:Date.now(),taskId:tid,projectId:process.env.LOOM_PROJECT_ID||"",command:cmd,reason:r})+"\n")}catch{}}process.exit(0)};
 for(const re of deny){if(re.test(cmd))return block("Command blocked by the security policy (/"+re.source+"/). Change it in Security \\u2192 Command policy, or run a safer command.")}
 if(allow.length&&!allow.some(re=>re.test(cmd)))return block("Command not in the security allow-list. Add an allow rule in Security \\u2192 Command policy if this is intended.");
 process.exit(0)});`;

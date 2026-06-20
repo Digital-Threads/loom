@@ -228,6 +228,19 @@ describe("web api", () => {
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
   });
 
+  it("GET /api/timeline merges command-policy audit blocks as audit.command.blocked events (loom-block-audit)", async () => {
+    const e = (ts: number, type: string) => ({ schema: "loom.event.v1", ts, source: "loom", projectId: "p1", type });
+    const blockEvent = { schema: "loom.event.v1" as const, ts: 2, source: "loom" as const, projectId: "p1", type: "audit.command.blocked", severity: "warn" as const, message: "Blocked: rm -rf /" };
+    const app2 = createApi(db, {
+      activeProject: () => ({ projectId: "p1", root: "/r", name: "r", addedAt: 0 }),
+      loadEvents: () => [e(1, "a") as never, e(3, "c") as never],
+      loadCommandAuditEvents: () => [blockEvent],
+    });
+    const body = (await (await app2.request("/api/timeline")).json()) as { events: { type: string; ts: number }[] };
+    expect(body.events.map((x) => x.type)).toEqual(["a", "audit.command.blocked", "c"]);
+    expect(body.events[1].ts).toBe(2);
+  });
+
   it("GET /api/knowledge/search returns semantic hits (L7.2)", async () => {
     const app2 = createApi(db, { search: (q) => [{ taskId: "t", projectHash: "h", eventType: "decision", text: `match ${q}`, score: 1 }] });
     const r = (await (await app2.request("/api/knowledge/search?q=axum")).json()) as { hits: { text: string }[] };
