@@ -1089,7 +1089,12 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       }
     };
     const qaGate = async (slot: number) => {
-      const res = await runQa(buildQaChecks(resolveFlow("qa", storedFlow("qa")), { repoRoot: swarmWorktreePath(id, slot) }));
+      // Gate candidates on `build` only (tsc + bundler + design-system) — it runs
+      // reliably in a worktree, whereas the full test suite (vitest) is fragile
+      // there (node_modules symlink, loom-xzqv). This is a viability filter to pick
+      // among BUILDABLE candidates; the elected winner still goes through the full
+      // QA stage (tests) after promotion, which parks the task if it regresses.
+      const res = await runQa(buildQaChecks(["build"], { repoRoot: swarmWorktreePath(id, slot) }));
       return { green: res.passed, summary: fmtQa(res) };
     };
     const judge = async (greens: { slot: number; branch: string; output: string }[]) => {
