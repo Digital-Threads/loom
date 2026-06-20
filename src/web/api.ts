@@ -1050,9 +1050,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         // instead of patching findings in place.
         const reviewRel = applyRelocate(id, "review", reviewRaw.get(id) ?? "");
         if (reviewRel) return { ok: true, relocate: reviewRel };
-        // Autopilot fixes the accumulated findings once, then re-reviews — no
-        // human gate, so it must resolve the work rather than park on it.
+        // Autopilot fixes the accumulated findings once, then re-reviews. But the
+        // fix + re-review is itself expensive (another fix pass + reviewers on a
+        // large session), and the fix may not even converge. So when the task has
+        // already spent past the auto-fix budget, DON'T pay for a fix attempt that
+        // might fail anyway — park with the findings surfaced for a manual fix +
+        // re-run (loom-wqzr). 0 = no cap.
         if (payload!.result.findings.length) {
+          const spentNow = getCosts(db, id).filter((r) => r.source === "aimux" && r.metric === "spent").reduce((s, r) => s + r.value, 0);
+          const autofixCapUsd = getSetting<number>(db, "review.autofixMaxUsd", 6);
+          if (autofixCapUsd > 0 && spentNow >= autofixCapUsd) {
+            recordTurn(id, "review", "Auto-fix skipped (cost cap)", `Review found ${payload!.result.findings.length} issue(s). The task has already spent $${spentNow.toFixed(2)} ≥ the $${autofixCapUsd} auto-fix cap — parking for a manual fix instead of an expensive (and possibly non-converging) auto-fix loop.`);
+            return { ok: false, needsAttention: true, note: `review auto-fix skipped — cost cap $${autofixCapUsd} reached` };
+          }
           await fixAllFindings(id, payload!.result.findings);
           payload = await reReviewAfterFix(id, payload!.result.findings);
           recordTurn(id, "review", "Auto-fix + re-review (autopilot)", fmtReview(payload.result));

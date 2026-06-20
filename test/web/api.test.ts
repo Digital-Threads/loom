@@ -1026,6 +1026,26 @@ describe("web api — fs browse + PR connector", () => {
     expect(rev.result.findings.length).toBe(0); // re-review came back clean
   });
 
+  it("autopilot review skips the expensive auto-fix and parks when over the cost cap (loom-wqzr)", async () => {
+    createTask(database, { id: "rcap", title: "RCAP", run_mode: "autopilot" });
+    upsertCost(database, "rcap", "aimux", "spent", 7, true); // already over the $6 default auto-fix cap
+    const rm = createRunManager();
+    let fixCalls = 0;
+    const a = createApi(database, {
+      runManager: rm,
+      stageAgent: async () => { fixCalls++; return "исправил\nИТОГ: ГОТОВО"; }, // only the auto-fix path uses stageAgent
+      reviewPass: (key) => ({ key, run: async () => [{ pass: key, severity: "bug" as const, message: "boom" }] }),
+    });
+    await a.request("/api/tasks/rcap/start", { method: "POST" });
+    await a.request("/api/tasks/rcap/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const { runId } = (await (await a.request("/api/tasks/rcap/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect(fixCalls).toBe(0); // auto-fix NOT run — cost cap hit, so no extra opus spend
+    const stages = (await (await a.request("/api/tasks/rcap")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active"); // parked for a manual fix
+    expect((await transcriptOf(a, "rcap")).some((t) => /auto-fix cap|parking for a manual fix/i.test(t.output))).toBe(true);
+  });
+
   it("review fix with no findings → 400", async () => {
     createTask(database, { id: "rf0", title: "RF0" });
     const a = createApi(database);
