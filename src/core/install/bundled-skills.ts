@@ -8,10 +8,30 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
+// Loom ships one skill per pipeline stage so a fresh install has the full method
+// out of the box (no plugin hunt). Stage → skill mapping is wired into each
+// stage's prompt; these are the bundled bodies. superpowers/* are vendored from
+// the superpowers plugin (markdown methods, no deps).
 export const BUNDLED_SKILLS = [
-  "adversarial-review", // review stage — break the change before it ships
-  "code-review-format", // review stage — consistent finding format
-  "pr-description-format", // PR stage — the PR text Loom writes
+  // review stage
+  "requesting-code-review", // drive a rigorous review pass
+  "receiving-code-review", // work the fix loop on returned findings
+  "adversarial-review", // break the change before it ships
+  "code-review-format", // consistent finding format
+  // brainstorm → spec → rd
+  "brainstorming", // brainstorm stage — turn the idea into a design
+  "writing-plans", // spec + rd stages — design doc / task breakdown
+  // impl stage
+  "test-driven-development", // failing test → minimal code → refactor
+  "executing-plans", // work the plan step by step
+  "subagent-driven-development", // fan work out to subagents when it fits
+  // qa stage
+  "verification-before-completion", // prove it works before calling done
+  // pr / done stage
+  "finishing-a-development-branch", // wrap up + land the branch cleanly
+  "pr-description-format", // the PR text Loom writes
+  // cross-cutting
+  "systematic-debugging", // any stage that hits a bug
   "natural-language-response", // human-readable output (matches the session rules)
 ];
 
