@@ -909,12 +909,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         const story = boardTaskStory(root); // task-journal's native export-pr
         if (story.trim()) return story;
       }
+      // The Done-time snapshot (story or raw events) is the authoritative record
+      // once the worktree is gone — it must beat the live `boardTaskJournal` read,
+      // which reads the repo's journal project and can be racy/empty (and made
+      // this test flaky). Snapshot first, live read only as a last resort.
       const snap = loadResult<{ events?: TjEvent[]; story?: string }>(id, JOURNAL_SNAPSHOT_KIND);
       if (snap?.story?.trim()) return snap.story;
-      const live = boardTaskJournal(root);
-      if (live.trim()) return live;
       const rendered = snap?.events ? renderJournalFromEvents(snap.events) : "";
       if (rendered.trim()) return rendered;
+      const live = boardTaskJournal(root);
+      if (live.trim()) return live;
     }
     // Nothing to show — surface the explicit "no journal" marker if we recorded one.
     const status = loadResult<{ state?: string; reason?: string }>(id, JOURNAL_STATUS_KIND);
