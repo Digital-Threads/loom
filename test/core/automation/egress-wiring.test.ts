@@ -49,4 +49,21 @@ describe("egress audit wiring (Phase 1)", () => {
     expect(env()?.HTTPS_PROXY).toBeUndefined();
     expect(env()?.LOOM_TASK_ID).toBe("t2");
   });
+
+  it("passes an allow predicate to the proxy when egress enforcement is on (and not when off)", async () => {
+    const optsSeen: Array<{ allow?: unknown }> = [];
+    const mk = (enforce: boolean) => createAimuxLiveLauncher({
+      loadConfig: (() => ({})) as never, profile: "p1", listMcp: () => [],
+      openSession: (() => ({ send: async () => ({ text: "ok", costUsd: 0, denials: [] }), interject: () => false, relocate: () => {}, cost: () => 0, denials: () => [], close: () => {} })) as never,
+      sandbox: true, detectSandbox: () => "none",
+      egressPolicy: () => ({ enforce, allow: ["github.com"] }),
+      startEgressProxy: (async (o: { allow?: unknown }) => { optsSeen.push(o); return { port: 1, close: () => {} }; }) as never,
+    });
+
+    await mk(true).run("hi", { sessionId: "e1", resume: false, sandbox: true, env: {} });
+    expect(typeof optsSeen[0].allow).toBe("function"); // enforce on → allowlist predicate wired
+
+    await mk(false).run("hi", { sessionId: "e2", resume: false, sandbox: true, env: {} });
+    expect(optsSeen[1].allow).toBeUndefined(); // enforce off → observe-only, no predicate
+  });
 });

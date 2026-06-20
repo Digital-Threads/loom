@@ -70,6 +70,7 @@ import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { audit } from "../core/security/audit.js";
+import { DEFAULT_EGRESS_ALLOW } from "../core/security/egress-allowlist.js";
 import { join as pathJoin, isAbsolute, dirname, resolve as pathResolve } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { parseRelocate, relocateAllowed, type Relocate } from "../core/pipeline/relocate.js";
@@ -339,7 +340,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // The agent engine: one swappable runtime hides everything Claude-specific
   // (launcher, skills, connectors, recall). Declared early so recall below can
   // fall back to it; the per-task launcher is read off it further down.
-  const runtime = deps.runtime ?? createClaudeRuntime({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
+  const runtime = deps.runtime ?? createClaudeRuntime({
+    sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false),
+    egressPolicy: () => ({
+      enforce: getSetting<boolean>(db, "security.egress.enforce", false),
+      allow: getSetting<string[]>(db, "security.egress.allow", DEFAULT_EGRESS_ALLOW),
+    }),
+  });
   const recall =
     deps.recall ?? runtime.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query, { run: recallRunner }));
   const search =

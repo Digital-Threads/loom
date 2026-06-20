@@ -15,6 +15,8 @@ import { selectConnector } from "../connectors/registry.js";
 export interface ClaudeRuntimeDeps {
   /** OS-sandbox toggle, resolved per spawn (see aimux launcher). */
   sandbox?: boolean | (() => boolean);
+  /** Egress enforcement policy, resolved per spawn (from settings by the host). */
+  egressPolicy?: () => { enforce: boolean; allow: string[] };
   /** Override the launcher (tests). Default: live aimux launcher. */
   launcher?: SessionLauncher & SessionControl;
   /** Optional recall — wired by the API with the project root in scope. */
@@ -24,7 +26,7 @@ export interface ClaudeRuntimeDeps {
 export function createClaudeRuntime(deps: ClaudeRuntimeDeps = {}): AgentRuntime {
   return {
     id: "claude",
-    launcher: deps.launcher ?? createAimuxLiveLauncher({ sandbox: deps.sandbox }),
+    launcher: deps.launcher ?? createAimuxLiveLauncher({ sandbox: deps.sandbox, egressPolicy: deps.egressPolicy }),
     skills: {
       list: listSkills,
       read: readSkill,

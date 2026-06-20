@@ -18,6 +18,7 @@ import type { SessionControl } from "./live-session.js";
 import { detectSandbox, wrapCommand, sandboxUsable, type OsSandboxBackend } from "../security/os-sandbox.js";
 import { startEgressProxy as startEgressProxyImpl, type EgressProxy } from "../security/egress-proxy.js";
 import { createEgressObserver } from "../security/egress-audit.js";
+import { allowsHost } from "../security/egress-allowlist.js";
 import { enforcedSettingsPath, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
@@ -42,6 +43,9 @@ export interface AimuxLiveLauncherDeps {
   spawnProcess?: typeof spawn;
   /** Start the egress-audit proxy (injectable for tests). Default: the real one. */
   startEgressProxy?: typeof startEgressProxyImpl;
+  /** Egress enforcement policy, resolved per session (from settings by the host):
+   *  enforce=true refuses hosts off `allow`. Absent → observe-only. */
+  egressPolicy?: () => { enforce: boolean; allow: string[] };
 }
 
 interface RunOpts {
@@ -169,11 +173,11 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
         })
       : spawnProcess) as typeof spawn;
 
-    // Egress audit (Phase 1, loom-xclx): when the security sandbox is on, route the
-    // agent's traffic through a local proxy that LOGS each destination host and
-    // forwards it — observe-only, nothing is blocked. Works even where write-
-    // confinement is degraded (the proxy is just env). Best-effort: if the proxy
-    // can't start, run with direct access rather than break the agent's network.
+    // Egress (loom-xclx): when the security sandbox is on, route the agent's
+    // traffic through a local proxy that LOGS each destination host and, when
+    // egress enforcement is enabled, REFUSES hosts off the allowlist. Works even
+    // where write-confinement is degraded (the proxy is just env). Best-effort: if
+    // the proxy can't start, run with direct access rather than break the network.
     let sessionEnv = opts.env;
     if (sandboxOn) {
       try {
@@ -181,7 +185,12 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
           projectId: opts.env?.LOOM_PROJECT_ID ?? "default",
           taskId: opts.env?.LOOM_TASK_ID,
         });
-        const proxy = await startEgress({ onHost: obs.onHost });
+        const policy = deps.egressPolicy?.();
+        const proxy = await startEgress({
+          onHost: obs.onHost,
+          onBlock: obs.onBlock,
+          allow: policy?.enforce ? (host) => allowsHost(host, policy.allow) : undefined,
+        });
         egressProxies.set(opts.sessionId, proxy);
         const url = `http://127.0.0.1:${proxy.port}`;
         sessionEnv = { ...opts.env, HTTP_PROXY: url, HTTPS_PROXY: url, NO_PROXY: "127.0.0.1,localhost" };
