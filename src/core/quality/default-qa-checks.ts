@@ -79,8 +79,30 @@ export function buildQaChecks(keys: string[], env: QaCheckEnv): QaCheck[] {
     };
   };
 
+  // The "tests" pass runs the package's `test` script AND, when present, `test:web`
+  // — a separate browser/jsdom suite that the root `test` (e.g. vitest excluding
+  // web/**) does NOT cover. Without this, UI-only changes pass QA unverified
+  // (their component tests are never run). Fails if EITHER suite fails.
+  const testsCheck = (): QaCheck => {
+    const subs = [["host", "test"], ["web", "test:web"]].filter(([, name]) => scripts[name]) as Array<[string, string]>;
+    if (!subs.length) return skipped("tests", `no "test" script in package.json`);
+    return {
+      key: "tests",
+      run: async () => {
+        const parts: string[] = [];
+        let ok = true;
+        for (const [label, name] of subs) {
+          const r = await sh(pm, ["run", name], env.repoRoot);
+          ok = ok && r.code === 0;
+          parts.push(`[${label}] ${clip(r.output)}`);
+        }
+        return { ok, output: parts.join("\n\n") };
+      },
+    };
+  };
+
   return keys.map((key) => {
-    if (key === "tests") return script("tests", "test");
+    if (key === "tests") return testsCheck();
     if (key === "build") return script("build", "build");
     if (key === "browser") return skipped(key, "browser checks need a canary connector (not configured)");
     return skipped(key, "no default runner for this pass");

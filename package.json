@@ -47,6 +47,7 @@
     "build": "npm run check:ds && tsc -p tsconfig.json && npm run build:web && npm run copy:manifests",
     "start": "node dist/cli.js",
     "test": "vitest run",
+    "test:web": "cd web && vitest run",
     "prepublishOnly": "npm run build",
     "prepack": "node scripts/prepare-publish.mjs --prepack",
     "postpack": "node scripts/prepare-publish.mjs --restore",
