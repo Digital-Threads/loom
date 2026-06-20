@@ -1,0 +1,53 @@
+name: release
+
+# Build the self-contained Loom binary on each OS and attach it to the GitHub
+# Release. `bun build --compile` bundles the runtime + all JS + the native
+# better-sqlite3 for THAT platform, so each runner produces a working native
+# binary (no cross-compile). Triggered by a v* tag, or manually for a dry run.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # upload release assets
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, name: linux-x64, ext: "" }
+          - { os: macos-latest, name: darwin-arm64, ext: "" }
+          - { os: windows-latest, name: windows-x64, ext: ".exe" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Build (host dist + web/dist)
+        run: bun run build
+      - name: Compile self-contained binary
+        run: bun build dist/cli.js --compile --outfile "release/loom${{ matrix.ext }}"
+      - name: Stage web/dist next to the binary
+        shell: bash
+        run: |
+          mkdir -p release/web
+          cp -r web/dist release/web/dist
+      - name: Package
+        shell: bash
+        run: |
+          cd release
+          tar -czf "../loom-${{ matrix.name }}.tar.gz" .
+      - name: Attach to the release (on a v* tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: loom-${{ matrix.name }}.tar.gz
+      - name: Upload as a workflow artifact (manual runs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: loom-${{ matrix.name }}
+          path: loom-${{ matrix.name }}.tar.gz
