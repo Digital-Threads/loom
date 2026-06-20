@@ -27,6 +27,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install deps
         run: bun install --frozen-lockfile
+      - name: Install web deps
+        # web/ is a separate package (own package.json + bun.lock) — its deps
+        # (react/vite + @testing-library, which the build's tsc type-checks)
+        # aren't pulled by the root install, so install them too.
+        run: cd web && bun install --frozen-lockfile
       - name: Build (host dist + web/dist)
         run: bun run build
       - name: Compile self-contained binary
