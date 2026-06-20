@@ -255,12 +255,20 @@ export function Connectors({ client }: { client: LoomClient }) {
           <tbody>
             {plugins.map((p) => (
               <tr key={p.name}>
-                <td>{p.name}{p.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
+                <td>
+                  {p.name}
+                  {p.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}
+                  {p.bundled ? <span className="chip" style={{ marginLeft: 6 }} title="Bundled with Loom and required by the pipeline">required</span> : null}
+                </td>
                 <td className="crumb">{p.version ?? "—"}</td>
                 <td>
                   <button className="btn" onClick={() => runPluginOp(client.pluginUpdate(p.name), `Updating ${p.name}`)}>Update</button>
-                  <button className="btn" onClick={() => runPluginOp(p.enabled ? client.pluginDisable(p.name) : client.pluginEnable(p.name), p.enabled ? `Disabling ${p.name}` : `Enabling ${p.name}`)}>{p.enabled ? "Disable" : "Enable"}</button>
-                  <button className="btn" onClick={() => runPluginOp(client.pluginUninstall(p.name), `Removing ${p.name}`)}>Remove</button>
+                  {p.bundled ? null : (
+                    <button className="btn" onClick={() => runPluginOp(p.enabled ? client.pluginDisable(p.name) : client.pluginEnable(p.name), p.enabled ? `Disabling ${p.name}` : `Enabling ${p.name}`)}>{p.enabled ? "Disable" : "Enable"}</button>
+                  )}
+                  {p.bundled ? null : (
+                    <button className="btn" onClick={() => runPluginOp(client.pluginUninstall(p.name), `Removing ${p.name}`)}>Remove</button>
+                  )}
                 </td>
               </tr>
             ))}

@@ -408,7 +408,7 @@ describe("web api", () => {
   });
 
   // ── connectors: Claude plugins ──
-  it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status)", async () => {
+  it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status/bundled)", async () => {
     const app2 = createApi(db, {
       claudePlugin: () =>
         Promise.resolve({
@@ -416,16 +416,35 @@ describe("web api", () => {
           stdout:
             "Installed plugins:\n\n" +
             "  ❯ my-plugin@my-marketplace\n    Version: 1.2.0\n    Scope: user\n    Status: ✔ enabled\n\n" +
-            "  ❯ other@other-mkt\n    Version: 2.0.0\n    Scope: project\n    Status: ✘ disabled\n",
+            "  ❯ other@other-mkt\n    Version: 2.0.0\n    Scope: project\n    Status: ✘ disabled\n\n" +
+            "  ❯ token-pilot@token-pilot\n    Version: 0.46.0\n    Scope: user\n    Status: ✔ enabled\n\n" +
+            "  ❯ broken@mkt\n    Version: unknown\n    Scope: user\n    Status: error: not loaded\n",
         }),
     });
     const r = (await (await app2.request("/api/connectors/plugins")).json()) as {
-      plugins: { name: string; version?: string; enabled: boolean }[];
+      plugins: { name: string; version?: string; enabled: boolean; bundled?: boolean }[];
     };
     expect(r.plugins).toEqual([
-      { name: "my-plugin@my-marketplace", version: "1.2.0", enabled: true },
-      { name: "other@other-mkt", version: "2.0.0", enabled: false },
+      { name: "my-plugin@my-marketplace", version: "1.2.0", enabled: true, bundled: false },
+      { name: "other@other-mkt", version: "2.0.0", enabled: false, bundled: false },
+      { name: "token-pilot@token-pilot", version: "0.46.0", enabled: true, bundled: true }, // Loom-required
+      { name: "broken@mkt", version: "unknown", enabled: false, bundled: false }, // odd status → NOT enabled (no false "on")
     ]);
+  });
+
+  it("blocks uninstall/disable of a bundled plugin (409), but allows update", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    for (const verb of ["uninstall", "disable"]) {
+      const res = await app2.request(`/api/connectors/plugins/token-pilot@token-pilot/${verb}`, { method: "POST" });
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ ok: false });
+    }
+    expect(calls).toEqual([]); // CLI never invoked for a blocked bundled op
+    // update is still allowed (keeps bundled plugins current)
+    const upd = await app2.request("/api/connectors/plugins/token-pilot@token-pilot/update", { method: "POST" });
+    expect(upd.status).toBe(200);
+    expect(calls).toContainEqual(["plugin", "update", "--", "token-pilot@token-pilot"]);
   });
 
   it("POST /api/connectors/plugins installs name@marketplace via the CLI", async () => {

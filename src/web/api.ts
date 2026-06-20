@@ -165,7 +165,17 @@ function profileConfigDir(p: { is_source?: boolean; path: string }): string {
 }
 
 // A Claude plugin row for the Connectors UI. Parsed from `claude plugin list`.
-interface PluginEntry { name: string; version?: string; enabled: boolean }
+interface PluginEntry { name: string; version?: string; enabled: boolean; bundled?: boolean }
+
+// Plugins Loom installs and depends on (bootstrap INSTALL_UNITS). Uninstalling or
+// disabling one breaks the pipeline (caveman review / qa-skills / canary) or the
+// agent's tooling (token-pilot / task-journal / context-mode / superpowers), so
+// the UI flags them and the API blocks remove/disable — the user can still force
+// it via the claude CLI if they truly mean to. Matched by the base name (before @).
+const BUNDLED_PLUGINS = new Set([
+  "canary", "caveman", "context-mode", "qa-skills", "superpowers", "task-journal", "token-pilot",
+]);
+const pluginBaseName = (ref: string): string => ref.split("@")[0];
 
 // Defensive parse of `claude plugin list`. The real output is a multi-line block
 // per plugin:
@@ -184,7 +194,7 @@ function parsePluginList(stdout: string): PluginEntry[] {
     // Header: an optional bullet glyph, then "<name>@<marketplace>" alone.
     const ref = line.replace(/^[^\w]+/, "").match(/^([A-Za-z0-9][\w.-]*@[\w.-]+)$/);
     if (ref) {
-      cur = { name: ref[1], enabled: true };
+      cur = { name: ref[1], enabled: true, bundled: BUNDLED_PLUGINS.has(pluginBaseName(ref[1])) };
       out.push(cur);
       continue;
     }
@@ -192,7 +202,10 @@ function parsePluginList(stdout: string): PluginEntry[] {
     const v = line.match(/^Version:\s*(\S+)/i);
     if (v) { cur.version = v[1]; continue; }
     const s = line.match(/^Status:\s*(.+)$/i);
-    if (s) { cur.enabled = !/disabled/i.test(s[1]); continue; }
+    // Positive match: "enabled" only when the word is actually present, so an
+    // error/blank/unexpected status reads as NOT enabled (the safe default)
+    // rather than the green "on" that `!disabled` produced for any odd string.
+    if (s) { cur.enabled = /enabled/i.test(s[1]) && !/disabled/i.test(s[1]); continue; }
   }
   return out;
 }
@@ -1986,6 +1999,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const pluginAction = (verb: string) => async (c: Context) => {
     const name = c.req.param("name") ?? "";
     if (!isSafePluginRef(name)) return c.json({ error: "invalid plugin name" }, 400);
+    // Don't let the UI remove/disable a plugin Loom's pipeline depends on.
+    if ((verb === "uninstall" || verb === "disable") && BUNDLED_PLUGINS.has(pluginBaseName(name))) {
+      return c.json({ ok: false, error: `${pluginBaseName(name)} is bundled with Loom and required by the pipeline — ${verb} is blocked here. Use the claude CLI directly if you really need to.` }, 409);
+    }
     try {
       const r = await claudePlugin(["plugin", verb, "--", name]);
       return r.code === 0 ? c.json({ ok: true }) : c.json({ ok: false, error: r.stdout || `${verb} failed` });

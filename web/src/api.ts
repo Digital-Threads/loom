@@ -438,6 +438,7 @@ export interface PluginEntry {
   name: string;
   version?: string;
   enabled: boolean;
+  bundled?: boolean; // shipped + required by Loom's pipeline → can't be removed/disabled here
 }
 
 export interface LayerInfo {
