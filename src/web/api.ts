@@ -18,7 +18,7 @@ import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expa
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
 import { pickFallbackProfile, shouldAutoFallback, type ProfileLimit } from "../core/automation/auto-fallback.js";
-import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
+import { addSubscription, removeSubscription, listProviderPresets, addProviderPreset, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
   listProjects,
@@ -1828,6 +1828,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const b = (await c.req.json().catch(() => ({}))) as { name?: unknown; cli?: unknown; model?: unknown };
     if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
     const res = addSub(b.name, { cli: typeof b.cli === "string" ? b.cli : undefined, model: typeof b.model === "string" ? b.model : undefined });
+    return res.ok ? c.json(res) : c.json(res, 400);
+  });
+
+  // The one-command provider presets (deepseek/glm/kimi/…) for the Add-provider UI.
+  app.get("/api/accounts/presets", (c) => c.json({ presets: listProviderPresets() }));
+
+  // Add a provider-preset profile. Body: { name, provider, token }. The profile
+  // runs on the claude CLI against the provider's Anthropic-compatible endpoint.
+  app.post("/api/accounts/preset", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: unknown; provider?: unknown; token?: unknown };
+    if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
+    if (typeof b.provider !== "string" || !b.provider) return c.json({ error: "provider required" }, 400);
+    if (typeof b.token !== "string" || !b.token) return c.json({ error: "token required" }, 400);
+    const res = addProviderPreset(b.name, b.provider, b.token);
     return res.ok ? c.json(res) : c.json(res, 400);
   });
 

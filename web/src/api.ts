@@ -197,6 +197,10 @@ export function createClient(base = "", f: Fetcher = fetch) {
       postJson<{ active: string }>(`${base}/api/accounts/active`, { profileId }, f).then((d) => d.active),
     addSubscription: (name: string, opts?: { cli?: string; model?: string }) =>
       postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription`, { name, ...opts }, f),
+    listPresets: () =>
+      getJson<{ presets: { key: string; label: string; baseUrl: string }[] }>(`${base}/api/accounts/presets`, f).then((d) => d.presets),
+    addProviderPreset: (name: string, provider: string, token: string) =>
+      postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/preset`, { name, provider, token }, f),
     removeSubscription: (name: string) =>
       postJson<{ ok: boolean; error?: string }>(`${base}/api/accounts/subscription/remove`, { name }, f),
     authStart: (name: string) =>

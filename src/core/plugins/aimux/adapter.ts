@@ -10,6 +10,11 @@ import {
   launchProfile,
   getProfile,
   saveActiveProfile,
+  PROVIDER_PRESETS,
+  providerEnv,
+  writeProfileDotEnv,
+  seedApiClaudeJson,
+  ensureProfileDir,
   type HealthReport,
 } from "@digital-threads/aimux/core";
 import type { SettingsSchema, LoomPlugin, ViewSpec } from "../contract.js";
@@ -75,6 +80,40 @@ export function addSubscription(
     if (!cfg) return { ok: false, error: "no aimux config" };
     const updated = addProfile(cfg, name, opts);
     saveConfig(updated);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export interface ProviderPresetInfo {
+  key: string;
+  label: string;
+  baseUrl: string;
+}
+
+/** The one-command provider presets aimux ships (deepseek/glm/kimi/…). Each runs
+ *  on the claude CLI against the provider's Anthropic-compatible endpoint, so it
+ *  inherits the full claude brain + native resume. */
+export function listProviderPresets(): ProviderPresetInfo[] {
+  return Object.entries(PROVIDER_PRESETS).map(([key, p]) => ({ key, label: p.label, baseUrl: p.baseUrl }));
+}
+
+/** Add a profile from a provider preset: a claude-CLI profile pointed at the
+ *  provider's endpoint, with the token written to its private .env. */
+export function addProviderPreset(name: string, providerKey: string, token: string): AddSubscriptionResult {
+  try {
+    const preset = PROVIDER_PRESETS[providerKey.toLowerCase()];
+    if (!preset) return { ok: false, error: `unknown provider: ${providerKey}` };
+    if (!name.trim()) return { ok: false, error: "profile name required" };
+    if (!token.trim()) return { ok: false, error: "API token required" };
+    const cfg = loadConfig();
+    if (!cfg) return { ok: false, error: "no aimux config" };
+    const updated = addProfile(cfg, name, { cli: "claude", model: preset.models.default });
+    const profilePath = ensureProfileDir(updated, name);
+    saveConfig(updated);
+    writeProfileDotEnv(profilePath, providerEnv(preset, token)); // ANTHROPIC_BASE_URL + token + model
+    seedApiClaudeJson(profilePath);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

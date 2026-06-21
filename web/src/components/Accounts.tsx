@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, WorkspaceData, HealthRow, RateLimit } from "../api";
 import { StateView } from "./StateView";
 import { AuthModal } from "./AuthModal";
+import { Select } from "./Select";
 import { toast } from "../toast";
 
 // Color a utilization % like aimux's status bar: green under 70, amber to 90, red above.
@@ -20,9 +21,14 @@ export function Accounts({ client }: { client: LoomClient }) {
   const [limits, setLimits] = useState<Record<string, RateLimit>>({});
   const [limitsLoading, setLimitsLoading] = useState(true);
   const [authProfile, setAuthProfile] = useState<string | null>(null);
+  const [presets, setPresets] = useState<{ key: string; label: string; baseUrl: string }[]>([]);
+  const [provider, setProvider] = useState("");
+  const [provName, setProvName] = useState("");
+  const [provToken, setProvToken] = useState("");
 
   useEffect(() => {
     client.workspace().then(setWs).catch((e) => setErr(String(e)));
+    client.listPresets().then(setPresets).catch(() => {}); // provider presets for the Add-provider form
     // Live rate-limit utilization per profile (OAuth only). Background — each is a
     // ~5s probe; the table renders immediately and the % fills in when ready.
     setLimitsLoading(true);
@@ -41,6 +47,20 @@ export function Accounts({ client }: { client: LoomClient }) {
       setWs(await client.workspace());
       toast.success("Subscription added — authorize it with: aimux auth login " + newSub.trim());
     } catch { toast.error("Couldn't add subscription"); } finally { setBusy(false); }
+  }
+
+  // Add a provider-preset profile (DeepSeek/GLM/…): a claude-CLI profile pointed at
+  // the provider's endpoint, with the token written to its private .env.
+  async function addPreset() {
+    if (!provider || !provName.trim() || !provToken.trim()) return;
+    setBusy(true);
+    try {
+      const r = await client.addProviderPreset(provName.trim(), provider, provToken.trim());
+      if (r.error) { toast.error(r.error); return; }
+      setProvName(""); setProvToken(""); setProvider("");
+      setWs(await client.workspace());
+      toast.success("Provider added");
+    } catch { toast.error("Couldn't add provider"); } finally { setBusy(false); }
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -106,6 +126,21 @@ export function Accounts({ client }: { client: LoomClient }) {
           <button className="btn acc" disabled={busy || !newSub.trim()} onClick={addSub}>Add subscription</button>
           <button className="btn" disabled={busy} onClick={checkHealth}>Check health</button>
         </div>
+        {presets.length ? (
+          <div className="acct-add">
+            <Select value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="Provider preset">
+              <option value="">+ provider…</option>
+              {presets.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </Select>
+            {provider ? (
+              <>
+                <input className="inp" placeholder="profile name" value={provName} onChange={(e) => setProvName(e.target.value)} />
+                <input className="inp" type="password" placeholder="API token" value={provToken} onChange={(e) => setProvToken(e.target.value)} />
+                <button className="btn acc" disabled={busy || !provName.trim() || !provToken.trim()} onClick={addPreset}>Add provider</button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <p className="acct-hint">
         Adding a profile only creates the config entry. To sign in, click <b>Authorize</b> on its row — or run{" "}
