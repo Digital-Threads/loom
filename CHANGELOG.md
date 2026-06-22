@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **One-line binary installer** — `curl -fsSL …/install.sh | sh` downloads the
+  latest self-contained binary for your platform (Linux x64, macOS Apple
+  Silicon), unpacks it with the web UI beside it, and puts `loom` on your PATH —
+  no Node required. The README now documents both install paths (npm and binary).
+
 ## [0.6.0] - 2026-06-22
 
 ### Added

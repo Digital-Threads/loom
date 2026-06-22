@@ -12,12 +12,32 @@ The layers: **aimux** (multi-account AI-CLI sessions, no downtime on rate limits
 
 ## Install
 
-**Prerequisite: [Node.js](https://nodejs.org) ≥ 22.**
+Two ways to get Loom. Use npm if you already have Node; use the binary if you
+don't want a toolchain.
+
+### npm (needs Node ≥ 22)
 
 ```bash
 npm i -g @digital-threads/loom
 loom
 ```
+
+Easiest to update (`npm i -g @digital-threads/loom@latest`) and the right choice
+on a machine that already has [Node.js](https://nodejs.org).
+
+### Binary (no Node, nothing to install)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Digital-Threads/loom/master/loom-host/install.sh | sh
+loom
+```
+
+Self-contained — the runtime and the web UI are bundled into one executable, so
+there's no Node and no dependency tree. The installer grabs the latest release
+for your platform (Linux x64, macOS Apple Silicon) and puts `loom` on your PATH;
+on Windows, or another architecture, download the archive from the
+[releases page](https://github.com/Digital-Threads/loom/releases/latest) or use
+the npm install above. Updating means re-running the installer.
 
 `loom` with no arguments starts the app — the local API and the web UI — and
 opens the dashboard in your browser. Stop it with `Ctrl+C`.
