@@ -8,11 +8,17 @@
 // wrote, the spine env — and tracks per-session degradations for the task.
 
 import { spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadConfig, loadActiveProfile, openSession, type LiveSession } from "@digital-threads/aimux/core";
 import { listSubscriptions } from "../plugins/aimux/adapter.js";
 import type { SessionLauncher } from "./task-session.js";
 import type { SessionControl } from "./live-session.js";
-import { detectSandbox, wrapCommand } from "../security/os-sandbox.js";
+import { detectSandbox, wrapCommand, sandboxUsable, type OsSandboxBackend } from "../security/os-sandbox.js";
+import { startEgressProxy as startEgressProxyImpl, type EgressProxy } from "../security/egress-proxy.js";
+import { createEgressObserver } from "../security/egress-audit.js";
+import { allowsHost } from "../security/egress-allowlist.js";
 import { enforcedSettingsPath, tokenPilotOnPath, enforcedSettingsWriteFailed } from "./enforced-settings.js";
 import { listMcp as listMcpServers, writeMcpRunConfig, type McpServer } from "../connectors/mcp.js";
 
@@ -25,12 +31,21 @@ export interface AimuxLiveLauncherDeps {
   /** EXPERIMENTAL: confine writes to the worktree (cwd) via an OS sandbox. A
    *  function is resolved per session so a Settings toggle takes effect next run. */
   sandbox?: boolean | (() => boolean);
+  /** Detect the available OS-sandbox backend (injectable for tests). */
+  detectSandbox?: () => OsSandboxBackend;
+  /** Verify the backend can actually run the agent (injectable for tests). */
+  sandboxUsable?: (backend: OsSandboxBackend, cli: string) => boolean;
   /** Source of the user's MCP registry (default: ~/.loom/mcp.json). */
   listMcp?: () => McpServer[];
   /** Write the enabled servers to a run-config file, return its path (or null). */
   writeMcpRunConfig?: (servers: McpServer[]) => string | null;
   /** Spawn the child process (injectable for tests). Default: node spawn. */
   spawnProcess?: typeof spawn;
+  /** Start the egress-audit proxy (injectable for tests). Default: the real one. */
+  startEgressProxy?: typeof startEgressProxyImpl;
+  /** Egress enforcement policy, resolved per session (from settings by the host):
+   *  enforce=true refuses hosts off `allow`. Absent → observe-only. */
+  egressPolicy?: () => { enforce: boolean; allow: string[] };
 }
 
 interface RunOpts {
@@ -44,6 +59,9 @@ interface RunOpts {
   allowedTools?: string[];
   onChunk?: (chunk: string) => void;
   profile?: string;
+  /** Confine the agent's writes to the worktree via the OS sandbox for THIS run
+   *  (per-task override — autopilot forces it on). Falls back to deps.sandbox. */
+  sandbox?: boolean;
 }
 
 /** A LiveSession that yields one empty turn — used when there is no aimux
@@ -69,6 +87,9 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
 
   const load = deps.loadConfig ?? loadConfig;
   const open = deps.openSession ?? openSession;
+  const startEgress = deps.startEgressProxy ?? startEgressProxyImpl;
+  // One egress-audit proxy per live session, closed when the session stops.
+  const egressProxies = new Map<string, EgressProxy>();
   const listMcp = deps.listMcp ?? listMcpServers;
   const writeMcp = deps.writeMcpRunConfig ?? writeMcpRunConfig;
   const spawnProcess = deps.spawnProcess ?? spawn;
@@ -83,7 +104,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     if (!list.includes(what)) { list.push(what); degraded.set(sid, list); }
   };
 
-  function getOrOpen(opts: RunOpts): LiveSession {
+  async function getOrOpen(opts: RunOpts): Promise<LiveSession> {
     const existing = sessions.get(opts.sessionId);
     if (existing) return existing;
 
@@ -105,22 +126,94 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     if (enforcedSettingsWriteFailed()) note(opts.sessionId, "token-pilot enforcement settings not written");
     if (tokenPilotMissing) note(opts.sessionId, "token-pilot not on PATH — session ran without enforced tools");
 
-    // EXPERIMENTAL OS sandbox: confine writes to the worktree (cwd). Stays a Loom
-    // concern by injecting a wrapping spawnFn — aimux just spawns what it's given.
-    const sandboxOn = typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox;
-    const spawnFn = (sandboxOn
+    // OS sandbox: confine the agent's writes to the worktree (cwd) via bubblewrap/
+    // sandbox-exec. Stays a Loom concern by injecting a wrapping spawnFn — aimux
+    // just spawns what it's given. The per-task flag (opts.sandbox, set on by
+    // autopilot) wins over the global Settings toggle (deps.sandbox).
+    const sandboxOn = opts.sandbox ?? (typeof deps.sandbox === "function" ? deps.sandbox() : !!deps.sandbox);
+    const detect = deps.detectSandbox ?? detectSandbox;
+    const usable = deps.sandboxUsable ?? sandboxUsable;
+    let backend = sandboxOn ? detect() : "none";
+    if (sandboxOn && backend === "none") {
+      // No backend at all (no bwrap / Windows / WSL without bubblewrap).
+      note(opts.sessionId, "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement");
+    } else if (sandboxOn && !usable(backend, "claude")) {
+      // Backend present but it can't run the agent on this platform (e.g. the
+      // Bun-based claude crashes under it) — degrade rather than break the agent.
+      note(opts.sessionId, "OS sandbox can't run the agent on this platform — agent ran without write-confinement");
+      backend = "none";
+    }
+    // Carve-outs the agent's own tooling legitimately writes under a read-only
+    // root: Claude's session-state dir (--resume), the aimux profiles, the XDG
+    // data dir (task-journal's SQLite + events), the XDG cache dir (token-pilot's
+    // ast-index, claude-cli MCP logs), and tmp. The jail still protects ~/.ssh,
+    // ~/.config (gh/aws creds), dotfiles, /etc, /usr and the real repo outside the
+    // worktree. (XDG_DATA_HOME/XDG_CACHE_HOME override the defaults when set.)
+    const writable = [
+      join(homedir(), ".claude"),
+      join(homedir(), ".aimux"),
+      process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+      process.env.XDG_CACHE_HOME || join(homedir(), ".cache"),
+      tmpdir(),
+    ];
+    const spawnFn = (backend !== "none"
       ? ((cli: string, args: string[], o: { cwd?: string }) => {
-          const w = o.cwd ? wrapCommand(detectSandbox(), cli, args, o.cwd) : { cli, args };
+          let extra = writable;
+          if (o.cwd) {
+            // The worktree's node_modules is symlinked to the shared install
+            // (outside the worktree → read-only under the jail). Build tools the
+            // agent runs (vitest → node_modules/.vite-temp, vite → .cache) write
+            // there, so bind the RESOLVED node_modules dir writable (loom-ndvo).
+            // Trade-off: the shared node_modules becomes writable to the agent —
+            // acceptable (it's not credentials, and broken tooling is worse).
+            try { extra = [...writable, realpathSync(join(o.cwd, "node_modules"))]; } catch { /* no node_modules */ }
+          }
+          const w = o.cwd ? wrapCommand(backend, cli, args, o.cwd, extra) : { cli, args };
           return (spawnProcess as unknown as (c: string, a: string[], oo: unknown) => unknown)(w.cli, w.args, o);
         })
       : spawnProcess) as typeof spawn;
+
+    // Egress (loom-xclx): when the security sandbox is on, route the agent's
+    // traffic through a local proxy that LOGS each destination host and, when
+    // egress enforcement is enabled, REFUSES hosts off the allowlist. Works even
+    // where write-confinement is degraded (the proxy is just env). Best-effort: if
+    // the proxy can't start, run with direct access rather than break the network.
+    let sessionEnv = opts.env;
+    if (sandboxOn) {
+      const policy = deps.egressPolicy?.();
+      try {
+        const obs = createEgressObserver({
+          projectId: opts.env?.LOOM_PROJECT_ID ?? "default",
+          taskId: opts.env?.LOOM_TASK_ID,
+        });
+        const proxy = await startEgress({
+          onHost: obs.onHost,
+          onBlock: obs.onBlock,
+          allow: policy?.enforce ? (host) => allowsHost(host, policy.allow) : undefined,
+        });
+        egressProxies.set(opts.sessionId, proxy);
+        const url = `http://127.0.0.1:${proxy.port}`;
+        sessionEnv = { ...opts.env, HTTP_PROXY: url, HTTPS_PROXY: url, NO_PROXY: "127.0.0.1,localhost" };
+      } catch {
+        if (policy?.enforce) {
+          // FAIL CLOSED: enforcement is on but the filtering proxy didn't start.
+          // Point the agent at a dead local port so its HTTP(S) egress is refused,
+          // rather than handing it open network (the fail-open hole).
+          const dead = "http://127.0.0.1:1"; // nothing listens → connection refused
+          sessionEnv = { ...opts.env, HTTP_PROXY: dead, HTTPS_PROXY: dead, NO_PROXY: "127.0.0.1,localhost" };
+          note(opts.sessionId, "egress enforcement is on but the proxy failed to start — denied all network (fail-closed)");
+        } else {
+          note(opts.sessionId, "egress audit proxy could not start — agent ran with direct network access");
+        }
+      }
+    }
 
     const session = open(cfg, profile, {
       model: opts.model ?? deps.model,
       sessionId: opts.sessionId,
       resume: opts.resume,
       cwd: opts.cwd,
-      env: opts.env, // spine env (LOOM_TASK_ID …) so plugin telemetry ties to the task
+      env: sessionEnv, // spine env (LOOM_TASK_ID …) + egress-audit proxy when sandboxed
       settingsPath: enforcedSettingsPath(),
       mcpConfigPath,
       allowedTools: opts.allowedTools,
@@ -133,7 +226,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
 
   return {
     async run(prompt, opts) {
-      const session = getOrOpen(opts);
+      const session = await getOrOpen(opts);
       // Stream assistant text/tool activity to the live view as it arrives.
       const onEvent = opts.onChunk
         ? (e: { kind: string; text?: string }) => { if (e.kind === "assistant" && e.text) opts.onChunk!(e.text); }
@@ -147,6 +240,8 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     stop: (sessionId) => {
       const s = sessions.get(sessionId);
       if (s) { s.close(); sessions.delete(sessionId); }
+      egressProxies.get(sessionId)?.close();
+      egressProxies.delete(sessionId);
     },
     degradedOf: (sessionId) => degraded.get(sessionId) ?? [],
   };

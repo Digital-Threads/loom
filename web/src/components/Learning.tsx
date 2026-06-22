@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import type { LoomClient, Lesson } from "../api";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 // L8 Slice 0 — read-only "lessons": what keeps going wrong, so the next run can
 // avoid it. Two sources: review findings that recur across tasks, and explicit
 // user corrections (which rank first — a deliberate "do it this way").
 export function Learning({ client }: { client: LoomClient }) {
+  const t = useT();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [busy, setBusy] = useState(true);
   const [ran, setRan] = useState(false);
@@ -17,7 +19,7 @@ export function Learning({ client }: { client: LoomClient }) {
     try {
       setLessons((await client.lessons()).lessons);
     } catch (e) {
-      toast.error(`Learning failed: ${e}`);
+      toast.error(`${t("learning.loadFailed")}: ${e}`);
       setLessons([]);
     }
     setRan(true);
@@ -31,9 +33,9 @@ export function Learning({ client }: { client: LoomClient }) {
     setGenFor(l.signature);
     try {
       const r = await client.skillFromLesson(l.signature);
-      toast.success(`Skill draft “${r.name}” created — refine it in Skills.`);
+      toast.success(`${t("learning.skillDraftPrefix")}“${r.name}”${t("learning.skillDraftSuffix")}`);
     } catch (e) {
-      toast.error(`Skill generation failed: ${e}`);
+      toast.error(`${t("learning.skillGenFailed")}: ${e}`);
     }
     setGenFor(null);
   }
@@ -43,14 +45,14 @@ export function Learning({ client }: { client: LoomClient }) {
       await client.dismissLesson(l.signature);
       setLessons((ls) => ls.filter((x) => x.signature !== l.signature));
     } catch (e) {
-      toast.error(`Dismiss failed: ${e}`);
+      toast.error(`${t("learning.dismissFailed")}: ${e}`);
     }
   }
 
   // Effectiveness: earlier→recent occurrences. ↓ = recurrence trending down (working).
   const trendChip = (l: Lesson) =>
     l.trend && l.trend.recent + l.trend.prior > 0 ? (
-      <span className="n" title="occurrences earlier → recent">
+      <span className="n" title={t("learning.trendTitle")}>
         {l.trend.recent < l.trend.prior ? "↓" : l.trend.recent > l.trend.prior ? "↑" : "→"} {l.trend.prior}→{l.trend.recent}
       </span>
     ) : null;
@@ -58,9 +60,9 @@ export function Learning({ client }: { client: LoomClient }) {
   const actions = (l: Lesson) => (
     <span className="row" style={{ gap: 6 }}>
       <button className="btn" disabled={genFor !== null} onClick={() => createSkill(l)}>
-        {genFor === l.signature ? "Generating…" : "Create skill"}
+        {genFor === l.signature ? t("learning.generating") : t("learning.createSkill")}
       </button>
-      <button className="btn" onClick={() => dismiss(l)}>Dismiss</button>
+      <button className="btn" onClick={() => dismiss(l)}>{t("learning.dismiss")}</button>
     </span>
   );
 
@@ -70,21 +72,21 @@ export function Learning({ client }: { client: LoomClient }) {
   return (
     <div className="panel learning">
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn" disabled={busy} onClick={load}>Refresh</button>
+        <button className="btn" disabled={busy} onClick={load}>{t("learning.refresh")}</button>
       </div>
 
-      {busy ? <StateView kind="loading" msg="Computing lessons…" /> : null}
+      {busy ? <StateView kind="loading" msg={t("learning.computing")} /> : null}
 
       {!busy && ran && lessons.length === 0 ? (
         <StateView
           kind="empty"
-          msg="No recurring lessons yet. They surface once review findings repeat across tasks, or when you correct the agent."
+          msg={t("learning.empty")}
         />
       ) : null}
 
       {corrections.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>✎ From your corrections <span className="n">{corrections.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>✎ {t("learning.fromCorrections")} <span className="n">{corrections.length}</span></h2>
           {corrections.map((l, i) => (
             <div className="kv" key={i}>
               <b>{l.file ?? "—"}</b>
@@ -100,12 +102,12 @@ export function Learning({ client }: { client: LoomClient }) {
 
       {findings.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>↻ Recurring findings <span className="n">{findings.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>↻ {t("learning.recurringFindings")} <span className="n">{findings.length}</span></h2>
           {findings.map((l, i) => (
             <div className={`kv ${l.severity === "error" ? "warn" : ""}`} key={i}>
               <b>{l.file ?? "—"}</b>
               <span>
-                [{l.severity}] {l.sampleMessages[0] ?? ""} · recurred ×{l.occurrences} across {l.taskIds.length} tasks {trendChip(l)}
+                [{l.severity}] {l.sampleMessages[0] ?? ""} · {t("learning.recurredTimes")}×{l.occurrences} {t("learning.acrossTasks")} {l.taskIds.length} {t("learning.tasks")} {trendChip(l)}
               </span>
               {actions(l)}
             </div>

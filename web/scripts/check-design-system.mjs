@@ -8,8 +8,11 @@
  * directory IS the system, so it is exempt. */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("../src", import.meta.url).pathname;
+// fileURLToPath (not .pathname) → a native path on every OS. On Windows
+// .pathname yields "/D:/…", which scandir then mangles into "D:\D:\…".
+const ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const TOKENS = join(ROOT, "tokens");
 
 // Hex literals the design system itself defines (finding/diff readable variants)

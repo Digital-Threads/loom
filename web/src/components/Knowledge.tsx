@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { LoomClient, RecallHit, GraphNodeKind } from "../api";
 import { StateView } from "./StateView";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 // L7.4 — knowledge recall: search prior reasoning across projects → what was
 // already decided vs already rejected (so the team/agent doesn't repeat itself).
@@ -29,6 +30,7 @@ function chainsFromHits(hits: RecallHit[]): { taskId: string; nodes: ChainNode[]
 const dedupeKey = (h: RecallHit) => `${h.taskId}\0${h.text}`;
 
 export function Knowledge({ client }: { client: LoomClient }) {
+  const t = useT();
   const [q, setQ] = useState("");
   const [lastQ, setLastQ] = useState("");
   const [decisions, setDecisions] = useState<RecallHit[]>([]);
@@ -51,11 +53,11 @@ export function Knowledge({ client }: { client: LoomClient }) {
       setRejections(rRes.value.rejections);
       setHits(rRes.value.hits);
     } else {
-      toast.error(`Recall failed: ${rRes.reason}`);
+      toast.error(`${t("knowledge.recallFailed")}: ${rRes.reason}`);
       setDecisions([]); setRejections([]); setHits([]);
     }
     if (sRes.status === "fulfilled") setSimilar(sRes.value.hits);
-    else { setSimilar([]); toast.error(`Search failed: ${sRes.reason}`); }
+    else { setSimilar([]); toast.error(`${t("knowledge.searchFailed")}: ${sRes.reason}`); }
     setRan(true);
     setBusy(false);
   }
@@ -72,41 +74,41 @@ export function Knowledge({ client }: { client: LoomClient }) {
       <div className="row" style={{ gap: 8 }}>
         <input
           className="inp"
-          placeholder="e.g. switch to axum, postgres connector…"
+          placeholder={t("knowledge.searchPlaceholder")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") search(); }}
         />
-        <button className="btn acc" disabled={busy} onClick={search}>Recall</button>
+        <button className="btn acc" disabled={busy} onClick={search}>{t("knowledge.recall")}</button>
       </div>
 
-      {busy ? <StateView kind="loading" msg="Searching prior reasoning…" /> : null}
+      {busy ? <StateView kind="loading" msg={t("knowledge.searching")} /> : null}
 
       {!busy && !ran ? (
-        <StateView kind="empty" msg="Search prior reasoning across this project — what was already decided or rejected. Try a topic, e.g. “switch to axum”." />
+        <StateView kind="empty" msg={t("knowledge.introHint")} />
       ) : null}
 
       {!busy && ran && nothing ? (
-        <StateView kind="empty" msg={`Nothing prior found for “${lastQ}”.`} />
+        <StateView kind="empty" msg={`${t("knowledge.nothingPrefix")}“${lastQ}”.`} />
       ) : null}
 
       {rejections.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>⛔ Already rejected <span className="n">{rejections.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>⛔ {t("knowledge.alreadyRejected")} <span className="n">{rejections.length}</span></h2>
           {rejections.map((h, i) => <div className="kv warn" key={i}><b>{h.taskId}</b><span>{h.text}</span></div>)}
         </>
       ) : null}
 
       {decisions.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>✓ Already decided <span className="n">{decisions.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>✓ {t("knowledge.alreadyDecided")} <span className="n">{decisions.length}</span></h2>
           {decisions.map((h, i) => <div className="kv" key={i}><b>{h.taskId}</b><span>{h.text}</span></div>)}
         </>
       ) : null}
 
       {chains.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>🕸 Reasoning graph <span className="n">{hits.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>🕸 {t("knowledge.reasoningGraph")} <span className="n">{hits.length}</span></h2>
           {chains.map((c) => (
             <div className="kg-group" key={c.taskId}>
               <b className="kg-task">{c.taskId}</b>
@@ -125,7 +127,7 @@ export function Knowledge({ client }: { client: LoomClient }) {
 
       {similarUnique.length ? (
         <>
-          <h2 style={{ marginTop: 18 }}>≈ Similar prior reasoning <span className="n">{similarUnique.length}</span></h2>
+          <h2 style={{ marginTop: 18 }}>≈ {t("knowledge.similarReasoning")} <span className="n">{similarUnique.length}</span></h2>
           {similarUnique.map((h, i) => <div className="kv" key={i}><b>{h.taskId}</b><span>{h.text}</span></div>)}
         </>
       ) : null}

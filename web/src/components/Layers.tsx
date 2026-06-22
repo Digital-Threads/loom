@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoomClient, LayerInfo } from "../api";
 import { layerSection } from "../layers";
 import { StateView } from "./StateView";
+import { useT } from "../i18n";
 
 // L11.2 — Layers: the full Loom architecture. 3 layers are already standalone
 // plugins (aimux / token-pilot / task-journal); the rest are inline in core/*
@@ -9,6 +10,7 @@ import { StateView } from "./StateView";
 // Layers that have their own menu section (see ../layers) are clickable and jump
 // straight to that section.
 export function Layers({ client, onNav }: { client: LoomClient; onNav: (v: string) => void }) {
+  const t = useT();
   const [layers, setLayers] = useState<LayerInfo[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { client.layers().then(setLayers).catch((e) => setErr(String(e))); }, [client]);
@@ -21,13 +23,14 @@ export function Layers({ client, onNav }: { client: LoomClient; onNav: (v: strin
 
   return (
     <div className="panel">
-      <Group title="Standalone plugins" hint="extracted into their own packages" layers={standalone} onNav={onNav} />
-      <Group title="Inline modules" hint="live in core/* — may become standalone plugins later" layers={inline} onNav={onNav} />
+      <Group title={t("layers.standalone.title")} hint={t("layers.standalone.hint")} layers={standalone} onNav={onNav} />
+      <Group title={t("layers.inline.title")} hint={t("layers.inline.hint")} layers={inline} onNav={onNav} />
     </div>
   );
 }
 
 function Group({ title, hint, layers, onNav }: { title: string; hint: string; layers: LayerInfo[]; onNav: (v: string) => void }) {
+  const t = useT();
   if (layers.length === 0) return null;
   return (
     <div className="layer-group">
@@ -38,12 +41,12 @@ function Group({ title, hint, layers, onNav }: { title: string; hint: string; la
           <>
             <div className="layer-main">
               <span className={`badge ${l.status === "standalone" ? "badge-ok" : "badge-warn"}`}>
-                {l.status === "standalone" ? "✅ standalone" : "🔨 inline"}
+                {l.status === "standalone" ? `✅ ${t("layers.badge.standalone")}` : `🔨 ${t("layers.badge.inline")}`}
               </span>
               <b className="layer-title">{l.title}</b>
               <span className="crumb">{l.node}</span>
-              {l.executes ? <span className="chip ok">execute</span> : null}
-              {l.slots.length ? <span className="chip">{l.slots.length} slot(s)</span> : null}
+              {l.executes ? <span className="chip ok">{t("layers.execute")}</span> : null}
+              {l.slots.length ? <span className="chip">{l.slots.length} {t("layers.slots")}</span> : null}
             </div>
             <div className="layer-desc">{l.description}</div>
             <div className="layer-src muted">{l.source}</div>
@@ -59,8 +62,8 @@ function Group({ title, hint, layers, onNav }: { title: string; hint: string; la
             className="layer-row layer-row-link"
             onClick={() => onNav(section)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNav(section); } }}
-            title={`Open ${l.title}`}
-            aria-label={`Open ${l.title}`}
+            title={`${t("layers.open")} ${l.title}`}
+            aria-label={`${t("layers.open")} ${l.title}`}
           >
             {inner}
           </div>

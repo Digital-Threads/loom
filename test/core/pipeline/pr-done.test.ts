@@ -43,6 +43,20 @@ describe("runPr (L14.1)", () => {
     expect(r.compareUrl).toBe("https://github.com/acme/widgets/compare/master...loom/t1?expand=1");
   });
 
+  it("appends a change summary (commits + diffstat) to the description (loom-b0kj)", async () => {
+    const sh = async (cmd: string, args: string[]) => {
+      if (cmd === "git" && args[0] === "symbolic-ref") return { code: 0, stdout: "origin/master\n" };
+      if (cmd === "git" && args[0] === "log") return { code: 0, stdout: "- fix the thing\n- add a test\n" };
+      if (cmd === "git" && args[0] === "diff") return { code: 0, stdout: " src/a.ts | 2 +-\n 1 file changed\n" };
+      return { code: 0, stdout: "" };
+    };
+    const r = await runPr(db, "t1", { sh, branch: "loom/t1", repoRoot: "/repo", describe: () => "BODY" });
+    expect(r.description).toContain("## Changes");
+    expect(r.description).toContain("- fix the thing"); // actual commits, not the task spec
+    expect(r.description).toContain("src/a.ts"); // diffstat of what changed
+    expect(r.connector).toBe(false); // no push without connector — description only
+  });
+
   it("reports a clear error when the repo has no origin remote", async () => {
     const sh = async (cmd: string, args: string[]) => ({ code: cmd === "git" && args[0] === "remote" ? 1 : 0, stdout: "" });
     const r = await runPr(db, "t1", { connector: true, sh, branch: "loom/t1", repoRoot: "/repo" });

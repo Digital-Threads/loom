@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openStore, createTask, getTask } from "../../../src/core/store/db.js";
+import { openStore, createTask, getTask, getStages } from "../../../src/core/store/db.js";
+import { completeStage } from "../../../src/core/pipeline/engine.js";
 import { latestArtifact, getChatMessages } from "../../../src/core/store/artifacts.js";
 import {
   runAnalysis,
@@ -33,6 +34,21 @@ describe("L12.1 runAnalysis", () => {
     expect(r.route).toEqual(["analysis", "impl", "review", "qa", "done"]); // BOGUS filtered
     expect(JSON.parse(getTask(db, "t1")!.route!)).toEqual(r.route);
     expect(latestArtifact(db, "t1", "analysis")).toBeDefined();
+  });
+  it("reconciles stage rows to a shorter route — dropped stages are skipped (loom-kk00)", async () => {
+    // createTask seeds all 9 stages; analysis re-routes to a chore, dropping
+    // brainstorm/spec/rd. Those rows must become "skipped" so the engine's
+    // pending-walk passes over them — else the route change is cosmetic and the
+    // pipeline still runs the dropped stages.
+    const agent = async () => '{"class":"chore","route":["analysis","impl","review","qa","pr","done"]}';
+    await runAnalysis(db, "t1", "trivial config tweak", agent);
+    const byKey = Object.fromEntries(getStages(db, "t1").map((s) => [s.stage_key, s.status]));
+    expect(byKey.brainstorm).toBe("skipped");
+    expect(byKey.spec).toBe("skipped");
+    expect(byKey.rd).toBe("skipped");
+    expect(byKey.impl).toBe("pending");
+    // completing analysis jumps straight to impl — the skipped stages are passed over.
+    expect(completeStage(db, "t1", "analysis")).toBe("impl");
   });
   it("falls back to the full route on bad agent output", async () => {
     const r = await runAnalysis(db, "t1", "x", async () => "not json");

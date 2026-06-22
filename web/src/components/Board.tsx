@@ -5,6 +5,7 @@ import { StateView } from "./StateView";
 import { Modal } from "./Modal";
 import { Select } from "./Select";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 export function Board({
   client,
@@ -19,28 +20,19 @@ export function Board({
   projects?: ProjectEntry[];
   projectFilter?: string; // "" = all
 }) {
+  const t = useT();
   const [cols, setCols] = useState<BoardColumn[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null);
   const [stopping, setStopping] = useState<Set<string>>(new Set());
-  const [modelCfg, setModelCfg] = useState<{ stageDefaults: Record<string, string>; tiers: string[]; columns: Record<string, string> } | null>(null);
 
   useEffect(() => {
     client.board().then(setCols).catch((e) => setErr(String(e)));
   }, [client]);
-  useEffect(() => {
-    client.modelConfig?.().then(setModelCfg).catch(() => {});
-  }, [client]);
 
-  // Pin a model for a whole stage column (or "" = auto, the per-stage default).
-  function setColModel(stage: string, model: string) {
-    setModelCfg((m) => (m ? { ...m, columns: { ...m.columns, [stage]: model } } : m));
-    client.saveSetting(`model.col.${stage}`, model).catch(() => {});
-  }
-
-  if (err) return <StateView kind="error" msg={`Can’t reach the core: ${err}`} />;
+  if (err) return <StateView kind="error" msg={`${t("board.err.unreachable")}: ${err}`} />;
   if (!cols) return <StateView kind="loading" />;
 
   const projName = (id: string) => projects.find((p) => p.projectId === id)?.name;
@@ -54,8 +46,8 @@ export function Board({
     return (
       <StateView
         kind="empty"
-        msg={anyTask ? "No tasks in this project yet." : "No tasks yet. Create one to get started."}
-        action={onNew ? <button className="btn acc" onClick={onNew}>+ New task</button> : undefined}
+        msg={anyTask ? t("board.empty.project") : t("board.empty.all")}
+        action={onNew ? <button className="btn acc" onClick={onNew}>{t("board.newTask")}</button> : undefined}
       />
     );
   }
@@ -70,7 +62,7 @@ export function Board({
     client
       .moveTask(taskId, stageKey, true)
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t move the task: ${er}`));
+      .catch((er) => toast.error(`${t("board.err.move")}: ${er}`));
   }
 
   function onDrop(stageKey: string, e: DragEvent) {
@@ -102,7 +94,7 @@ export function Board({
         if (!/→ 404$/.test(er.message)) throw er;
       })
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t delete the task: ${er}`))
+      .catch((er) => toast.error(`${t("board.err.delete")}: ${er}`))
       .finally(() => setDeleting((s) => { const n = new Set(s); n.delete(id); return n; }));
   }
 
@@ -115,7 +107,7 @@ export function Board({
     client
       .stopTask(id)
       .then(() => client.board().then(setCols))
-      .catch((er) => toast.error(`Couldn’t stop the task: ${er}`))
+      .catch((er) => toast.error(`${t("board.err.stop")}: ${er}`))
       .finally(() => setStopping((s) => { const n = new Set(s); n.delete(id); return n; }));
   }
 
@@ -132,20 +124,6 @@ export function Board({
           <h2>
             {STAGE_LABELS[col.stageKey] ?? col.stageKey}
             <span className="n">{col.cards.filter(visible).length}</span>
-            {modelCfg?.stageDefaults[col.stageKey] ? (
-              <select
-                className="col-model"
-                aria-label={`Model for ${STAGE_LABELS[col.stageKey] ?? col.stageKey}`}
-                title="Model for this stage (auto = the default policy)"
-                value={modelCfg.columns[col.stageKey] ?? ""}
-                onChange={(e) => setColModel(col.stageKey, e.target.value)}
-              >
-                <option value="">auto · {modelCfg.stageDefaults[col.stageKey]}</option>
-                {modelCfg.tiers.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            ) : null}
           </h2>
           <div className="stack">
             {col.cards.filter(visible).length ? (
@@ -156,15 +134,15 @@ export function Board({
                   draggable
                   role="button"
                   tabIndex={0}
-                  aria-label={`Open task: ${card.title}`}
+                  aria-label={`${t("board.openTask")}: ${card.title}`}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", card.id)}
                   onClick={() => onOpen(card.id)}
                   onKeyDown={(e) => { if (e.key === "Enter") onOpen(card.id); }}
                 >
                   <button
                     className="card-del"
-                    title="Delete task"
-                    aria-label="Delete task"
+                    title={t("board.deleteTask")}
+                    aria-label={t("board.deleteTask")}
                     disabled={deleting.has(card.id)}
                     onClick={(e) => askDelete(card.id, card.title, e)}
                   >
@@ -173,8 +151,8 @@ export function Board({
                   {card.status === "running" ? (
                     <button
                       className="card-stop"
-                      title="Stop task"
-                      aria-label="Stop task"
+                      title={t("board.stopTask")}
+                      aria-label={t("board.stopTask")}
                       disabled={stopping.has(card.id)}
                       onClick={(e) => onStop(card.id, e)}
                     >
@@ -195,13 +173,13 @@ export function Board({
                     block
                     size="sm"
                     wrapClassName="card-move"
-                    aria-label="Move to stage"
+                    aria-label={t("board.moveToStage")}
                     value=""
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => { e.stopPropagation(); moveCard(card.id, e.target.value); }}
                   >
-                    <option value="" disabled>Move…</option>
+                    <option value="" disabled>{t("board.move")}</option>
                     {cols.map((c) => (
                       <option key={c.stageKey} value={c.stageKey}>{STAGE_LABELS[c.stageKey] ?? c.stageKey}</option>
                     ))}
@@ -209,17 +187,17 @@ export function Board({
                 </div>
               ))
             ) : (
-              <div className="dropzone">Drop a task here</div>
+              <div className="dropzone">{t("board.dropHere")}</div>
             )}
           </div>
         </div>
       ))}
       {confirm ? (
-        <Modal title="Delete task" onClose={() => setConfirm(null)}>
-          <div className="modal-b">Delete task "{confirm.title}"? This can't be undone.</div>
+        <Modal title={t("board.deleteTask")} onClose={() => setConfirm(null)}>
+          <div className="modal-b">{t("board.deleteConfirmPre")} "{confirm.title}"? {t("board.deleteConfirmPost")}</div>
           <div className="modal-f">
-            <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
-            <button className="btn acc" onClick={() => doDelete(confirm.id)}>Delete</button>
+            <button className="btn" onClick={() => setConfirm(null)}>{t("action.cancel")}</button>
+            <button className="btn acc" onClick={() => doDelete(confirm.id)}>{t("action.delete")}</button>
           </div>
         </Modal>
       ) : null}

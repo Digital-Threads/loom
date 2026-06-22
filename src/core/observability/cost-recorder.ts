@@ -18,12 +18,18 @@ export interface RecordCostInput {
   sessionId?: string;
   /** Provenance: spine-linked (task_id-tagged) → exact, else ≈estimate. */
   exact?: boolean;
+  /** MCP tool-call savings (token-pilot's tool-calls.jsonl), attributed by the
+   *  task's session ids rather than task_id — added on top of the hook-event
+   *  totals so used/saved reflect the agent's actual token-pilot tool use. */
+  extra?: { used: number; saved: number };
 }
 
 export function recordRunCost(db: Database.Database, taskId: string, input: RecordCostInput): void {
   const exact = input.exact ?? true;
   const t = tokensForTaskExact(input.tokenEvents, taskId);
-  upsertCost(db, taskId, "token-pilot", "used", t.used, exact);
-  upsertCost(db, taskId, "token-pilot", "saved", t.saved, exact);
+  const used = t.used + (input.extra?.used ?? 0);
+  const saved = t.saved + (input.extra?.saved ?? 0);
+  upsertCost(db, taskId, "token-pilot", "used", used, exact);
+  upsertCost(db, taskId, "token-pilot", "saved", saved, exact);
   if (input.spent !== undefined) recordSpend(db, taskId, input.spent, exact, input.sessionId);
 }

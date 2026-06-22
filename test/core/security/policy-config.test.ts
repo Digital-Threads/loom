@@ -12,6 +12,7 @@ import {
   saveSecretConfig,
   effectivePolicy,
   scanWithCustom,
+  redactWithCustom,
   policySummary,
   defaultDenySources,
   DEFAULT_SECRET_KINDS,
@@ -110,6 +111,14 @@ describe("security policy-config", () => {
     expect(kinds).toContain("internal");
     // never echo the full custom secret
     expect(found.find((f) => f.kind === "internal")!.preview).not.toContain("INT-123456");
+  });
+
+  it("redactWithCustom removes built-in + custom secrets from text (M3)", () => {
+    const rules = [{ kind: "internal", source: "INT-[0-9]{6}" }];
+    const out = redactWithCustom("key sk-ant-ABCDEFGHIJKLMNOPQRSTUVWX and INT-123456 done", rules);
+    expect(out).not.toContain("sk-ant-ABCDEFGHIJKLMNOPQRSTUVWX"); // built-in pattern redacted
+    expect(out).not.toContain("INT-123456"); // custom rule redacted
+    expect(out).toContain("done"); // surrounding text preserved
   });
 
   it("policySummary reports counts and the switch", () => {

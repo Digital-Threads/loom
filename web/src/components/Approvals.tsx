@@ -4,14 +4,25 @@ import type { LoomClient } from "../api";
 // Polished in-app approval panel (no native prompts). In manual/gated mode the
 // agent's non-allowlisted tool attempts are denied and shown here; Approve adds
 // the tool to the task's allowlist so the next run can use it.
-export function Approvals({ client, taskId, onChanged }: { client: LoomClient; taskId: string; onChanged?: () => void }) {
+export function Approvals({ client, taskId, onChanged, running }: { client: LoomClient; taskId: string; onChanged?: () => void; running?: boolean }) {
   const [denials, setDenials] = useState<string[]>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
 
+  // Fetch denials, hiding ones the user already dismissed this view (so a poll
+  // doesn't resurrect them). Approved tools drop off server-side on the next read.
   function refresh() {
-    client.permissions(taskId).then((p) => setDenials(p.denials)).catch(() => {});
+    client.permissions(taskId).then((p) => setDenials(p.denials.filter((t) => !dismissed.has(t)))).catch(() => {});
   }
-  useEffect(refresh, [client, taskId]);
+  // Poll while the task is running so denials raised mid-run surface promptly,
+  // not only when the task view is reopened. Idle → fetch once.
+  useEffect(() => {
+    refresh();
+    if (!running) return;
+    const h = setInterval(refresh, 4000);
+    return () => clearInterval(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, taskId, running, dismissed]);
 
   async function approve(tool: string) {
     setBusy(tool);
@@ -24,6 +35,7 @@ export function Approvals({ client, taskId, onChanged }: { client: LoomClient; t
     }
   }
   function dismiss(tool: string) {
+    setDismissed((s) => new Set(s).add(tool));
     setDenials((d) => d.filter((t) => t !== tool));
   }
 

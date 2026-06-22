@@ -4,7 +4,8 @@
 // agent call is injected (StageAgent) so the logic is testable without a model.
 import { randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
-import { STAGE_KEYS } from "../store/db.js";
+import { STAGE_KEYS, getStages, updateStageStatus } from "../store/db.js";
+import { setSetting } from "../store/settings.js";
 import {
   createArtifact,
   latestArtifact,
@@ -38,12 +39,27 @@ export async function runAnalysis(
   // store the agent's full readable analysis (the user reads this), not just the
   // parsed class/route — the route is derived from the JSON line at the end.
   createArtifact(db, { id: id("art"), taskId, stage: "analysis", kind: "analysis", content: raw });
+  // Persist the class so downstream stages can scale to it (e.g. the review stage
+  // runs fewer reviewers for a trivial chore) — loom-ohky.
+  setSetting(db, `analysis.class.${taskId}`, parsed.class);
   if (parsed.route.length) {
     db.prepare("UPDATE tasks SET route = ?, updated_at = ? WHERE id = ?").run(
       JSON.stringify(parsed.route),
       Date.now(),
       taskId,
     );
+    // Reconcile the stage rows to the new route: stages dropped from the route are
+    // marked "skipped" so the engine's pending-walk (completeStage/currentStage)
+    // passes over them. The rows were seeded from the creation-time route (often
+    // the full pipeline), so without this the adaptive re-route is cosmetic — the
+    // pipeline would still run the dropped stages (loom-kk00). Done stages are
+    // left as-is; only not-yet-run, no-longer-in-route stages are skipped.
+    const keep = new Set(parsed.route);
+    for (const s of getStages(db, taskId)) {
+      if (!keep.has(s.stage_key) && s.status !== "done" && s.status !== "skipped") {
+        updateStageStatus(db, taskId, s.stage_key, "skipped");
+      }
+    }
   }
   return parsed;
 }
@@ -51,6 +67,9 @@ export async function runAnalysis(
 export function analysisPrompt(spec: string): string {
   return [
     "Analyze this task for a developer who will READ your analysis.",
+    "Ground it in the ACTUAL codebase — don't guess: use token-pilot",
+    "(project_overview / explore_area / find_usages) to locate where it lands, and",
+    "delegate a deep read to the `code-analyzer` agent if it spans many files.",
     "Write a short, clear analysis in plain language:",
     "- what the task actually is (in your words),",
     "- where in the codebase it likely lands (files/areas),",
@@ -110,7 +129,7 @@ export const BRAINSTORM_READY = "READY";
 export function brainstormPrompt(history: string): string {
   return [
     "You are running a brainstorming dialog, ONE question at a time.",
-    "Lean on the `superpowers:brainstorming` skill's technique — surface hidden",
+    "Lean on the `brainstorming` skill's technique — surface hidden",
     "assumptions, weigh 2-3 approaches — but keep THIS one-question-at-a-time flow.",
     "Ask the single most useful next question to pin down the task.",
     "When you already have ENOUGH to write a clear spec, do NOT ask another question —",
@@ -224,7 +243,7 @@ export async function draftSpec(db: Database.Database, taskId: string, agent: St
   const md = await agent(
     [
       "Write a clear SDD (software design document, markdown) for this brief.",
-      "Use the `superpowers:writing-plans` skill's approach to make it implementable.",
+      "Use the `writing-plans` skill's approach to make it implementable.",
       "Cover: goal, scope (and explicit NON-goals), the design/approach, the data and",
       "control flow, edge cases, and concrete acceptance criteria a reviewer can check.",
       "Surface the weak assumptions — anything that, if wrong, breaks the plan — and",

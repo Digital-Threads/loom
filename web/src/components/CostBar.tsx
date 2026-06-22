@@ -18,15 +18,18 @@ export function CostBar({ costs }: { costs: CostRowLike[] }) {
               {s.spendEstimate ? <span className="cost-approx"> ≈</span> : null}
             </span>
           ) : null}
-          {s.tokens && s.tokens.used !== "0" ? (
-            <span className="cost-tokens" title="Tokens used by the agent for this task">
-              <b>{s.tokens.used}</b> tokens
-              {s.tokensEstimate ? <span className="cost-approx"> ≈</span> : null}
-              {s.tokens.savedPct > 0 ? (
-                <span className="cost-saved">
-                  {" · "}{s.tokens.saved} saved ({s.tokens.savedPct}%)
-                  {s.tokens.savedUsd ? <span className="cost-approx" title="Estimated $ saved by token-pilot (saved tokens × input price)"> · {s.tokens.savedUsd} ≈</span> : null}
-                </span>
+          {/* token-pilot READ savings — how many tokens of file content it avoided
+              loading (summed across the task's model sessions), NOT the agent's
+              billed tokens and NOT a reduction of the spend above. Labelled so it
+              can't be read as the task's token usage. */}
+          {s.tokens && s.tokens.savedPct > 0 ? (
+            <span
+              className="cost-tokens cost-saved"
+              title="token-pilot saved this many tokens of file reads vs. naive reads, summed across the task's model sessions. It's read efficiency — separate from the $ spent above."
+            >
+              token-pilot saved <b>{s.tokens.saved}</b> read-tokens ({s.tokens.savedPct}%)
+              {s.tokens.savedUsd ? (
+                <span className="cost-approx" title="Estimated value of the avoided reads (saved tokens × input price) — not a reduction of the spend above"> ≈ {s.tokens.savedUsd}</span>
               ) : null}
             </span>
           ) : null}

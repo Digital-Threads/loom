@@ -10,7 +10,7 @@ import { createStep } from "../../src/core/store/steps.js";
 import { addAttachment } from "../../src/core/store/attachments.js";
 import { createArtifact } from "../../src/core/store/artifacts.js";
 import { startTask, attentionQueue } from "../../src/core/pipeline/engine.js";
-import { createApi } from "../../src/web/api.js";
+import { createApi, reviewersForClass, isFatalAgentError } from "../../src/web/api.js";
 import { createRunManager } from "../../src/core/automation/run-manager.js";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
@@ -125,8 +125,13 @@ describe("web api", () => {
 
   it("GET /api/memory/board/:id falls back to the snapshot when the worktree journal is gone", async () => {
     // A git-repo task → its journal project is the (absent) worktree, so the
-    // live read is empty and the Done-time snapshot must be used instead.
-    createTask(db, { id: "t-snap", title: "Snapshot task", repo: process.cwd() });
+    // live read is empty and the Done-time snapshot must be used instead. Use a
+    // DEDICATED temp repo (not process.cwd()) so isGitRepo + the live journal read
+    // are deterministic — process.cwd()'s git status varied across suite runs and
+    // made this flake.
+    const snapRepo = mkdtempSync(join(tmpdir(), "loom-snap-"));
+    mkdirSync(join(snapRepo, ".git"), { recursive: true }); // isGitRepo(repo) → true
+    createTask(db, { id: "t-snap", title: "Snapshot task", repo: snapRepo });
     const events = [
       { event_id: "e1", task_id: "tj-z", type: "open", timestamp: "2026-06-18T10:00:00.000Z", text: "Snapshot reasoning task" },
       { event_id: "e2", task_id: "tj-z", type: "decision", timestamp: "2026-06-18T10:01:00.000Z", text: "snapshot decision kept" },
@@ -226,6 +231,19 @@ describe("web api", () => {
     });
     const body = (await (await app2.request("/api/timeline")).json()) as { events: { type: string }[] };
     expect(body.events.map((x) => x.type)).toEqual(["a", "b", "c"]);
+  });
+
+  it("GET /api/timeline merges command-policy audit blocks as audit.command.blocked events (loom-block-audit)", async () => {
+    const e = (ts: number, type: string) => ({ schema: "loom.event.v1", ts, source: "loom", projectId: "p1", type });
+    const blockEvent = { schema: "loom.event.v1" as const, ts: 2, source: "loom" as const, projectId: "p1", type: "audit.command.blocked", severity: "warn" as const, message: "Blocked: rm -rf /" };
+    const app2 = createApi(db, {
+      activeProject: () => ({ projectId: "p1", root: "/r", name: "r", addedAt: 0 }),
+      loadEvents: () => [e(1, "a") as never, e(3, "c") as never],
+      loadCommandAuditEvents: () => [blockEvent],
+    });
+    const body = (await (await app2.request("/api/timeline")).json()) as { events: { type: string; ts: number }[] };
+    expect(body.events.map((x) => x.type)).toEqual(["a", "audit.command.blocked", "c"]);
+    expect(body.events[1].ts).toBe(2);
   });
 
   it("GET /api/knowledge/search returns semantic hits (L7.2)", async () => {
@@ -408,7 +426,7 @@ describe("web api", () => {
   });
 
   // ── connectors: Claude plugins ──
-  it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status)", async () => {
+  it("GET /api/connectors/plugins parses `claude plugin list` (name/version/status/bundled)", async () => {
     const app2 = createApi(db, {
       claudePlugin: () =>
         Promise.resolve({
@@ -416,16 +434,35 @@ describe("web api", () => {
           stdout:
             "Installed plugins:\n\n" +
             "  ❯ my-plugin@my-marketplace\n    Version: 1.2.0\n    Scope: user\n    Status: ✔ enabled\n\n" +
-            "  ❯ other@other-mkt\n    Version: 2.0.0\n    Scope: project\n    Status: ✘ disabled\n",
+            "  ❯ other@other-mkt\n    Version: 2.0.0\n    Scope: project\n    Status: ✘ disabled\n\n" +
+            "  ❯ token-pilot@token-pilot\n    Version: 0.46.0\n    Scope: user\n    Status: ✔ enabled\n\n" +
+            "  ❯ broken@mkt\n    Version: unknown\n    Scope: user\n    Status: error: not loaded\n",
         }),
     });
     const r = (await (await app2.request("/api/connectors/plugins")).json()) as {
-      plugins: { name: string; version?: string; enabled: boolean }[];
+      plugins: { name: string; version?: string; enabled: boolean; bundled?: boolean }[];
     };
     expect(r.plugins).toEqual([
-      { name: "my-plugin@my-marketplace", version: "1.2.0", enabled: true },
-      { name: "other@other-mkt", version: "2.0.0", enabled: false },
+      { name: "my-plugin@my-marketplace", version: "1.2.0", enabled: true, bundled: false },
+      { name: "other@other-mkt", version: "2.0.0", enabled: false, bundled: false },
+      { name: "token-pilot@token-pilot", version: "0.46.0", enabled: true, bundled: true }, // Loom-required
+      { name: "broken@mkt", version: "unknown", enabled: false, bundled: false }, // odd status → NOT enabled (no false "on")
     ]);
+  });
+
+  it("blocks uninstall/disable of a bundled plugin (409), but allows update", async () => {
+    const calls: string[][] = [];
+    const app2 = createApi(db, { claudePlugin: (a) => { calls.push(a); return Promise.resolve({ code: 0, stdout: "" }); } });
+    for (const verb of ["uninstall", "disable"]) {
+      const res = await app2.request(`/api/connectors/plugins/token-pilot@token-pilot/${verb}`, { method: "POST" });
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ ok: false });
+    }
+    expect(calls).toEqual([]); // CLI never invoked for a blocked bundled op
+    // update is still allowed (keeps bundled plugins current)
+    const upd = await app2.request("/api/connectors/plugins/token-pilot@token-pilot/update", { method: "POST" });
+    expect(upd.status).toBe(200);
+    expect(calls).toContainEqual(["plugin", "update", "--", "token-pilot@token-pilot"]);
   });
 
   it("POST /api/connectors/plugins installs name@marketplace via the CLI", async () => {
@@ -629,6 +666,35 @@ describe("web api", () => {
     expect(r.result.passed).toBe(false);
   });
 
+  // ── review depth scales with task class (loom-ohky) ──
+  it("reviewersForClass narrows to one reviewer only for a chore", () => {
+    const full = ["self", "ralph", "adversarial"];
+    expect(reviewersForClass(full, "chore")).toEqual(["self"]); // trivial → single pass
+    expect(reviewersForClass(full, "feature")).toEqual(full); // feature → full panel
+    expect(reviewersForClass(full, "bug")).toEqual(full); // bug → full panel
+    expect(reviewersForClass(full, "")).toEqual(full); // unknown → full (never under-reviews)
+    expect(reviewersForClass(full, undefined)).toEqual(full);
+    expect(reviewersForClass(["self"], "chore")).toEqual(["self"]); // already one → unchanged
+  });
+  it("analysis persists the task class so review can scale to it (loom-ohky)", async () => {
+    const app2 = createApi(db, { stageAgent: async () => '{ "class": "chore", "route": ["analysis","impl","review","qa","pr","done"] }' });
+    await app2.request("/api/tasks/t1/analysis/run", { method: "POST" });
+    const settings = (await (await app2.request("/api/settings")).json()) as Record<string, unknown>;
+    expect(settings["analysis.class.t1"]).toBe("chore");
+  });
+
+  it("isFatalAgentError flags a whole-reply auth/API/dead-session error, not a long real output (loom-authfail)", () => {
+    expect(isFatalAgentError("Failed to authenticate. API Error: 401 Invalid authentication credentials")).toBe(true);
+    expect(isFatalAgentError("⚠ The agent process ended before replying. Re-run the stage.")).toBe(true);
+    expect(isFatalAgentError("API Error: 503 Service Unavailable")).toBe(true);
+    expect(isFatalAgentError("Not logged in · Please run /login")).toBe(true); // unauthenticated profile
+    expect(isFatalAgentError("⏱ The agent did not respond within the time limit — the session was stopped. Re-run the stage or switch the subscription.")).toBe(true); // per-turn timeout: impl never ran → must park, not fake-Done
+    expect(isFatalAgentError("API Error: 429 Too Many Requests")).toBe(false); // rate limit → existing auto-fallback, not park
+    expect(isFatalAgentError("")).toBe(false); // empty handled elsewhere
+    expect(isFatalAgentError("Done. ИТОГ: ГОТОВО — implemented the fix and tests pass.")).toBe(false); // real work
+    expect(isFatalAgentError("x".repeat(450) + " invalid authentication")).toBe(false); // long real output, not a bare error
+  });
+
   // ── dialog stages (L12) ──
   it("analysis/brainstorm/spec endpoints drive the dialog stages (L12.5)", async () => {
     let n = 0;
@@ -825,6 +891,16 @@ describe("web api mutations", () => {
     expect(task.run_mode).toBe("autopilot"); // not the hardcoded "gated"
   });
 
+  it("persists a per-task QA depth override on create, ignores inherit/garbage (QA depth)", async () => {
+    const full = await app.request("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "QA full", qaMode: "full" }) });
+    const fullId = ((await full.json()) as { task: { id: string } }).task.id;
+    const inh = await app.request("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "QA inherit", qaMode: "inherit" }) });
+    const inhId = ((await inh.json()) as { task: { id: string } }).task.id;
+    const settings = (await (await app.request("/api/settings")).json()) as Record<string, unknown>;
+    expect(settings[`qa.mode.${fullId}`]).toBe("full"); // real override persisted
+    expect(settings[`qa.mode.${inhId}`]).toBeUndefined(); // inherit → no override row
+  });
+
   it("GET /api/tasks/:id/dossier weaves stages, cost and artifacts into the history", async () => {
     upsertCost(db, "t1", "claude", "tokens", 1200, true);
     addAttachment(db, { id: "att1", taskId: "t1", kind: "file", name: "plan.md", pathOrUrl: "/repo/plan.md" });
@@ -977,10 +1053,42 @@ describe("web api — fs browse + PR connector", () => {
     expect(rev.result.findings.length).toBe(0); // re-review came back clean
   });
 
+  it("autopilot review skips the expensive auto-fix and parks when over the cost cap (loom-wqzr)", async () => {
+    createTask(database, { id: "rcap", title: "RCAP", run_mode: "autopilot" });
+    upsertCost(database, "rcap", "aimux", "spent", 7, true); // already over the $6 default auto-fix cap
+    const rm = createRunManager();
+    let fixCalls = 0;
+    const a = createApi(database, {
+      runManager: rm,
+      stageAgent: async () => { fixCalls++; return "исправил\nИТОГ: ГОТОВО"; }, // only the auto-fix path uses stageAgent
+      reviewPass: (key) => ({ key, run: async () => [{ pass: key, severity: "bug" as const, message: "boom" }] }),
+    });
+    await a.request("/api/tasks/rcap/start", { method: "POST" });
+    await a.request("/api/tasks/rcap/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "review" }) });
+    const { runId } = (await (await a.request("/api/tasks/rcap/stages/review/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    expect(fixCalls).toBe(0); // auto-fix NOT run — cost cap hit, so no extra opus spend
+    const stages = (await (await a.request("/api/tasks/rcap")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active"); // parked for a manual fix
+    expect((await transcriptOf(a, "rcap")).some((t) => /auto-fix cap|parking for a manual fix/i.test(t.output))).toBe(true);
+  });
+
   it("review fix with no findings → 400", async () => {
     createTask(database, { id: "rf0", title: "RF0" });
     const a = createApi(database);
     expect((await a.request("/api/tasks/rf0/review/fix", { method: "POST" })).status).toBe(400);
+  });
+
+  it("parks the stage (degraded, NOT done) when the agent returns a fatal auth error (loom-authfail)", async () => {
+    createTask(database, { id: "af", title: "AF", run_mode: "manual" });
+    const rm = createRunManager();
+    const a = createApi(database, { runManager: rm, stageAgent: async () => "Failed to authenticate. API Error: 401 Invalid authentication credentials" });
+    await a.request("/api/tasks/af/start", { method: "POST" });
+    const { runId } = (await (await a.request("/api/tasks/af/stages/analysis/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const detail = (await (await a.request("/api/tasks/af")).json()) as { stages: { stage_key: string; status: string }[]; degraded: string[] };
+    expect(detail.stages.find((s) => s.stage_key === "analysis")!.status).not.toBe("done"); // not fake-completed
+    expect(detail.degraded.some((d) => /agent error/i.test(d))).toBe(true); // surfaced, not silent
   });
 
   it("qa run leaves a readable turn (check results visible)", async () => {
@@ -1227,7 +1335,7 @@ describe("web api — fs browse + PR connector", () => {
     const { runId } = (await res.json()) as { runId: string };
     await rm.wait(runId);
     expect(seenPrompt).toContain("ты ошибся, глянь файл X"); // verbatim, no stage wrapper
-    expect(seenPrompt).not.toContain("Стадия:");
+    expect(seenPrompt).not.toContain("Stage:");
     expect(rm.get(runId)!.output.join("")).toContain("reply"); // streamed → SSE
     const turns = (await (await a.request("/api/tasks/ch/transcript")).json()) as { turns: { output: string }[] };
     expect(turns.turns.some((t) => t.output.includes("посмотрю файл X"))).toBe(true);
@@ -1251,8 +1359,13 @@ describe("web api — fs browse + PR connector", () => {
     await a.request("/api/tasks/pm/analysis/run", { method: "POST", body: "{}" });
     expect(seenAllowed).toContain("Read");
     expect(seenAllowed).toContain("Bash(git *)");
-    expect(seenAllowed).toContain("mcp__token-pilot"); // token-pilot tools allowed by default in gated/manual
-    expect(seenAllowed).not.toContain("Bash"); // unrestricted Bash is NOT in the default allowlist
+    // Loom-bundled MCP servers the agent is told to use must be allowed by default
+    // in gated/manual — both the plugin-delivered and standalone-server names (loom-hlpy).
+    expect(seenAllowed).toContain("mcp__plugin_token-pilot_token-pilot");
+    expect(seenAllowed).toContain("mcp__token-pilot");
+    expect(seenAllowed).toContain("mcp__plugin_task-journal_task-journal");
+    expect(seenAllowed).toContain("mcp__task-journal");
+    expect(seenAllowed).not.toContain("Bash"); // unrestricted Bash is NOT default-allowed
 
     const p1 = (await (await a.request("/api/tasks/pm/permissions")).json()) as { denials: string[]; allowed: string[] };
     expect(p1.denials).toContain("Bash"); // agent tried Bash → blocked, awaiting approval

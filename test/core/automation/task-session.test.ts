@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -55,12 +55,12 @@ describe("TaskSession (one session per task)", () => {
     expect(getTaskSession(db, "t1")).toEqual({ sessionId: "fixed-uuid", started: true });
   });
 
-  it("the preamble mandates token-pilot, task-journal, fact-only, and plain user-language formatting", () => {
+  it("the preamble mandates token-pilot, task-journal, fact-only, and plain-English formatting", () => {
     expect(SESSION_PREAMBLE).toContain("token-pilot");
     expect(SESSION_PREAMBLE).toContain("task-journal");
-    expect(SESSION_PREAMBLE).toMatch(/Только факт/i);
-    expect(SESSION_PREAMBLE).toMatch(/язык(е)? пользовател/i); // user's language, not hard-coded Russian
-    expect(SESSION_PREAMBLE).toMatch(/жаргон/i); // no machine/jargon-heavy text
+    expect(SESSION_PREAMBLE).toMatch(/Facts only/i);
+    expect(SESSION_PREAMBLE).toMatch(/plain human language/i); // plain language, no jargon (response language is per-step)
+    expect(SESSION_PREAMBLE).toMatch(/jargon/i); // no machine/jargon-heavy text
   });
 
   it("every stage send reinforces the rules + carries the stage", async () => {
@@ -68,7 +68,7 @@ describe("TaskSession (one session per task)", () => {
     const s = createTaskSession(db, "t1", { launcher });
     await s.send("first", { stage: "analysis" });
     await s.send("impl it", { stage: "impl" });
-    expect(calls[1].prompt).toContain("Стадия: impl");
+    expect(calls[1].prompt).toContain("Stage: impl");
     expect(calls[1].prompt).toMatch(/token-pilot.*task-journal|task-journal/);
   });
 
@@ -77,10 +77,10 @@ describe("TaskSession (one session per task)", () => {
     const s = createTaskSession(db, "t1", { launcher });
     await s.send("kick off", { stage: "analysis" }); // create the session first
     await s.send("посмотри в файл X, ты ошибся в анализе", { raw: true });
-    // resumed → no preamble; raw → the message goes through verbatim, no "Стадия:" head
+    // resumed → no preamble; raw → the message goes through verbatim, no "Stage:" head
     expect(calls[1].resume).toBe(true);
     expect(calls[1].prompt).toBe("посмотри в файл X, ты ошибся в анализе");
-    expect(calls[1].prompt).not.toContain("Стадия");
+    expect(calls[1].prompt).not.toContain("Stage");
   });
 
   it("passes streamed chunks through to onChunk", async () => {
@@ -91,12 +91,15 @@ describe("TaskSession (one session per task)", () => {
     expect(seen).toEqual(["chunk"]);
   });
 
-  it("parseCompleteness: parks only on an explicit НЕ ГОТОВО, passes otherwise", () => {
-    expect(parseCompleteness("итог...\nИТОГ: ГОТОВО").complete).toBe(true);
+  it("parseCompleteness: parks only on an explicit NOT DONE, passes otherwise", () => {
+    expect(parseCompleteness("summary...\nRESULT: DONE").complete).toBe(true);
     expect(parseCompleteness("no marker at all").complete).toBe(true); // missing marker → not blocked
-    const r = parseCompleteness("...\nИТОГ: НЕ ГОТОВО — нет доступа к API");
+    const r = parseCompleteness("...\nRESULT: NOT DONE — no access to the API");
     expect(r.complete).toBe(false);
-    expect(r.note).toContain("нет доступа");
+    expect(r.note).toContain("no access");
+    // Russian sentinel still parses as a fallback for in-flight sessions.
+    expect(parseCompleteness("итог...\nИТОГ: ГОТОВО").complete).toBe(true);
+    expect(parseCompleteness("...\nИТОГ: НЕ ГОТОВО — нет доступа").complete).toBe(false);
   });
 
   it("detectRateLimit: flags a provider session-limit message + reset hint", () => {
@@ -111,6 +114,15 @@ describe("TaskSession (one session per task)", () => {
     expect(declaresRemainingWork("осталось реализовать RD-4 и RD-5")).toBe(true);
     expect(declaresRemainingWork("remaining steps: wire the UI")).toBe(true);
     expect(declaresRemainingWork("Всё сделано и проверено, регрессий нет.")).toBe(false);
+  });
+
+  it("languageDirective sets the reply language and defaults to English (i18n loom-y14v)", () => {
+    expect(languageDirective("ru")).toContain("Russian");
+    expect(languageDirective("RU")).toContain("Russian"); // case-insensitive
+    expect(languageDirective("en")).toContain("English");
+    expect(languageDirective(undefined)).toContain("English"); // default
+    expect(languageDirective("xx")).toContain("English"); // unknown → English
+    expect(languageDirective("ru")).toMatch(/instructions remain in English/i); // prompts stay English
   });
 
   it("compacts the session once the turn threshold is reached", async () => {

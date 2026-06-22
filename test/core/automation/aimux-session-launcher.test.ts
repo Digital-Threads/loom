@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAimuxLiveLauncher } from "../../../src/core/automation/aimux-session-launcher.js";
 
 // A fake aimux live session: each send resolves immediately, so launcher.run()
@@ -43,5 +46,87 @@ describe("createAimuxLiveLauncher — degradedOf (visible open-time failures)", 
   it("returns an empty list for a session that never ran", () => {
     const launcher = createAimuxLiveLauncher(baseDeps);
     expect(launcher.degradedOf!("never")).toEqual([]);
+  });
+});
+
+describe("createAimuxLiveLauncher — OS sandbox", () => {
+  it("wraps the agent spawn in bubblewrap when sandbox is requested and a backend exists", async () => {
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { cli: string; args: string[] }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap",
+      sandboxUsable: () => true,
+      spawnProcess: ((cli: string, args: string[]) => { spawned.push({ cli, args }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "sb1", resume: false, sandbox: true });
+    // aimux was handed a wrapping spawnFn; invoke it the way aimux would.
+    captured.spawnFn!("claude", ["-p", "--resume", "x"], { cwd: "/wt" });
+    expect(spawned[0].cli).toBe("bwrap");
+    expect(spawned[0].args.join(" ")).toContain("--bind /wt /wt"); // worktree writable
+    const sep = spawned[0].args.indexOf("--");
+    expect(spawned[0].args.slice(sep + 1)).toEqual(["claude", "-p", "--resume", "x"]); // real cmd preserved
+    expect(launcher.degradedOf!("sb1")).toEqual([]); // sandboxed → no degradation
+  });
+
+  it("records a degraded marker when sandbox is requested but no backend exists", async () => {
+    const launcher = createAimuxLiveLauncher({ ...baseDeps, detectSandbox: () => "none" });
+    await launcher.run("hi", { sessionId: "sb2", resume: false, sandbox: true });
+    expect(launcher.degradedOf!("sb2")).toContain(
+      "OS sandbox unavailable (install bubblewrap) — agent ran without write-confinement",
+    );
+  });
+
+  it("binds the worktree's resolved node_modules writable so build tools work in the jail (loom-ndvo)", async () => {
+    const wt = mkdtempSync(join(tmpdir(), "loom-wt-"));
+    mkdirSync(join(wt, "node_modules"));
+    const nm = realpathSync(join(wt, "node_modules"));
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { args: string[] }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap",
+      sandboxUsable: () => true,
+      spawnProcess: ((_cli: string, args: string[]) => { spawned.push({ args }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "nm1", resume: false, sandbox: true });
+    captured.spawnFn!("claude", ["-p"], { cwd: wt });
+    expect(spawned[0].args.join(" ")).toContain(`--bind ${nm} ${nm}`); // node_modules writable
+    rmSync(wt, { recursive: true, force: true });
+  });
+
+  it("degrades (not breaks) when a backend exists but can't run the agent under it", async () => {
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { cli: string }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap", // present…
+      sandboxUsable: () => false, // …but the agent crashes under it (e.g. Bun segfault)
+      spawnProcess: ((cli: string) => { spawned.push({ cli }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "sb4", resume: false, sandbox: true });
+    captured.spawnFn!("claude", ["-p"], { cwd: "/wt" });
+    expect(spawned[0].cli).toBe("claude"); // ran UNWRAPPED — agent not broken
+    expect(launcher.degradedOf!("sb4")).toContain(
+      "OS sandbox can't run the agent on this platform — agent ran without write-confinement",
+    );
+  });
+
+  it("does not wrap the spawn when sandbox is not requested (passthrough)", async () => {
+    let captured: { spawnFn?: (c: string, a: string[], o: { cwd?: string }) => unknown } = {};
+    const spawned: { cli: string }[] = [];
+    const launcher = createAimuxLiveLauncher({
+      ...baseDeps,
+      openSession: ((_c: unknown, _p: unknown, o: typeof captured) => { captured = o; return fakeSession(); }) as never,
+      detectSandbox: () => "bubblewrap", // available, but not requested
+      spawnProcess: ((cli: string) => { spawned.push({ cli }); return {}; }) as never,
+    });
+    await launcher.run("hi", { sessionId: "sb3", resume: false }); // sandbox omitted
+    captured.spawnFn!("claude", ["-p"], { cwd: "/wt" });
+    expect(spawned[0].cli).toBe("claude"); // unwrapped
+    expect(launcher.degradedOf!("sb3")).toEqual([]);
   });
 });

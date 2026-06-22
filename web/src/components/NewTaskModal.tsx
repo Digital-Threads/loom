@@ -3,6 +3,7 @@ import type { LoomClient, ProjectEntry } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { Modal } from "./Modal";
 import { Select } from "./Select";
+import { useT } from "../i18n";
 
 export function NewTaskModal({
   client,
@@ -20,12 +21,14 @@ export function NewTaskModal({
   const [branch, setBranch] = useState("");
   const [description, setDescription] = useState("");
   const [runMode, setRunMode] = useState("gated");
+  const [qaMode, setQaMode] = useState("inherit"); // inherit | minimal | full
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [profiles, setProfiles] = useState<string[]>([]);
   const [profile, setProfile] = useState("");
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const t = useT();
 
   useEffect(() => {
     client.projects().then((d) => {
@@ -46,7 +49,7 @@ export function NewTaskModal({
 
   async function submit() {
     if (!title.trim()) {
-      setErr("Title is required");
+      setErr(t("newTask.titleRequired"));
       return;
     }
     setBusy(true);
@@ -59,6 +62,7 @@ export function NewTaskModal({
         description: description.trim() || undefined,
         run_mode: runMode,
         profile: profile || undefined,
+        qaMode: qaMode === "inherit" ? undefined : qaMode,
       });
       onCreated();
       onClose();
@@ -74,20 +78,20 @@ export function NewTaskModal({
   // no repo is chosen or it looks like a temp dir, so the agent isn't pointed at
   // empty/scratch code.
   const repoWarning = !repo.trim()
-    ? "No project selected — Browse to your code folder, or the agent will have nothing to work on."
+    ? t("newTask.repoWarning.none")
     : /(^|\/)(tmp|temp)(\/|$)/i.test(repo)
-      ? "This looks like a temporary folder. Pick your real project unless you meant a scratch repo."
+      ? t("newTask.repoWarning.temp")
       : null;
 
   return (
-    <Modal title="New task" onClose={onClose}>
+    <Modal title={t("newTask.modalTitle")} onClose={onClose}>
         <div className="modal-b">
           <label className="fld">
-            <span>Title</span>
-            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add refund endpoint…" />
+            <span>{t("newTask.title")}</span>
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("newTask.title.placeholder")} />
           </label>
           <label className="fld">
-            <span>Repository</span>
+            <span>{t("newTask.repository")}</span>
             <div className="fld-row" style={{ gap: 8 }}>
               <Select
                 block
@@ -99,50 +103,59 @@ export function NewTaskModal({
                   <option key={p.projectId} value={p.root}>{p.name} — {p.root}</option>
                 ))}
                 {!repoInList && repo ? <option value="__custom__">{repo}</option> : null}
-                {projects.length === 0 ? <option value="">no projects — browse…</option> : null}
+                {projects.length === 0 ? <option value="">{t("newTask.noProjects")}</option> : null}
               </Select>
-              <button type="button" className="btn" onClick={() => setPicking(true)}>Browse…</button>
+              <button type="button" className="btn" onClick={() => setPicking(true)}>{t("newTask.browse")}</button>
             </div>
             {repoWarning ? <span className="fld-warn">⚠ {repoWarning}</span> : null}
           </label>
           <label className="fld">
-            <span>Branch</span>
+            <span>{t("newTask.branch")}</span>
             <input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" />
           </label>
           <label className="fld">
-            <span>Description</span>
-            <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What needs to happen…" />
+            <span>{t("newTask.description")}</span>
+            <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("newTask.description.placeholder")} />
           </label>
           <label className="fld">
-            <span>Run mode</span>
+            <span>{t("newTask.runMode")}</span>
             <Select block value={runMode} onChange={(e) => setRunMode(e.target.value)}>
-              <option value="manual">Manual — run each stage yourself</option>
-              <option value="gated">Gated — auto-run, stop at approval gates</option>
-              <option value="autopilot">Autopilot — run end-to-end</option>
+              <option value="manual">{t("newTask.runMode.manual")}</option>
+              <option value="gated">{t("newTask.runMode.gated")}</option>
+              <option value="autopilot">{t("newTask.runMode.autopilot")}</option>
             </Select>
+          </label>
+          <label className="fld">
+            <span>{t("newTask.qaDepth")}</span>
+            <Select block value={qaMode} onChange={(e) => setQaMode(e.target.value)}>
+              <option value="inherit">{t("newTask.qaDepth.inherit")}</option>
+              <option value="minimal">{t("newTask.qaDepth.minimal")}</option>
+              <option value="full">{t("newTask.qaDepth.full")}</option>
+            </Select>
+            <span className="fld-hint">{t("newTask.qaDepth.hint")}</span>
           </label>
           {profiles.length ? (
             <label className="fld">
-              <span>Account</span>
+              <span>{t("newTask.account")}</span>
               <Select block value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {profiles.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </Select>
-              <span className="fld-hint">Subscription this task runs under. You can switch it any time while it runs.</span>
+              <span className="fld-hint">{t("newTask.account.hint")}</span>
             </label>
           ) : null}
           {runMode === "autopilot" ? (
             <div className="modal-warn">
-              ⚠ Autopilot grants the agent <b>full host access</b> — it runs end-to-end without per-action approval and is <b>not</b> confined unless the OS sandbox is on. Enable the sandbox (Settings) to isolate it, or use only on a repo you trust.
+              ⚠ {t("newTask.autopilotWarning.before")}<b>{t("newTask.autopilotWarning.fullAccess")}</b>{t("newTask.autopilotWarning.mid")}<b>{t("newTask.autopilotWarning.not")}</b>{t("newTask.autopilotWarning.after")}
             </div>
           ) : null}
           {err ? <div className="modal-err">{err}</div> : null}
         </div>
         <div className="modal-f">
-          <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn" onClick={onClose} disabled={busy}>{t("action.cancel")}</button>
           <button className="btn acc" onClick={submit} disabled={busy}>
-            {busy ? "Creating…" : "Create"}
+            {busy ? t("newTask.creating") : t("action.create")}
           </button>
         </div>
       {picking ? (

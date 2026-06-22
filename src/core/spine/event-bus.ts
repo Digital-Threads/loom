@@ -3,7 +3,7 @@
 // giving a single chronological spine keyed by the shared ids. Best-effort —
 // telemetry must never throw into a caller.
 
-import { appendFileSync, readFileSync, mkdirSync, existsSync } from "node:fs";
+import { appendFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { loomDataDir } from "../paths.js";
 import type { LoomEvent } from "./event.js";
@@ -39,6 +39,41 @@ export function loadLoomEvents(projectId: string): LoomEvent[] {
       out.push(JSON.parse(trimmed) as LoomEvent);
     } catch {
       /* skip corrupt line */
+    }
+  }
+  return out;
+}
+
+/** Load blocked-command audit entries written by the command-policy hook and
+ *  convert them to `audit.command.blocked` LoomEvents for the timeline. */
+export function loadCommandAuditEvents(projectId: string): LoomEvent[] {
+  const dir = join(loomDataDir(), "audit");
+  if (!existsSync(dir)) return [];
+  let files: string[];
+  try { files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")); }
+  catch { return []; }
+  const out: LoomEvent[] = [];
+  for (const file of files) {
+    let raw: string;
+    try { raw = readFileSync(join(dir, file), "utf8"); }
+    catch { continue; }
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        const e = JSON.parse(t) as { ts: number; taskId: string; projectId: string; command: string; reason: string };
+        if (e.projectId !== projectId) continue;
+        out.push({
+          schema: "loom.event.v1",
+          ts: e.ts,
+          source: "loom",
+          projectId: e.projectId,
+          taskId: e.taskId,
+          type: "audit.command.blocked",
+          severity: "warn",
+          message: `Blocked: ${e.command.slice(0, 120)} — ${e.reason}`,
+        });
+      } catch { /* skip corrupt line */ }
     }
   }
   return out;

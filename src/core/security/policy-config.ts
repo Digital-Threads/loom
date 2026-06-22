@@ -6,9 +6,12 @@
 // Built-in defaults (DEFAULT_DENY, the package's secret patterns) are shown
 // read-only. User patterns are stored as plain strings and compiled here, so a
 // malformed pattern is reported, never thrown at runtime.
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { loomDataDir } from "../paths.js";
 import type Database from "better-sqlite3";
 import { DEFAULT_DENY, type CommandPolicy } from "./policy.js";
-import { scanSecrets, type SecretFinding } from "./secrets.js";
+import { scanSecrets, redactSecrets, type SecretFinding } from "./secrets.js";
 import { getSetting, setSetting } from "../store/settings.js";
 
 export interface SecretRule {
@@ -159,19 +162,57 @@ export function saveSecretConfig(db: Database.Database, rules: unknown, enabled:
 }
 
 /** Build the effective command policy: DEFAULT_DENY always applies; valid user
- *  patterns are layered on. Invalid sources are dropped (already rejected on save).
- *  NOTE: enforcement (calling checkCommand with this policy) is not yet wired into
- *  the runtime — this is the seam a future change will use. */
+ *  patterns are layered on. Invalid sources are dropped (already rejected on save). */
 export function effectivePolicy(cfg: SecurityConfig): CommandPolicy {
   const deny = [...DEFAULT_DENY, ...cfg.deny.map((s) => compileRegex(s)).filter((re): re is RegExp => re !== null)];
   const allow = cfg.allow.map((s) => compileRegex(s)).filter((re): re is RegExp => re !== null);
   return { deny, allow };
 }
 
+/** Where the command-policy hook reads the user's allow/deny patterns. Under the
+ *  Loom data dir (XDG_DATA_HOME/loom or ~/.loom) so the hook, the writer here, and
+ *  the audit reader all agree even when XDG_DATA_HOME is set (loom-block-audit). */
+export function commandPolicyFilePath(): string {
+  return join(loomDataDir(), "command-policy.json");
+}
+
+/** Mirror the user's command policy to ~/.loom/command-policy.json so the agent's
+ *  PreToolUse(Bash) hook (enforced-settings) can enforce it at runtime — the hook
+ *  runs in a separate process and can't read the DB. DEFAULT_DENY is baked into
+ *  the hook itself, so this file carries only the user's extra patterns. Called
+ *  on every save and at server start. Best-effort: a write failure just means the
+ *  baked DEFAULT_DENY floor still applies. */
+export function writeCommandPolicyFile(cfg: SecurityConfig): void {
+  const p = commandPolicyFilePath();
+  try {
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify({ allow: cfg.allow, deny: cfg.deny }), "utf8");
+  } catch {
+    /* best-effort — the hook's baked DEFAULT_DENY floor still enforces */
+  }
+}
+
 /** Redact a matched secret to a short head+tail; never echo the full value. */
 function redact(value: string): string {
   if (value.length <= 8) return "…";
   return `${value.slice(0, 4)}…${value.slice(-2)}`;
+}
+
+/** Redact likely secrets OUT of text (built-in patterns + custom rules), returning
+ *  the cleaned text — for the live agent stream and generated PR/commit bodies,
+ *  which secure-executor's scan never sees. Bounded like scanWithCustom. */
+export function redactWithCustom(text: string, rules: SecretRule[]): string {
+  let out = redactSecrets(text); // built-in credential patterns
+  for (const rule of rules) {
+    const re = compileRegex(rule.source, "g");
+    if (!re) continue;
+    let hits = 0;
+    out = out.replace(re, (m) => {
+      if (++hits > MAX_MATCHES_PER_RULE) return m; // bound work
+      return m.length <= 8 ? "…" : `${m.slice(0, 4)}…${m.slice(-2)}`;
+    });
+  }
+  return out;
 }
 
 /** Scan text with the built-in patterns plus any custom rules. Custom-rule

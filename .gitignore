@@ -5,3 +5,4 @@ dist
 .task-journal
 .token-pilot-fingerprint.json
 .claude/
+release/

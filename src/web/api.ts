@@ -18,7 +18,7 @@ import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expa
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
 import { pickFallbackProfile, shouldAutoFallback, type ProfileLimit } from "../core/automation/auto-fallback.js";
-import { addSubscription, removeSubscription, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
+import { addSubscription, removeSubscription, listProviderPresets, addProviderPreset, type AddSubscriptionResult } from "../core/plugins/aimux/adapter.js";
 import { createAuthManager } from "../core/plugins/aimux/auth-login.js";
 import {
   listProjects,
@@ -32,9 +32,9 @@ import { streamSSE } from "hono/streaming";
 import { createRunManager, type RunManager } from "../core/automation/run-manager.js";
 import { buildSpineIds, spineEnv } from "../core/spine/ids.js";
 import { recordRunCost } from "../core/observability/cost-recorder.js";
-import { tokenEventsByTime, tokenUsageBySession } from "../core/plugins/token-pilot/adapter.js";
+import { tokenEventsByTime, tokenUsageBySession, toolCallTokensForSessions, toolCallUsageBySession } from "../core/plugins/token-pilot/adapter.js";
 import { listSessions } from "../core/plugins/aimux/adapter.js";
-import { loadLoomEvents } from "../core/spine/event-bus.js";
+import { loadLoomEvents, loadCommandAuditEvents } from "../core/spine/event-bus.js";
 import type { LoomEvent } from "../core/spine/event.js";
 import { boardTotals, agentPerformance, failureReasons } from "../core/observability/metrics.js";
 import { recallPrior, partitionHits, askSearch, type RecallHit } from "../core/knowledge/recall.js";
@@ -50,7 +50,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../core/automation/task-session.js";
 import type { SessionControl } from "../core/automation/live-session.js";
 import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
@@ -58,12 +58,19 @@ import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from ".
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
-import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, type GitRunner } from "../core/security/sandbox.js";
+import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
+import { resolveSwarmConfig, type StageSwarmConfig } from "../core/layers/swarm/config.js";
+import { runImplSwarm } from "../core/layers/swarm/impl-swarm.js";
+import { perspectivePrompt } from "../core/layers/swarm/discrete-swarm.js";
+import { swarmRunEvent, sumAttemptCost } from "../core/layers/swarm/events.js";
+import { appendLoomEvent } from "../core/spine/event-bus.js";
+import { SESSION_PREAMBLE, TOOLS_ANCHOR, stageInstruction } from "../core/automation/task-session.js";
 import { browseDir } from "../core/workspace/fs-browse.js";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { safeResolveAny, realContained } from "../core/security/path-safety.js";
 import { audit } from "../core/security/audit.js";
+import { DEFAULT_EGRESS_ALLOW } from "../core/security/egress-allowlist.js";
 import { join as pathJoin, isAbsolute, dirname, resolve as pathResolve } from "node:path";
 import { advanceTask, runAndAdvance, type RunnerRegistry, type AdvanceOptions } from "../core/pipeline/conductor.js";
 import { parseRelocate, relocateAllowed, type Relocate } from "../core/pipeline/relocate.js";
@@ -78,6 +85,8 @@ import {
   policySummary,
   defaultDenySources,
   scanWithCustom,
+  redactWithCustom,
+  writeCommandPolicyFile,
   DEFAULT_SECRET_KINDS,
 } from "../core/security/policy-config.js";
 import { addAttachment, getAttachments, attachmentsPrompt } from "../core/store/attachments.js";
@@ -89,6 +98,7 @@ import { resolveFlow } from "../core/quality/flow-config.js";
 import { isValidSkillName } from "../core/skills/skills.js";
 import { reviewAction, reviewHolds, type ReviewAction } from "../core/quality/review-runner.js";
 import { runQa, type QaCheck } from "../core/quality/qa-runner.js";
+import { resolveQaMode } from "../core/quality/qa-mode.js";
 import { reviewPrompt, parseFindings, aggregateFindings, type ReviewPass, type Finding, type ReviewResult } from "../core/quality/review.js";
 import { computeLessons, lessonsPromptBlock, lessonToSkillDescription, type Lesson, type LessonFinding, type LessonCorrection } from "../core/learning/lessons.js";
 import { checkPrerequisites, type PrereqReport } from "../core/doctor/prereqs.js";
@@ -114,6 +124,8 @@ export interface ApiDeps {
   startRun?: (taskId: string, stageKey: string) => string;
   /** Load the project's event stream (default: file bus). */
   loadEvents?: (projectId: string) => LoomEvent[];
+  /** Load command-policy block audit entries for the project (default: file audit dir). */
+  loadCommandAuditEvents?: (projectId: string) => LoomEvent[];
   /** Recall prior reasoning for a query (default: task-journal recall --json). */
   recall?: (query: string) => RecallHit[];
   /** Semantic search this project (default: task-journal ask --json). */
@@ -165,7 +177,17 @@ function profileConfigDir(p: { is_source?: boolean; path: string }): string {
 }
 
 // A Claude plugin row for the Connectors UI. Parsed from `claude plugin list`.
-interface PluginEntry { name: string; version?: string; enabled: boolean }
+interface PluginEntry { name: string; version?: string; enabled: boolean; bundled?: boolean }
+
+// Plugins Loom installs and depends on (bootstrap INSTALL_UNITS). Uninstalling or
+// disabling one breaks the pipeline (caveman review / qa-skills / canary) or the
+// agent's tooling (token-pilot / task-journal / context-mode / superpowers), so
+// the UI flags them and the API blocks remove/disable — the user can still force
+// it via the claude CLI if they truly mean to. Matched by the base name (before @).
+const BUNDLED_PLUGINS = new Set([
+  "canary", "caveman", "context-mode", "qa-skills", "superpowers", "task-journal", "token-pilot",
+]);
+const pluginBaseName = (ref: string): string => ref.split("@")[0];
 
 // Defensive parse of `claude plugin list`. The real output is a multi-line block
 // per plugin:
@@ -184,7 +206,7 @@ function parsePluginList(stdout: string): PluginEntry[] {
     // Header: an optional bullet glyph, then "<name>@<marketplace>" alone.
     const ref = line.replace(/^[^\w]+/, "").match(/^([A-Za-z0-9][\w.-]*@[\w.-]+)$/);
     if (ref) {
-      cur = { name: ref[1], enabled: true };
+      cur = { name: ref[1], enabled: true, bundled: BUNDLED_PLUGINS.has(pluginBaseName(ref[1])) };
       out.push(cur);
       continue;
     }
@@ -192,7 +214,10 @@ function parsePluginList(stdout: string): PluginEntry[] {
     const v = line.match(/^Version:\s*(\S+)/i);
     if (v) { cur.version = v[1]; continue; }
     const s = line.match(/^Status:\s*(.+)$/i);
-    if (s) { cur.enabled = !/disabled/i.test(s[1]); continue; }
+    // Positive match: "enabled" only when the word is actually present, so an
+    // error/blank/unexpected status reads as NOT enabled (the safe default)
+    // rather than the green "on" that `!disabled` produced for any odd string.
+    if (s) { cur.enabled = /enabled/i.test(s[1]) && !/disabled/i.test(s[1]); continue; }
   }
   return out;
 }
@@ -237,8 +262,37 @@ function relocateSessionForProfile(profileName: string, sessionId: string): void
   }
 }
 
+/** Scale review depth to the task's analysis class: a trivial "chore" gets a
+ *  single reviewer — the full self→ralph→adversarial panel (each an opus pass
+ *  over the growing task session) is wasted cost on a one-line change. Features
+ *  and bugs keep the whole enabled pipeline. Unknown/empty class → full set, so
+ *  this only ever narrows when the analysis explicitly said "chore" (loom-ohky). */
+export function reviewersForClass(keys: string[], taskClass: string | undefined): string[] {
+  return taskClass === "chore" && keys.length > 1 ? keys.slice(0, 1) : keys;
+}
+
+/** True when the agent's reply is ENTIRELY a fatal error — auth/credentials, a
+ *  4xx/5xx API error, or a dead session — i.e. the stage never produced real
+ *  work. The pipeline uses this to PARK the stage (degraded) instead of marking
+ *  it "done" on a fake-empty result: otherwise a totally-failed run (e.g. a 401
+ *  on every stage) marches to "done" having done nothing. Length-bounded so a
+ *  long legitimate output that merely mentions an error doesn't trip it. */
+export function isFatalAgentError(text: string): boolean {
+  const t = (text ?? "").trim();
+  if (!t || t.length > 400) return false;
+  // NOTE: deliberately NOT matching 429 / rate-limit / usage-limit — those have
+  // their own recovery (detectRateLimit + auto-fallback to another account). This
+  // is only the terminal, no-existing-handler cases: auth/credentials, a 401/403/
+  // 404/5xx API error, or a dead session.
+  return /failed to authenticate|invalid authentication|authentication credentials|authentication.?failed|not logged in|please run \/login|api error:\s*(401|403|404|5\d\d)|agent process ended before replying|did not respond within the time limit|the session was stopped/i.test(t);
+}
+
 export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const app = new Hono();
+  // Mirror the stored command policy to the file the agent's PreToolUse(Bash)
+  // hook reads, so a freshly-started server enforces the saved policy from the
+  // first run (not only after the next save).
+  writeCommandPolicyFile(loadSecurityConfig(db));
   const loadWorkspace = deps.loadWorkspace ?? loadWorkspaceData;
   const setActiveProfile = deps.setActiveProfile ?? saveActiveProfile;
   const addSub = deps.addSubscription ?? ((name: string, opts: { cli?: string; model?: string }) => addSubscription(name, opts));
@@ -267,6 +321,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     db.prepare("UPDATE tasks SET project_id = ? WHERE project_id IS NULL OR project_id = ''").run(home);
   } catch { /* fresh db or no tasks */ }
   const loadEvents = deps.loadEvents ?? ((projectId: string) => loadLoomEvents(projectId));
+  const loadCmdAuditEvents = deps.loadCommandAuditEvents ?? ((projectId: string) => loadCommandAuditEvents(projectId));
   // Scope recall/search to the ACTIVE project (resolved per call), not the
   // server's cwd — otherwise task-journal looks in the wrong repo and recall
   // always returns 0 (loom-g2qf).
@@ -285,7 +340,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // The agent engine: one swappable runtime hides everything Claude-specific
   // (launcher, skills, connectors, recall). Declared early so recall below can
   // fall back to it; the per-task launcher is read off it further down.
-  const runtime = deps.runtime ?? createClaudeRuntime({ sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false) });
+  const runtime = deps.runtime ?? createClaudeRuntime({
+    sandbox: () => getSetting<boolean>(db, "sandbox.enabled", false),
+    egressPolicy: () => ({
+      enforce: getSetting<boolean>(db, "security.egress.enforce", false),
+      allow: getSetting<string[]>(db, "security.egress.allow", DEFAULT_EGRESS_ALLOW),
+    }),
+  });
   const recall =
     deps.recall ?? runtime.recall ?? ((query: string) => recallPrior(resolveProjectRoot(projectActive()?.root ?? process.cwd()), query, { run: recallRunner }));
   const search =
@@ -321,25 +382,25 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // that's the biggest token sink, and tests are the QA stage's job. Reviewers
   // read the code + diff (token-pilot smart_diff) only.
   const REVIEW_NO_RUN =
-    " ВАЖНО (экономия токенов): НЕ запускай тесты, билд или полный тест-сьют — ревьюй ТОЛЬКО чтением кода и diff (token-pilot smart_diff/read_symbol). Прогон тестов — задача стадии QA, не ревью.";
+    " IMPORTANT (token economy): do NOT run tests, the build, or the full test suite — review ONLY by reading the code and diff (token-pilot smart_diff/read_symbol). Running tests is the QA stage's job, not review's.";
   const REVIEWERS: { key: string; label: string; instruction: string }[] = [
     {
       key: "self",
-      label: "Своё ревью",
+      label: "Self review",
       instruction:
-        "Сделай собственное ревью ТЕКУЩИХ изменений кода в этом worktree. Прочитай изменённые файлы и diff. Ищи реальные баги, а не стиль." + REVIEW_NO_RUN,
+        "Do your own review of the CURRENT code changes in this worktree following the `requesting-code-review` skill: review the diff, then run `/simplify` to flag overcomplication. Read the changed files and the diff. Look for real bugs and unnecessary complexity, not style." + REVIEW_NO_RUN,
     },
     {
       key: "ralph",
       label: "Ralph-loop",
       instruction:
-        "Запусти ralph-loop ревью с МАКСИМУМ 3 итерациями над текущими изменениями кода: на каждой итерации углубляй анализ. Верни ВСЕ найденные за все итерации проблемы." + REVIEW_NO_RUN,
+        "Do an iterative deepening review of the current code changes with a MAXIMUM of 3 passes: each pass goes deeper than the last (first the obvious issues, then logic and edge cases, then subtle correctness and interactions). Return ALL issues found across all passes." + REVIEW_NO_RUN,
     },
     {
       key: "adversarial",
       label: "Adversarial",
       instruction:
-        "Запусти скилл /adversarial-review над текущими изменениями кода — пусть он попытается сломать решение (краевые случаи, неверный ввод, гонки, обход проверок). Верни найденные проблемы." + REVIEW_NO_RUN,
+        "Use the `adversarial-review` skill on the current code changes — try to break the solution (edge cases, invalid input, races, bypassing checks). Return the issues you find." + REVIEW_NO_RUN,
     },
   ];
   const REVIEWER_KEYS = REVIEWERS.map((r) => r.key);
@@ -377,7 +438,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
    *  by /review/fix (manual) and the autopilot review runner (auto-fix). */
   const fixAllFindings = async (id: string, findings: Finding[]): Promise<void> => {
     const list = findings.map((f) => `- [${f.severity}] ${f.file ? `${f.file}: ` : ""}${f.message}`).join("\n");
-    await sessionSend(id, "impl", `Code review нашёл проблемы. Исправь их в коде (реальные изменения, при необходимости делегируй субагентам), затем кратко отчитайся. Проблемы:\n${list}\nВ конце строкой ИТОГ.`);
+    await sessionSend(id, "impl", `Code review found issues. Fix them in the code (real changes, delegate to subagents if needed), then report briefly. Issues:\n${list}\nEnd with the RESULT line.`);
     const t = getTask(db, id);
     if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom: fix review findings — ${t.title}`);
   };
@@ -477,15 +538,36 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     try {
       const ids = taskSessionIds(id);
       const spent = ids.length ? ids.reduce((sum, s) => sum + (sessionLauncher.costOf?.(s) ?? 0), 0) : undefined;
-      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0] });
+      // token-pilot's MCP-tool savings live in tool-calls.jsonl, keyed by session
+      // id (not task_id) — add them on top of the hook-event totals so the Cost
+      // block reflects real tool savings, not just Read-hook denials (loom-cust).
+      const extra = toolCallTokensForSessions(repoRoot, ids);
+      recordRunCost(db, id, { tokenEvents: tokenEventsByTime(repoRoot), spent, sessionId: ids[0], extra });
     } catch {
       // Defensive as before (never throws) — but no longer silent: surface it.
       markDegraded(id, "session cost not recorded");
     }
   };
-  // manual/gated: agent may freely read/edit in the worktree + run git; anything
-  // else is denied and surfaced for approval. autopilot: full access (no list).
-  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite", "mcp__token-pilot"];
+  // Loom ships these MCP servers (bundled plugins: token-pilot@token-pilot,
+  // task-journal@task-journal) and SESSION_PREAMBLE tells the agent to use them.
+  // They must be allowed by default in gated/manual — else every call is denied
+  // and the agent silently falls back to raw Read/Grep (losing token-pilot's
+  // savings) or loses its journal (loom-hlpy). Both names are listed: the
+  // plugin-delivered form (mcp__plugin_<marketplace>_<plugin>, how Loom installs
+  // them) and the bare standalone-server form (mcp__<server>, e.g. task-journal
+  // registered via enforced-mcp.json). The bare form allows the WHOLE server —
+  // no "*", since the permission layer matches names literally (the manual
+  // /permissions/allow validator even rejects "*").
+  const BUNDLED_MCP_TOOLS = [
+    "mcp__token-pilot",
+    "mcp__plugin_token-pilot_token-pilot",
+    "mcp__task-journal",
+    "mcp__plugin_task-journal_task-journal",
+  ];
+  // manual/gated: agent may freely read/edit in the worktree + run git + use the
+  // bundled MCP servers; anything else is denied and surfaced for approval.
+  // autopilot: full access (no list).
+  const DEFAULT_ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(git *)", "TodoWrite", ...BUNDLED_MCP_TOOLS];
   const allowKey = (id: string) => `perm.allow.${id}`;
   const taskAllowed = (id: string): string[] => getSetting<string[]>(db, allowKey(id), []);
   const allowedToolsFor = (id: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...taskAllowed(id)];
@@ -505,8 +587,24 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // Live output sinks per task: when a stage runs via the run-manager, its
   // session output streams here → run-manager record → SSE to the UI.
   const streamSinks = new Map<string, (chunk: string) => void>();
+  // Redact likely secrets out of agent output the secure-executor scan never sees:
+  // the LIVE stream (chunks → transcript/SSE) and generated PR bodies (M3). Gated
+  // by the secret-scan toggle. Best-effort — a secret split across two stream
+  // chunks can slip through, but stored turns + PR text go through whole-string.
+  const redactOut = (text: string): string => {
+    try {
+      const cfg = loadSecurityConfig(db);
+      return cfg.secretScanEnabled ? redactWithCustom(text, cfg.secretRules) : text;
+    } catch { return text; }
+  };
+  const redactedSink = (sink: (c: string) => void) => (chunk: string) => sink(redactOut(chunk));
   const sessionSend = async (id: string, stage: string, prompt: string, opts?: { raw?: boolean }): Promise<string> => {
-    if (deps.stageAgent) return deps.stageAgent(prompt);
+    if (deps.stageAgent) {
+      const out = await deps.stageAgent(prompt);
+      // A fatal agent error must park the stage, not complete it (see below).
+      if (isFatalAgentError(out)) { markDegraded(id, `agent error: ${out.trim().slice(0, 140)}`); throw new Error(`agent send failed at ${stage}`); }
+      return out;
+    }
     const t = getTask(db, id);
     const repoRoot = t?.repo || process.cwd();
     const ids = buildSpineIds({ repoRoot, taskId: id });
@@ -518,7 +616,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       getSetting<string>(db, `model.task.${id}.${stage}`, "") ||
       getSetting<string>(db, `model.col.${stage}`, "") ||
       undefined;
-    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(prompt, {
+    // Append the response-language note from the UI-language setting (prompts stay
+    // English; only the agent's reply to the user follows it). i18n: loom-y14v.
+    const langPrompt = `${prompt}\n\n${languageDirective(getSetting<string>(db, "ui.language", "en"))}`;
+    const { text } = await createTaskSession(db, id, { launcher: sessionLauncher }).send(langPrompt, {
       stage,
       relocations,
       modelOverride,
@@ -527,10 +628,30 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       env: spineEnv(ids),
       bypassPermissions: autopilot,
       allowedTools: autopilot ? undefined : allowedToolsFor(id),
+      // Autopilot grants bypassPermissions, so confine its writes with the OS
+      // sandbox regardless of the global toggle; other modes honour the Settings
+      // toggle. Unavailable backend → the launcher records a degraded marker.
+      sandbox: autopilot || getSetting<boolean>(db, "sandbox.enabled", false),
       onChunk: streamSinks.get(id),
       profile: t?.profile ?? undefined, // run under the task's current subscription
     });
-    recordSessionCost(id, repoRoot);
+    // A fatal agent/API error (auth/credentials/429/dead session) comes back AS
+    // the reply text — the stage never really ran. Don't let the pipeline mark it
+    // "done" on this fake-empty result: record it, flag the task degraded, and
+    // throw so startRun records a failed run and the stage PARKS for the user to
+    // fix (re-auth / switch account / retry) instead of a task that reads
+    // "completed" having done nothing (loom-authfail).
+    if (isFatalAgentError(text)) {
+      saveResult(id, stage, "turn", { input: prompt, output: text });
+      markDegraded(id, `agent error: ${text.trim().slice(0, 140)}`);
+      throw new Error(`agent send failed at ${stage}: ${text.trim().slice(0, 160)}`);
+    }
+    // Read token-pilot stats from where the agent actually ran — its worktree —
+    // not the main repo. token-pilot writes .token-pilot/hook-events.jsonl under
+    // the session cwd (the worktree, which lives outside the repo in ~/.loom),
+    // and those events carry this task's id; reading the main repo finds none, so
+    // used/saved always showed 0 (loom-tpm). Non-git tasks fall back to the repo.
+    recordSessionCost(id, taskCwd(id) ?? repoRoot);
     recordDenials(id);
     // Drain any spawn-time degradations the launcher recorded for this session
     // (MCP not loaded, token-pilot enforcement missing) onto the task — same
@@ -701,6 +822,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const t = getTask(db, taskId);
     return buildQaChecks(keys, { repoRoot: t?.repo || process.cwd() });
   };
+  // QA depth: a per-task override (qa.mode.<id> = inherit|minimal|full) over the
+  // global default (qa.mode). "full" adds an agent verification pass on top of the
+  // objective checks (see the qa runner).
+  const qaModeFor = (taskId: string) =>
+    resolveQaMode(getSetting<string>(db, "qa.mode", "minimal"), getSetting<string>(db, `qa.mode.${taskId}`, "inherit"));
+  // Full-QA agent pass: deep verification beyond tests/build. Uses the bundled
+  // verification-before-completion skill; adds browser qa-skills only when the task
+  // is a reachable web app (degrades cleanly otherwise — no hard plugin dep). JSON
+  // findings out (same shape as review) so a `bug` finding fails QA.
+  const QA_FULL_PROMPT =
+    'Run a thorough QA pass on the CURRENT change. Follow the `verification-before-completion` skill: prove it actually works — exercise the real behaviour, edge cases, and error paths; don\'t assume. The objective tests/build already ran separately, so go beyond them. If (and only if) this is a web app with a reachable local URL, also run `/qa-skills:run-qa smoke` for browser checks; if it is not a web app or there is no URL, skip that and say so briefly. Return ONLY a JSON array of findings: [{ "severity": "bug|warn|info", "message": "...", "file": "..."? }]. Empty array if everything holds. No prose.';
   // Persist a stage result so the panel can re-display it on revisit (history).
   const saveResult = (taskId: string, stage: string, kind: string, data: unknown) =>
     createArtifact(db, { id: `art_${randomUUID().slice(0, 8)}`, taskId, stage, kind, content: JSON.stringify(data), status: "accepted" });
@@ -805,12 +937,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         const story = boardTaskStory(root); // task-journal's native export-pr
         if (story.trim()) return story;
       }
+      // The Done-time snapshot (story or raw events) is the authoritative record
+      // once the worktree is gone — it must beat the live `boardTaskJournal` read,
+      // which reads the repo's journal project and can be racy/empty (and made
+      // this test flaky). Snapshot first, live read only as a last resort.
       const snap = loadResult<{ events?: TjEvent[]; story?: string }>(id, JOURNAL_SNAPSHOT_KIND);
       if (snap?.story?.trim()) return snap.story;
-      const live = boardTaskJournal(root);
-      if (live.trim()) return live;
       const rendered = snap?.events ? renderJournalFromEvents(snap.events) : "";
       if (rendered.trim()) return rendered;
+      const live = boardTaskJournal(root);
+      if (live.trim()) return live;
     }
     // Nothing to show — surface the explicit "no journal" marker if we recorded one.
     const status = loadResult<{ state?: string; reason?: string }>(id, JOURNAL_STATUS_KIND);
@@ -900,13 +1036,96 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // NO code) → stored for review. Implementation = execute the plan in the task
   // worktree → auto-commit so PR has content. Both honour the completeness-gate.
   const RD_PROMPT =
-    "Стадия R&D — планирование. Разбей задачу на самодостаточные подзадачи (план/DAG): для каждой опиши что именно реализуется, какие файлы затрагиваются и критерий готовности. Код пока НЕ пиши. В конце укажи статус строкой ИТОГ.";
+    "R&D stage — planning. Follow the `writing-plans` skill. Break the task into self-sufficient subtasks (a plan/DAG): for each, describe exactly what gets implemented, which files it touches, and the done criterion. Do NOT write code yet. At the end state the status on the RESULT line.";
   const IMPL_PROMPT =
-    "Стадия реализации. Реализуй ВЕСЬ план целиком — все подзадачи/эпики, а НЕ только первый. Вноси реальные изменения в код (при необходимости делегируй субагентам), проверяй результат. Не останавливайся после одного эпика. Если по любой причине не успел доделать всё — в конце ОБЯЗАТЕЛЬНО строкой 'ИТОГ: НЕ ГОТОВО — <что осталось>'. Ставь 'ИТОГ: ГОТОВО' ТОЛЬКО когда весь план реализован и проверен.";
+    "Implementation stage. Work by the `executing-plans` skill (go through the plan step by step) and `test-driven-development` (failing test first → minimal code → refactor); when stuck, `systematic-debugging`. Implement the ENTIRE plan — all subtasks/epics, NOT just the first. Make real changes to the code (delegate to subagents via `subagent-driven-development` when needed) and verify the result. Don't stop after one epic. If for any reason you couldn't finish everything — at the end you MUST add the line 'RESULT: NOT DONE — <what's left>'. Write 'RESULT: DONE' ONLY when the whole plan is implemented and verified.";
   const IMPL_CONTINUE_PROMPT =
-    "Продолжай реализацию: возьми СЛЕДУЮЩИЕ невыполненные пункты плана и доведи их до конца (реальные изменения в коде + проверка). Когда весь план реализован и проверен — 'ИТОГ: ГОТОВО'; иначе 'ИТОГ: НЕ ГОТОВО — <что осталось>'.";
+    "Continue the implementation: take the NEXT unfinished items of the plan and carry them through (real changes in the code + verification). When the whole plan is implemented and verified — 'RESULT: DONE'; otherwise 'RESULT: NOT DONE — <what's left>'.";
   const IMPL_MAX_CONTINUES = 6; // bound the auto-continue loop so a huge/looping plan parks instead of running forever
   const doneProjectId = () => projectActive()?.projectId ?? "default";
+
+  // ── Impl-as-swarm (preview, gated by swarm.impl.enabled) ──────────────────────
+  const swarmConfigFor = (stage: string): StageSwarmConfig =>
+    resolveSwarmConfig(getSetting<unknown>(db, "swarm.default", {}), getSetting<unknown>(db, `swarm.${stage}`, {}));
+  const JUDGE_PROMPT =
+    "You are judging candidate implementations of the SAME task — each already passed the objective QA checks. Pick the ONE best: simplest correct change, cleanest diff, least risk. Reply with the winner as 'sw<N>' on the first line, then one short sentence why.";
+  // Run impl as a swarm of N candidates (each in its own worktree), gate each on
+  // QA, let a judge elect the winner, then promote it onto the task branch (git
+  // reset --hard) and drop the losers. Autopilot-only + expensive (N impl agents).
+  // Returns the report to record, or null to fall back to the single-impl path
+  // (nothing passed QA, or promotion failed). Live agents + git promote — verify
+  // by dogfood before trusting.
+  const runImplAsSwarm = async (id: string, cfg: StageSwarmConfig): Promise<{ report: string } | null> => {
+    const t = getTask(db, id);
+    if (!t?.repo || !isGitRepo(t.repo)) return null;
+    const repo = t.repo;
+    const base = worktreeBranch(id); // each attempt branches from the task's current state
+    const ids = buildSpineIds({ repoRoot: repo, taskId: id });
+    const model = getSetting<string>(db, `model.task.${id}.impl`, "") || getSetting<string>(db, "model.col.impl", "") || undefined;
+    const lang = languageDirective(getSetting<string>(db, "ui.language", "en"));
+    const git: GitRunner = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" });
+    const costs: Array<number | undefined> = [];
+    const failures: string[] = []; // why each dropped attempt failed (observability)
+    // A swarm attempt is a FRESH session with no accumulated task context (unlike
+    // the single-impl which resumes the lane that ran analysis/rd). Inject the task
+    // + analysis + spec so the agent knows WHAT to build instead of re-exploring
+    // from scratch (which times out).
+    const implContext = [
+      `TASK:\n${taskSpec(id)}`,
+      (latestArtifact(db, id, "analysis")?.content ?? "").trim() && `ANALYSIS:\n${latestArtifact(db, id, "analysis")!.content}`,
+      (latestArtifact(db, id, "spec-md")?.content ?? "").trim() && `SPEC:\n${latestArtifact(db, id, "spec-md")!.content}`,
+    ].filter(Boolean).join("\n\n");
+    const implement = async (slot: number, perspective: string | undefined) => {
+      try {
+        const wt = prepareSwarmWorktree(repo, id, slot, { base });
+        const instruction = `${perspectivePrompt(IMPL_PROMPT, perspective)}\n\n${implContext}`;
+        const body = `${stageInstruction("impl", instruction)}\n\n${TOOLS_ANCHOR}\n\n${lang}`;
+        // The session id is passed to claude as `--session-id <uuid>`, which MUST be
+        // a valid UUID — a slug like `${id}-sw${slot}` makes claude exit immediately
+        // ("agent process ended before replying"). Use a fresh UUID per attempt.
+        const sid = randomUUID();
+        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: sid, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
+        costs.push(sessionLauncher.costOf?.(sid)); // fresh session → this attempt's spend
+        if (isFatalAgentError(r.text)) throw new Error(`agent error: ${r.text.trim().slice(0, 120)}`);
+        const c = commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
+        if (!c.committed) throw new Error("no change committed (agent made no edit)");
+        return { branch: wt.branch, output: r.text };
+      } catch (e) {
+        failures.push(`sw${slot}: ${(e as Error).message}`);
+        throw e;
+      }
+    };
+    const qaGate = async (slot: number) => {
+      // Gate candidates on `build` only (tsc + bundler + design-system) — it runs
+      // reliably in a worktree, whereas the full test suite (vitest) is fragile
+      // there (node_modules symlink, loom-xzqv). This is a viability filter to pick
+      // among BUILDABLE candidates; the elected winner still goes through the full
+      // QA stage (tests) after promotion, which parks the task if it regresses.
+      const res = await runQa(buildQaChecks(["build"], { repoRoot: swarmWorktreePath(id, slot) }));
+      return { green: res.passed, summary: fmtQa(res) };
+    };
+    const judge = async (greens: { slot: number; branch: string; output: string }[]) => {
+      const summaries = greens.map((g) => `### sw${g.slot} (${g.branch})\n${g.output.trim().slice(0, 800)}`).join("\n\n");
+      const out = await sessionSend(id, "impl", `${JUDGE_PROMPT}\n\n${summaries}`);
+      const m = out.match(/sw\s*(\d+)/i);
+      const pick = m ? Number(m[1]) : greens[0].slot;
+      return { winnerSlot: greens.some((g) => g.slot === pick) ? pick : greens[0].slot, rationale: out.trim().slice(0, 200) };
+    };
+    const result = await runImplSwarm({ attempts: cfg.attempts, perspectives: cfg.perspectives, implement, qaGate, judge, concurrency: 1 });
+    const survivors = result.attempts.filter((a) => a.green).length;
+    const projectId = t.project_id ?? doneProjectId();
+    appendLoomEvent(projectId, swarmRunEvent({ projectId, taskId: id, stage: "impl", attempts: result.attempts.length, survivors, agree: result.winner ? 1 : 0, winner: result.winner ? `sw${result.winner.slot}` : undefined, costUsd: sumAttemptCost(costs), ts: Date.now() }));
+    // Persist the per-attempt outcome (why each failed, who survived/won) so a
+    // swarm that elects nothing is debuggable instead of a silent fallback.
+    saveResult(id, "impl", "swarm-debug", { attempts: result.attempts.map((a) => ({ slot: a.slot, green: a.green, qa: a.qa })), failures, winner: result.winner?.slot ?? null, rationale: result.rationale });
+    const cleanup = () => { for (let k = 0; k < cfg.attempts; k++) removeSwarmWorktree(repo, id, k); };
+    if (!result.winner) { cleanup(); return null; } // nothing passed QA → single-impl fallback
+    try {
+      git(["reset", "--hard", result.winner.branch], ensureWorktree(repo, id).path); // promote onto the task branch
+    } catch { cleanup(); return null; }
+    cleanup();
+    return { report: `Impl-swarm: ${result.attempts.length} candidates, ${survivors} passed QA → elected sw${result.winner.slot}. ${result.rationale}` };
+  };
   const defaultRunners: RunnerRegistry = {
     analysis: async (_d, id) => { await runAnalysis(db, id, taskSpec(id), stageAgentFor(id, "analysis")); return { ok: true }; },
     brainstorm: async (_d, id) => {
@@ -935,6 +1154,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return complete ? { ok: true } : { ok: true, needsAttention: true, note };
     },
     impl: async (_d, id) => {
+      // Impl-as-swarm (preview): when swarm.impl.enabled and the task is autopilot,
+      // run N candidates and promote the judged winner. Falls through to single
+      // impl when disabled, not autopilot, or nothing passed QA.
+      const swCfg = swarmConfigFor("impl");
+      if (swCfg.enabled && getTask(db, id)?.run_mode === "autopilot") {
+        const sw = await runImplAsSwarm(id, swCfg);
+        if (sw) {
+          saveResult(id, "impl", "impl-report", { report: sw.report });
+          recordTurn(id, "impl", "Implementation (swarm)", sw.report);
+          return { ok: true };
+        }
+      }
       // Implement the WHOLE plan: keep continuing while the agent reports it's
       // not done OR its own text still lists leftover plan items, up to a cap.
       // This stops impl from advancing after only the first epic (the agent
@@ -978,7 +1209,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const autopilot = getTask(db, id)?.run_mode === "autopilot";
       if (autopilot) {
         let payload: ReviewPayload | undefined;
-        const activeKeys = resolvedReviewerKeys();
+        const activeKeys = reviewersForClass(resolvedReviewerKeys(), getSetting<string>(db, `analysis.class.${id}`, ""));
         for (let i = 0; i < activeKeys.length; i++) {
           const reviewer = REVIEWERS.find((r) => r.key === activeKeys[i])!;
           const findings = await runReviewer(id, reviewer);
@@ -990,9 +1221,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         // instead of patching findings in place.
         const reviewRel = applyRelocate(id, "review", reviewRaw.get(id) ?? "");
         if (reviewRel) return { ok: true, relocate: reviewRel };
-        // Autopilot fixes the accumulated findings once, then re-reviews — no
-        // human gate, so it must resolve the work rather than park on it.
+        // Autopilot fixes the accumulated findings once, then re-reviews. But the
+        // fix + re-review is itself expensive (another fix pass + reviewers on a
+        // large session), and the fix may not even converge. So when the task has
+        // already spent past the auto-fix budget, DON'T pay for a fix attempt that
+        // might fail anyway — park with the findings surfaced for a manual fix +
+        // re-run (loom-wqzr). 0 = no cap.
         if (payload!.result.findings.length) {
+          const spentNow = getCosts(db, id).filter((r) => r.source === "aimux" && r.metric === "spent").reduce((s, r) => s + r.value, 0);
+          const autofixCapUsd = getSetting<number>(db, "review.autofixMaxUsd", 6);
+          if (autofixCapUsd > 0 && spentNow >= autofixCapUsd) {
+            recordTurn(id, "review", "Auto-fix skipped (cost cap)", `Review found ${payload!.result.findings.length} issue(s). The task has already spent $${spentNow.toFixed(2)} ≥ the $${autofixCapUsd} auto-fix cap — parking for a manual fix instead of an expensive (and possibly non-converging) auto-fix loop.`);
+            return { ok: false, needsAttention: true, note: `review auto-fix skipped — cost cap $${autofixCapUsd} reached` };
+          }
           await fixAllFindings(id, payload!.result.findings);
           payload = await reReviewAfterFix(id, payload!.result.findings);
           recordTurn(id, "review", "Auto-fix + re-review (autopilot)", fmtReview(payload.result));
@@ -1009,9 +1250,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     },
     qa: async (_d, id) => {
       const res = await runQa(qaChecksFor(id));
-      saveResult(id, "qa", "qa-result", { result: res });
-      recordTurn(id, "qa", "Run the repo's checks", fmtQa(res));
-      return { ok: res.passed, needsAttention: !res.passed };
+      // Full mode adds an agent verification pass on top of the objective checks;
+      // a `bug` finding fails QA just like a failed check. Minimal mode = checks only.
+      const mode = qaModeFor(id);
+      let findings: Finding[] = [];
+      if (mode === "full") findings = parseFindings("qa", await sessionSend(id, "qa", QA_FULL_PROMPT));
+      const passed = res.passed && findings.filter((f) => f.severity === "bug").length === 0;
+      saveResult(id, "qa", "qa-result", { result: res, mode, findings });
+      recordTurn(id, "qa", mode === "full" ? "QA: objective checks + verification pass" : "Run the repo's checks", fmtQa(res));
+      return { ok: passed, needsAttention: !passed };
     },
     pr: async (_d, id) => {
       // Rebase the worktree onto the current base first, so the PR/diff shows only
@@ -1028,13 +1275,27 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           return { ok: true, needsAttention: true, note };
         }
       }
-      const pr = await runPr(db, id, deps.prOptions?.(id) ?? {});
+      // Default PR options: in autopilot, actually push the branch to origin and
+      // return the host's "open a PR" link — Loom's push+link feature (we never
+      // auto-create the PR itself). Manual/gated stays description-only; the user
+      // pushes on demand via POST /api/tasks/:id/pr. Tests inject deps.prOptions,
+      // which wins. sh+repoRoot+branch are passed either way so the description
+      // gets a real change summary (commits + diffstat), not just the task spec.
+      const prOpts: PrOptions = deps.prOptions?.(id) ?? {
+        connector: prT?.run_mode === "autopilot",
+        sh: realSh,
+        repoRoot: prWt,
+        branch: worktreeBranch(id),
+      };
+      const pr = await runPr(db, id, prOpts);
+      pr.description = redactOut(pr.description); // M3: never store/show secrets in the PR body
       saveResult(id, "pr", "pr-result", pr);
       recordTurn(id, "pr", "Generate the PR description", pr.description);
-      // Opening the PR is the irreversible, opt-in step. When no PR was actually
-      // created (description-only / connector off), park here for the human to
-      // push + open it — don't silently advance the task to "done" with no PR.
-      return { ok: true, needsAttention: !pr.created };
+      // Pushed (autopilot) → Loom's part is done, advance. Otherwise — description
+      // only, or a push that failed — park for the human to push + open the PR,
+      // rather than silently finishing with nothing on origin. A push error is
+      // already saved on pr-result so it isn't a silent stall.
+      return { ok: true, needsAttention: !pr.pushed };
     },
     done: async (_d, id) => {
       runDone(db, id, { projectId: doneProjectId(), closeTask: () => deps.closeTask?.(id) });
@@ -1098,7 +1359,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     ((taskId: string, stageKey: string) => {
       const projectId = projectActive()?.projectId ?? "default";
       return rm.start({ projectId, taskId }, async (ctx) => {
-        streamSinks.set(taskId, ctx.appendOutput);
+        streamSinks.set(taskId, redactedSink(ctx.appendOutput));
         ctx.onInput((data) => {
           const sid = getTaskSession(db, taskId).sessionId;
           if (sid) sessionLauncher.interject?.(sid, data);
@@ -1183,7 +1444,18 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const pid = c.req.query("project");
     const root = pid ? projectsList().find((p) => p.projectId === pid)?.root : projectActive()?.root;
     const projectRoot = resolveProjectRoot(root ?? process.cwd());
-    const rows = tokenUsageBySession(projectRoot);
+    // Merge BOTH token-pilot sources per session: hook-events.jsonl (Read-hook
+    // denials) + tool-calls.jsonl (smart_read/read_symbol MCP savings). The
+    // dashboard previously read only hook-events, so it understated savings and
+    // disagreed with the per-task Cost block — which already sums both (loom-cust).
+    const merged = new Map<string, { sessionId: string; used: number; saved: number }>();
+    for (const r of [...tokenUsageBySession(projectRoot), ...toolCallUsageBySession(projectRoot)]) {
+      const e = merged.get(r.sessionId) ?? { sessionId: r.sessionId, used: 0, saved: 0 };
+      e.used += r.used;
+      e.saved += r.saved;
+      merged.set(r.sessionId, e);
+    }
+    const rows = [...merged.values()];
     const taskBySession = new Map(
       listTasks(db).filter((t) => t.session_id).map((t) => [t.session_id as string, t]),
     );
@@ -1321,6 +1593,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       profile: typeof body.profile === "string" && body.profile ? body.profile : (loadActiveProfile() ?? undefined),
       projectId,
     });
+    // Per-task QA depth override (inherit|minimal|full). "inherit"/absent → the
+    // task follows the global qa.mode default; only persist a real override.
+    if (body.qaMode === "minimal" || body.qaMode === "full") setSetting(db, `qa.mode.${id}`, body.qaMode);
     return c.json({ task }, 201);
   });
 
@@ -1386,7 +1661,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const projectId = projectActive()?.projectId ?? "default";
     const isAutopilot = getTask(db, id)?.run_mode === "autopilot";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       ctx.onInput((data) => { const s = getTaskSession(db, id).sessionId; if (s) sessionLauncher.interject?.(s, data); });
       try {
         if (isAutopilot) {
@@ -1404,7 +1679,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
           return { outcome: { ok: true }, stoppedAt: res.stoppedAt, reason: res.reason };
         }
         // manual/gated: raw resume of the same conversation under the new subscription
-        await sessionSend(id, "chat", "Continue — продолжай с того места, где остановился.", { raw: true });
+        await sessionSend(id, "chat", "Continue from where you left off.", { raw: true });
         return { outcome: { ok: true } };
       } finally {
         streamSinks.delete(id);
@@ -1472,7 +1747,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const stage = typeof body.stage === "string" && body.stage ? body.stage : "chat";
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
         if (sid) sessionLauncher.interject?.(sid, data);
@@ -1556,6 +1831,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return res.ok ? c.json(res) : c.json(res, 400);
   });
 
+  // The one-command provider presets (deepseek/glm/kimi/…) for the Add-provider UI.
+  app.get("/api/accounts/presets", (c) => c.json({ presets: listProviderPresets() }));
+
+  // Add a provider-preset profile. Body: { name, provider, token }. The profile
+  // runs on the claude CLI against the provider's Anthropic-compatible endpoint.
+  app.post("/api/accounts/preset", async (c) => {
+    const b = (await c.req.json().catch(() => ({}))) as { name?: unknown; provider?: unknown; token?: unknown };
+    if (typeof b.name !== "string" || !b.name) return c.json({ error: "name required" }, 400);
+    if (typeof b.provider !== "string" || !b.provider) return c.json({ error: "provider required" }, 400);
+    if (typeof b.token !== "string" || !b.token) return c.json({ error: "token required" }, 400);
+    const res = addProviderPreset(b.name, b.provider, b.token);
+    return res.ok ? c.json(res) : c.json(res, 400);
+  });
+
   // Remove an aimux subscription (non-source only). Body: { name }.
   app.post("/api/accounts/subscription/remove", async (c) => {
     const b = (await c.req.json().catch(() => ({}))) as { name?: unknown };
@@ -1619,8 +1908,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
 
   // ─── observability (L9) ──────────────────────────────────────────────────────
   // Unified timeline: the project's LoomEvent stream, time-ordered.
+  // Also merges command-policy block entries from ~/.loom/audit/ so the Security
+  // panel's audit trail reflects real blocked commands (audit.command.blocked).
   app.get("/api/timeline", (c) => {
-    const events = [...loadEvents(resolveProjectId(c))].sort((a, b) => a.ts - b.ts);
+    const projectId = resolveProjectId(c);
+    const events = [...loadEvents(projectId), ...loadCmdAuditEvents(projectId)].sort((a, b) => a.ts - b.ts);
     return c.json({ events });
   });
   // Board-wide token totals (provenance shown per cost row on the task view).
@@ -1693,7 +1985,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!getTask(db, id)) return c.json({ error: "not found" }, 404);
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       updateTaskStatus(db, id, "running"); // live while the pipeline advances
       ctx.onInput((data) => {
         const sid = getTaskSession(db, id).sessionId;
@@ -1927,6 +2219,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const pluginAction = (verb: string) => async (c: Context) => {
     const name = c.req.param("name") ?? "";
     if (!isSafePluginRef(name)) return c.json({ error: "invalid plugin name" }, 400);
+    // Don't let the UI remove/disable a plugin Loom's pipeline depends on.
+    if ((verb === "uninstall" || verb === "disable") && BUNDLED_PLUGINS.has(pluginBaseName(name))) {
+      return c.json({ ok: false, error: `${pluginBaseName(name)} is bundled with Loom and required by the pipeline — ${verb} is blocked here. Use the claude CLI directly if you really need to.` }, 409);
+    }
     try {
       const r = await claudePlugin(["plugin", verb, "--", name]);
       return r.code === 0 ? c.json({ ok: true }) : c.json({ ok: false, error: r.stdout || `${verb} failed` });
@@ -1986,6 +2282,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (body.deny !== undefined && !Array.isArray(body.deny)) return c.json({ error: "deny must be an array" }, 400);
     const r = saveCommandPolicy(db, body.allow ?? [], body.deny ?? []);
     if (!r.ok) return c.json({ error: r.error }, 400);
+    // Mirror to the file the agent's PreToolUse(Bash) hook reads, so the edit
+    // takes effect on the next command without a restart.
+    writeCommandPolicyFile(loadSecurityConfig(db));
     return c.json({ ok: true, summary: policySummary(loadSecurityConfig(db)) });
   });
   app.get("/api/security/secrets", (c) => {
@@ -2121,7 +2420,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (!findings.length) return c.json({ error: "no findings to fix" }, 400);
     const projectId = projectActive()?.projectId ?? "default";
     const runId = rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       try {
         moveToStage(db, id, "impl"); // back to implementation: the card shows the fix is dev work
         await fixAllFindings(id, findings as Finding[]); // fix every accumulated finding at once
@@ -2336,7 +2635,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     saveResult(id, "advance", "stop-reason", { kind: "none" });
     const projectId = projectActive()?.projectId ?? "default";
     rm.start({ projectId, taskId: id }, async (ctx) => {
-      streamSinks.set(id, ctx.appendOutput);
+      streamSinks.set(id, redactedSink(ctx.appendOutput));
       try {
         updateTaskStatus(db, id, "running");
         const res = await advanceTask(db, id, runners, advanceOpts());

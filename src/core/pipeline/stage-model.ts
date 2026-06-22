@@ -40,15 +40,23 @@ export interface ResolveModelOpts {
   override?: string;
   /** How many times this task has been relocated — escalates a stubborn impl. */
   relocations?: number;
+  /** The active profile's pinned model, when it isn't a Claude profile. The
+   *  opus/sonnet/haiku tiers below are Claude-specific, so a Codex/GLM profile
+   *  supplies its own model here and it wins over the tier policy. */
+  profileModel?: string;
 }
 
 /**
- * Resolve the model for a stage. Priority: explicit override > escalation > map.
- * Returns a tier alias ("opus"/"sonnet"/"haiku") or the raw override string —
- * both are valid `--model` values that aimux passes through.
+ * Resolve the model for a stage. Priority: explicit override > profile model >
+ * impl escalation > Claude tier map. Returns a tier alias ("opus"/"sonnet"/
+ * "haiku"), the profile's model, or the raw override — all valid `--model`
+ * values the provider's adapter passes through.
  */
 export function resolveStageModel(stage: string, opts: ResolveModelOpts = {}): string {
   if (opts.override) return opts.override;
+  // A non-Claude profile pins its own model — the Claude tiers + impl escalation
+  // below don't apply off-Claude.
+  if (opts.profileModel) return opts.profileModel;
   if (stage === "impl" && (opts.relocations ?? 0) >= IMPL_ESCALATE_AFTER) return "opus";
   return STAGE_MODEL[stage] ?? DEFAULT_TIER;
 }

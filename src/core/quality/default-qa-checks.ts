@@ -14,13 +14,29 @@ import type { QaCheck } from "../layers/quality/index.js";
  *  event loop and freeze every other request until it finished. */
 export type ShRun = (cmd: string, args: string[], cwd: string) => Promise<{ code: number; output: string }>;
 
+/** Hard ceiling per QA command. The suite/build can take minutes, but a command
+ *  that runs past this is a hang (a watch mode, a wedged test, a prompt) — without
+ *  a cap it parks the whole task forever (seen: a 45-min stuck qa). On timeout the
+ *  child is SIGKILLed and the check is reported as a failure, not left hanging. */
+export const QA_CMD_TIMEOUT_MS = 12 * 60_000;
+
 const defaultSh: ShRun = (cmd, args, cwd) =>
   new Promise((resolve) => {
-    execFile(cmd, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (!err) return resolve({ code: 0, output: stdout });
-      const e = err as { code?: number };
-      resolve({ code: typeof e.code === "number" ? e.code : 1, output: `${stdout ?? ""}${stderr ?? ""}` });
-    });
+    execFile(
+      cmd,
+      args,
+      { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: QA_CMD_TIMEOUT_MS, killSignal: "SIGKILL" },
+      (err, stdout, stderr) => {
+        if (!err) return resolve({ code: 0, output: stdout });
+        const e = err as { code?: number; killed?: boolean };
+        const out = `${stdout ?? ""}${stderr ?? ""}`;
+        if (e.killed === true) {
+          // Killed by the timeout — surface it clearly so QA fails loud, not silent.
+          return resolve({ code: 124, output: `${out}\n[QA: '${cmd} ${args.join(" ")}' exceeded ${QA_CMD_TIMEOUT_MS / 60_000}m and was killed — treated as a failure (likely a hang).]` });
+        }
+        resolve({ code: typeof e.code === "number" ? e.code : 1, output: out });
+      },
+    );
   });
 
 function readScripts(repoRoot: string): Record<string, string> {
@@ -79,8 +95,30 @@ export function buildQaChecks(keys: string[], env: QaCheckEnv): QaCheck[] {
     };
   };
 
+  // The "tests" pass runs the package's `test` script AND, when present, `test:web`
+  // — a separate browser/jsdom suite that the root `test` (e.g. vitest excluding
+  // web/**) does NOT cover. Without this, UI-only changes pass QA unverified
+  // (their component tests are never run). Fails if EITHER suite fails.
+  const testsCheck = (): QaCheck => {
+    const subs = [["host", "test"], ["web", "test:web"]].filter(([, name]) => scripts[name]) as Array<[string, string]>;
+    if (!subs.length) return skipped("tests", `no "test" script in package.json`);
+    return {
+      key: "tests",
+      run: async () => {
+        const parts: string[] = [];
+        let ok = true;
+        for (const [label, name] of subs) {
+          const r = await sh(pm, ["run", name], env.repoRoot);
+          ok = ok && r.code === 0;
+          parts.push(`[${label}] ${clip(r.output)}`);
+        }
+        return { ok, output: parts.join("\n\n") };
+      },
+    };
+  };
+
   return keys.map((key) => {
-    if (key === "tests") return script("tests", "test");
+    if (key === "tests") return testsCheck();
     if (key === "build") return script("build", "build");
     if (key === "browser") return skipped(key, "browser checks need a canary connector (not configured)");
     return skipped(key, "no default runner for this pass");

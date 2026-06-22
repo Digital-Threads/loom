@@ -87,6 +87,16 @@ export function createRunManager(persist?: RunPersist, opts?: RunManagerOptions)
 
   return {
     start(opts, task) {
+      // One in-flight run per task. A second concurrent start — a double-click, two
+      // browser tabs, a racing client, an over-eager driver — would run two stages
+      // at once and corrupt the board (e.g. impl AND done both "active"). Return the
+      // existing run instead of starting another; the caller's task fn is NOT
+      // invoked. Child runs (parentRunId) are exempt — they are sub-runs of an
+      // active run, not competing stages.
+      if (opts.taskId && !opts.parentRunId) {
+        const active = [...runs.values()].find((r) => r.taskId === opts.taskId && r.status === "running" && !r.parentRunId);
+        if (active) return active.runId;
+      }
       const runId = newRunId();
       const rec: RunRecord = {
         runId,

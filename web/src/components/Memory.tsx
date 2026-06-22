@@ -3,12 +3,14 @@ import type { LoomClient, TaskRow, ProjectEntry } from "../api";
 import { statusLabel, statusClass } from "../ui";
 import { StateView } from "./StateView";
 import { Markdown } from "./Markdown";
+import { useT } from "../i18n";
 
 // F1.4 — task-journal memory: list the BOARD tasks, click one to read the
 // agent's reasoning journal for that task (goal, decisions, what was ruled out,
 // what was verified) — read live from the task's worktree project, with a
 // snapshot fallback so it survives the worktree's deletion.
 export function Memory({ client, projects = [] }: { client: LoomClient; projects?: ProjectEntry[] }) {
+  const tr = useT();
   const [tasks, setTasks] = useState<TaskRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export function Memory({ client, projects = [] }: { client: LoomClient; projects
   if (err) return <StateView kind="error" msg={err} />;
   if (!tasks) return <StateView kind="loading" />;
   if (tasks.length === 0)
-    return <StateView kind="empty" msg="No tasks yet — the AI logs its reasoning here as it works on a task." />;
+    return <StateView kind="empty" msg={tr("memory.empty")} />;
 
   const selTask = sel ? tasks.find((t) => t.id === sel) : undefined;
   const projName = selTask ? projects.find((p) => p.projectId === selTask.project_id)?.name : undefined;
@@ -43,8 +45,7 @@ export function Memory({ client, projects = [] }: { client: LoomClient; projects
   return (
     <div>
       <p className="acct-hint" style={{ margin: "0 0 14px" }}>
-        The reasoning behind each task — its <b>goal</b>, the <b>decisions</b> made (and the alternatives weighed),
-        what was <b>ruled out</b>, and what was <b>verified</b>. Pick a task.
+        {tr("memory.intro.before")} <b>{tr("memory.intro.goal")}</b>{tr("memory.intro.mid1")} <b>{tr("memory.intro.decisions")}</b>{tr("memory.intro.mid2")} <b>{tr("memory.intro.ruledOut")}</b>{tr("memory.intro.mid3")} <b>{tr("memory.intro.verified")}</b>{tr("memory.intro.after")}
       </p>
       <div className="split">
         <div className="list mem-list">
@@ -63,7 +64,7 @@ export function Memory({ client, projects = [] }: { client: LoomClient; projects
         </div>
         <div className="detail mem-detail">
           {!selTask ? (
-            <StateView kind="empty" msg="Pick a task to see its reasoning." />
+            <StateView kind="empty" msg={tr("memory.pickTask")} />
           ) : (
             <>
               <div className="mem-head">
@@ -81,7 +82,7 @@ export function Memory({ client, projects = [] }: { client: LoomClient; projects
               ) : pack === null ? (
                 <StateView kind="loading" />
               ) : pack.trim() === "" ? (
-                <StateView kind="empty" msg="No reasoning recorded for this task yet." />
+                <StateView kind="empty" msg={tr("memory.noReasoning")} />
               ) : (
                 <div className="mem-pack"><Markdown text={pack} /></div>
               )}

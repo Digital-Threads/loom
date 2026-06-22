@@ -27,6 +27,18 @@ describe("resolveStageModel", () => {
     expect(resolveStageModel("mystery")).toBe("sonnet");
   });
 
+  it("a non-Claude profile's pinned model wins over the Claude tier policy", () => {
+    // opus/sonnet/haiku are Claude tiers — a GLM/Codex profile pins its own model.
+    expect(resolveStageModel("analysis", { profileModel: "glm-4.6" })).toBe("glm-4.6");
+    expect(resolveStageModel("qa", { profileModel: "glm-4.6" })).toBe("glm-4.6");
+    // the Claude-only impl escalation does not apply off-Claude
+    expect(resolveStageModel("impl", { profileModel: "glm-4.6", relocations: 5 })).toBe("glm-4.6");
+  });
+
+  it("an explicit override still wins over the profile model", () => {
+    expect(resolveStageModel("impl", { override: "o1-pro", profileModel: "glm-4.6" })).toBe("o1-pro");
+  });
+
   it("has a tier for every standard stage", () => {
     for (const s of ["analysis", "brainstorm", "spec", "rd", "impl", "review", "qa", "pr", "done"]) {
       expect(STAGE_MODEL[s]).toBeDefined();

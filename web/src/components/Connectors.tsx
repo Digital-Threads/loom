@@ -3,6 +3,7 @@ import type { ConnectorMeta, LoomClient, McpServer, McpTransport, PluginEntry } 
 import { StateView } from "./StateView";
 import { Select } from "./Select";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 // Parse the args field — one argument per line (so an argument may contain
 // spaces). Blank lines are dropped.
@@ -37,13 +38,15 @@ type ImportState =
   | { kind: "error"; message: string };
 
 function TestStatus({ state }: { state?: TestState }) {
+  const t = useT();
   if (!state) return null;
-  if (state.kind === "checking") return <span className="chip warn" style={{ marginLeft: 6 }}>Checking…</span>;
-  if (state.kind === "ok") return <span className="chip ok" style={{ marginLeft: 6 }}>Reachable</span>;
-  return <span className="chip bad" style={{ marginLeft: 6 }} title={state.error}>Unreachable</span>;
+  if (state.kind === "checking") return <span className="chip warn" style={{ marginLeft: 6 }}>{t("connectors.status.checking")}</span>;
+  if (state.kind === "ok") return <span className="chip ok" style={{ marginLeft: 6 }}>{t("connectors.status.reachable")}</span>;
+  return <span className="chip bad" style={{ marginLeft: 6 }} title={state.error}>{t("connectors.status.unreachable")}</span>;
 }
 
 export function Connectors({ client }: { client: LoomClient }) {
+  const t = useT();
   const [servers, setServers] = useState<McpServer[]>([]);
   const [id, setId] = useState("");
   const [transport, setTransport] = useState<McpTransport>("stdio");
@@ -87,7 +90,7 @@ export function Connectors({ client }: { client: LoomClient }) {
   async function installPlugin() {
     const name = pluginName.trim();
     if (!name) return;
-    if (await runPluginOp(client.pluginInstall(name), `Installing ${name}`)) setPluginName("");
+    if (await runPluginOp(client.pluginInstall(name), `${t("connectors.toast.installing")} ${name}`)) setPluginName("");
   }
   async function addMarketplace() {
     const src = marketplaceSrc.trim();
@@ -95,7 +98,7 @@ export function Connectors({ client }: { client: LoomClient }) {
     try {
       const r = await client.marketplaceAdd(src);
       if (r.error) { toast.error(r.error); return; }
-      toast.success("Marketplace added");
+      toast.success(t("connectors.toast.marketplaceAdded"));
       setMarketplaceSrc("");
       refreshMarketplaces();
     } catch (e) { toast.error(String(e)); }
@@ -125,31 +128,31 @@ export function Connectors({ client }: { client: LoomClient }) {
       }
       resetForm();
       refresh();
-      toast.success("MCP server added");
-    } catch (e) { toast.error(`Couldn’t add server: ${e}`); }
+      toast.success(t("connectors.toast.serverAdded"));
+    } catch (e) { toast.error(`${t("connectors.toast.couldntAddServer")}: ${e}`); }
   }
   async function toggle(s: McpServer) {
-    try { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? "Disabled" : "Enabled"); }
-    catch (e) { toast.error(`Couldn’t toggle ${s.id}: ${e}`); }
+    try { await client.mcpToggle(s.id, !s.enabled); refresh(); toast.success(s.enabled ? t("connectors.toast.disabled") : t("connectors.toast.enabled")); }
+    catch (e) { toast.error(`${t("connectors.toast.couldntToggle")} ${s.id}: ${e}`); }
   }
   async function remove(sid: string) {
     try {
       await client.mcpRemove(sid);
       setTests((m) => { if (!(sid in m)) return m; const next = { ...m }; delete next[sid]; return next; });
       refresh();
-      toast.success("Server removed");
+      toast.success(t("connectors.toast.serverRemoved"));
     }
-    catch (e) { toast.error(`Couldn’t remove ${sid}: ${e}`); }
+    catch (e) { toast.error(`${t("connectors.toast.couldntRemove")} ${sid}: ${e}`); }
   }
   async function test(sid: string) {
     setTests((m) => ({ ...m, [sid]: { kind: "checking" } }));
     try {
       const r = await client.mcpTest(sid);
       setTests((m) => ({ ...m, [sid]: r.ok ? { kind: "ok" } : { kind: "fail", error: r.error } }));
-      if (r.ok) toast.success(`${sid}: reachable`); else toast.error(`${sid}: ${r.error ?? "unreachable"}`);
+      if (r.ok) toast.success(`${sid}: ${t("connectors.toast.reachable")}`); else toast.error(`${sid}: ${r.error ?? t("connectors.toast.unreachable")}`);
     } catch (e) {
       setTests((m) => ({ ...m, [sid]: { kind: "fail", error: String(e) } }));
-      toast.error(`Couldn’t test ${sid}: ${e}`);
+      toast.error(`${t("connectors.toast.couldntTest")} ${sid}: ${e}`);
     }
   }
 
@@ -158,10 +161,10 @@ export function Connectors({ client }: { client: LoomClient }) {
     try {
       const r = await client.importTracker({ connector, repo: repo.trim() || undefined });
       setImp({ kind: "done", created: r.created });
-      toast.success(r.created > 0 ? `Imported ${r.created}` : "Nothing new to import");
+      toast.success(r.created > 0 ? `${t("connectors.toast.imported")} ${r.created}` : t("connectors.toast.nothingNew"));
     } catch (e) {
       setImp({ kind: "error", message: String(e) });
-      toast.error(`Import failed: ${e}`);
+      toast.error(`${t("connectors.toast.importFailed")}: ${e}`);
     }
   }
 
@@ -171,60 +174,60 @@ export function Connectors({ client }: { client: LoomClient }) {
     <div className="panel">
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <input className="inp" placeholder="id" value={id} onChange={(e) => setId(e.target.value)} />
-        <Select aria-label="Transport" value={transport} onChange={(e) => setTransport(e.target.value as McpTransport)}>
+        <Select aria-label={t("connectors.transport")} value={transport} onChange={(e) => setTransport(e.target.value as McpTransport)}>
           <option value="stdio">stdio</option>
           <option value="sse">sse</option>
           <option value="http">http</option>
         </Select>
         {remote ? (
-          <input className="inp" placeholder="url (e.g. https://host/mcp)" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input className="inp" placeholder={t("connectors.placeholder.url")} value={url} onChange={(e) => setUrl(e.target.value)} />
         ) : (
           <>
-            <input className="inp" placeholder="command (e.g. mcp-server-fs)" value={command} onChange={(e) => setCommand(e.target.value)} />
-            <textarea className="inp" rows={2} placeholder="args (one per line)" value={args} onChange={(e) => setArgs(e.target.value)} />
-            <textarea className="inp" rows={2} placeholder="env (KEY=VALUE, one per line)" value={env} onChange={(e) => setEnv(e.target.value)} />
+            <input className="inp" placeholder={t("connectors.placeholder.command")} value={command} onChange={(e) => setCommand(e.target.value)} />
+            <textarea className="inp" rows={2} placeholder={t("connectors.placeholder.args")} value={args} onChange={(e) => setArgs(e.target.value)} />
+            <textarea className="inp" rows={2} placeholder={t("connectors.placeholder.env")} value={env} onChange={(e) => setEnv(e.target.value)} />
           </>
         )}
-        <button className="btn acc" onClick={add}>Add MCP</button>
+        <button className="btn acc" onClick={add}>{t("connectors.action.addMcp")}</button>
         {connectors.length > 0 ? (
-          <Select aria-label="Connector" value={connector} onChange={(e) => setConnector(e.target.value)}>
+          <Select aria-label={t("connectors.connector")} value={connector} onChange={(e) => setConnector(e.target.value)}>
             {connectors.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </Select>
         ) : null}
         {needsRepo ? (
           <input className="inp" placeholder="owner/repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
         ) : null}
-        <button className="btn" onClick={importFromTracker} disabled={imp.kind === "running" || (needsRepo && !repo.trim())}>Import</button>
+        <button className="btn" onClick={importFromTracker} disabled={imp.kind === "running" || (needsRepo && !repo.trim())}>{t("connectors.action.import")}</button>
       </div>
       {imp.kind === "running" ? (
-        <div style={{ marginTop: 8 }}><span className="chip warn">Importing…</span></div>
+        <div style={{ marginTop: 8 }}><span className="chip warn">{t("connectors.status.importing")}</span></div>
       ) : imp.kind === "done" ? (
-        <div style={{ marginTop: 8 }}><span className="chip ok">{imp.created > 0 ? `Imported ${imp.created}` : "Nothing new to import"}</span></div>
+        <div style={{ marginTop: 8 }}><span className="chip ok">{imp.created > 0 ? `${t("connectors.toast.imported")} ${imp.created}` : t("connectors.toast.nothingNew")}</span></div>
       ) : imp.kind === "error" ? (
         <div style={{ marginTop: 8 }}><StateView kind="error" msg={imp.message} /></div>
       ) : null}
       {loading ? (
         <StateView kind="loading" />
       ) : servers.length === 0 ? (
-        <StateView kind="empty" msg="No MCP servers yet." />
+        <StateView kind="empty" msg={t("connectors.empty.servers")} />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
-          <thead><tr><th>Server</th><th>Endpoint</th><th></th></tr></thead>
+          <thead><tr><th>{t("connectors.col.server")}</th><th>{t("connectors.col.endpoint")}</th><th></th></tr></thead>
           <tbody>
             {servers.map((s) => {
               const isRemote = s.transport === "sse" || s.transport === "http";
               return (
               <tr key={s.id}>
-                <td>{s.id}{s.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
+                <td>{s.id}{s.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>{t("connectors.on")}</span> : <span className="chip" style={{ marginLeft: 6 }}>{t("connectors.off")}</span>}</td>
                 <td className="crumb">
                   {isRemote ? <span className="chip" style={{ marginRight: 6 }}>{s.transport}</span> : null}
                   {isRemote ? s.url : s.command}
                   {isRemote ? null : <TestStatus state={tests[s.id]} />}
                 </td>
                 <td>
-                  <button className="btn" onClick={() => toggle(s)}>{s.enabled ? "Disable" : "Enable"}</button>
-                  {isRemote ? null : <button className="btn" onClick={() => test(s.id)} disabled={tests[s.id]?.kind === "checking"}>Test</button>}
-                  <button className="btn" onClick={() => remove(s.id)}>Remove</button>
+                  <button className="btn" onClick={() => toggle(s)}>{s.enabled ? t("connectors.action.disable") : t("connectors.action.enable")}</button>
+                  {isRemote ? null : <button className="btn" onClick={() => test(s.id)} disabled={tests[s.id]?.kind === "checking"}>{t("connectors.action.test")}</button>}
+                  <button className="btn" onClick={() => remove(s.id)}>{t("connectors.action.remove")}</button>
                 </td>
               </tr>
               );
@@ -233,34 +236,42 @@ export function Connectors({ client }: { client: LoomClient }) {
         </table>
       )}
 
-      <h3 style={{ marginTop: 24 }}>Plugins</h3>
+      <h3 style={{ marginTop: 24 }}>{t("connectors.plugins.title")}</h3>
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <input className="inp" placeholder="plugin (name@marketplace)" value={pluginName} onChange={(e) => setPluginName(e.target.value)} />
-        <button className="btn acc" onClick={installPlugin}>Install</button>
-        <input className="inp" placeholder="marketplace source (owner/repo or url)" value={marketplaceSrc} onChange={(e) => setMarketplaceSrc(e.target.value)} />
-        <button className="btn" onClick={addMarketplace}>Add marketplace</button>
+        <input className="inp" placeholder={t("connectors.placeholder.plugin")} value={pluginName} onChange={(e) => setPluginName(e.target.value)} />
+        <button className="btn acc" onClick={installPlugin}>{t("connectors.action.install")}</button>
+        <input className="inp" placeholder={t("connectors.placeholder.marketplace")} value={marketplaceSrc} onChange={(e) => setMarketplaceSrc(e.target.value)} />
+        <button className="btn" onClick={addMarketplace}>{t("connectors.action.addMarketplace")}</button>
       </div>
       {marketplaces.length > 0 ? (
         <div className="crumb" style={{ marginTop: 8 }}>
-          Marketplaces: {marketplaces.map((m) => <span key={m} className="chip" style={{ marginLeft: 6 }}>{m}</span>)}
+          {t("connectors.marketplaces")}: {marketplaces.map((m) => <span key={m} className="chip" style={{ marginLeft: 6 }}>{m}</span>)}
         </div>
       ) : null}
       {!pluginsLoaded ? (
         <StateView kind="loading" />
       ) : plugins.length === 0 ? (
-        <StateView kind="empty" msg="No plugins installed." />
+        <StateView kind="empty" msg={t("connectors.empty.plugins")} />
       ) : (
         <table className="tbl" style={{ marginTop: 16 }}>
-          <thead><tr><th>Plugin</th><th>Version</th><th></th></tr></thead>
+          <thead><tr><th>{t("connectors.col.plugin")}</th><th>{t("connectors.col.version")}</th><th></th></tr></thead>
           <tbody>
             {plugins.map((p) => (
               <tr key={p.name}>
-                <td>{p.name}{p.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>on</span> : <span className="chip" style={{ marginLeft: 6 }}>off</span>}</td>
+                <td>
+                  {p.name}
+                  {p.enabled ? <span className="chip ok" style={{ marginLeft: 6 }}>{t("connectors.on")}</span> : <span className="chip" style={{ marginLeft: 6 }}>{t("connectors.off")}</span>}
+                  {p.bundled ? <span className="chip" style={{ marginLeft: 6 }} title={t("connectors.plugin.requiredTitle")}>{t("connectors.plugin.required")}</span> : null}
+                </td>
                 <td className="crumb">{p.version ?? "—"}</td>
                 <td>
-                  <button className="btn" onClick={() => runPluginOp(client.pluginUpdate(p.name), `Updating ${p.name}`)}>Update</button>
-                  <button className="btn" onClick={() => runPluginOp(p.enabled ? client.pluginDisable(p.name) : client.pluginEnable(p.name), p.enabled ? `Disabling ${p.name}` : `Enabling ${p.name}`)}>{p.enabled ? "Disable" : "Enable"}</button>
-                  <button className="btn" onClick={() => runPluginOp(client.pluginUninstall(p.name), `Removing ${p.name}`)}>Remove</button>
+                  <button className="btn" onClick={() => runPluginOp(client.pluginUpdate(p.name), `${t("connectors.toast.updating")} ${p.name}`)}>{t("connectors.action.update")}</button>
+                  {p.bundled ? null : (
+                    <button className="btn" onClick={() => runPluginOp(p.enabled ? client.pluginDisable(p.name) : client.pluginEnable(p.name), p.enabled ? `${t("connectors.toast.disabling")} ${p.name}` : `${t("connectors.toast.enabling")} ${p.name}`)}>{p.enabled ? t("connectors.action.disable") : t("connectors.action.enable")}</button>
+                  )}
+                  {p.bundled ? null : (
+                    <button className="btn" onClick={() => runPluginOp(client.pluginUninstall(p.name), `${t("connectors.toast.removing")} ${p.name}`)}>{t("connectors.action.remove")}</button>
+                  )}
                 </td>
               </tr>
             ))}

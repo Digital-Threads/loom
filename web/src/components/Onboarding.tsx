@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { LoomClient, HealthRow, PrereqReport } from "../api";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { StateView } from "./StateView";
+import { useT } from "../i18n";
 
 // D2.2 — first-run wizard: shown when there are no projects. Walks a fresh
 // machine through setup without a terminal — check the environment (required
@@ -19,10 +20,10 @@ function isHealthy(h?: HealthRow): boolean {
 // Short "why" per required tool, shown next to its status so the user knows what
 // each one is for (the doctor hint is the install pointer, this is the purpose).
 const TOOL_WHY: Record<string, string> = {
-  node: "JavaScript runtime Loom itself runs on.",
-  npm: "Installs the Claude Code CLI and Node packages.",
-  cargo: "Builds the Task Journal binary that stores your task memory.",
-  claude: "Runs the AI agent that powers every task in Loom.",
+  node: "onboarding.toolWhy.node",
+  npm: "onboarding.toolWhy.npm",
+  cargo: "onboarding.toolWhy.cargo",
+  claude: "onboarding.toolWhy.claude",
 };
 
 // A single progress row streamed from the auto-installer.
@@ -34,6 +35,7 @@ interface InstallStep {
 }
 
 export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () => void }) {
+  const t = useT();
   const [report, setReport] = useState<PrereqReport | null>(null);
   const [subs, setSubs] = useState<{ name: string }[]>([]);
   const [health, setHealth] = useState<HealthRow[]>([]);
@@ -59,7 +61,7 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
       setSubs(ws.subscriptions as { name: string }[]);
       setHealth(ws.health);
     } catch (e) {
-      setLoadErr(`Couldn't read your environment: ${(e as Error).message}`);
+      setLoadErr(`${t("onboarding.err.readEnv")}: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -77,14 +79,14 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
     setSubMsg(null);
     try {
       const r = await client.addSubscription(profile.trim());
-      if (!r.ok) { setSubMsg(`Couldn't add subscription: ${r.error ?? "failed"}`); return; }
+      if (!r.ok) { setSubMsg(`${t("onboarding.err.addSub")}: ${r.error ?? "failed"}`); return; }
       setProfile("");
       const ws = await client.workspace();
       setSubs(ws.subscriptions as { name: string }[]);
       setHealth(ws.health);
-      setSubMsg("Subscription added. Authorize it from Subscriptions once you're on the board.");
+      setSubMsg(t("onboarding.subAdded"));
     } catch (e) {
-      setSubMsg(`Couldn't add subscription: ${(e as Error).message}`);
+      setSubMsg(`${t("onboarding.err.addSub")}: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -98,7 +100,7 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
       await client.addProject(root.trim());
       onDone();
     } catch (e) {
-      setProjErr(`Couldn't add project: ${(e as Error).message}`);
+      setProjErr(`${t("onboarding.err.addProject")}: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -135,47 +137,47 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
   }
 
   if (loading) {
-    return <div className="panel" style={{ maxWidth: 560 }}><StateView kind="loading" msg="Checking your environment…" /></div>;
+    return <div className="panel" style={{ maxWidth: 560 }}><StateView kind="loading" msg={t("onboarding.checkingEnv")} /></div>;
   }
   if (loadErr) {
     return (
       <div className="panel" style={{ maxWidth: 560 }}>
         <StateView kind="error" msg={loadErr} />
         <div className="row" style={{ marginTop: 10 }}>
-          <button className="btn acc" onClick={() => void load()}>Retry</button>
+          <button className="btn acc" onClick={() => void load()}>{t("action.retry")}</button>
         </div>
       </div>
     );
   }
 
   // Anything missing (incl. optional cargo) can be auto-installed → show the button.
-  const anyMissing = report ? report.tools.some((t) => !t.found) : false;
+  const anyMissing = report ? report.tools.some((tool) => !tool.found) : false;
 
   return (
     <div className="panel" style={{ maxWidth: 560 }}>
-      <h1>Welcome to Loom</h1>
-      <p className="muted">A few steps to get going — no terminal needed.</p>
+      <h1>{t("onboarding.welcome")}</h1>
+      <p className="muted">{t("onboarding.welcomeSub")}</p>
 
-      <h2 style={{ marginTop: 18 }}>1 · Check your environment</h2>
+      <h2 style={{ marginTop: 18 }}>{t("onboarding.step1")}</h2>
       {report ? (
         <div style={{ marginTop: 6 }}>
-          {report.tools.map((t) => {
-            const cls = t.found ? "ok" : t.optional ? "warn" : "bad";
-            const label = t.found ? "found" : t.optional ? "optional" : "missing";
+          {report.tools.map((tool) => {
+            const cls = tool.found ? "ok" : tool.optional ? "warn" : "bad";
+            const label = tool.found ? t("onboarding.status.found") : tool.optional ? t("onboarding.status.optional") : t("onboarding.status.missing");
             return (
-              <div key={t.name} className="row" style={{ gap: 8, marginTop: 4 }}>
+              <div key={tool.name} className="row" style={{ gap: 8, marginTop: 4 }}>
                 <span className={`chip ${cls}`}>{label}</span>
-                <span>{t.name}</span>
-                {TOOL_WHY[t.name] ? <span className="muted">— {TOOL_WHY[t.name]}</span> : null}
+                <span>{tool.name}</span>
+                {TOOL_WHY[tool.name] ? <span className="muted">— {t(TOOL_WHY[tool.name])}</span> : null}
               </div>
             );
           })}
           {anyMissing ? (
             <div className="row" style={{ gap: 8, marginTop: 8 }}>
               <button className="btn acc" disabled={installing} onClick={installMissing}>
-                {installing ? "Installing…" : "Install missing"}
+                {installing ? t("onboarding.installing") : t("onboarding.installMissing")}
               </button>
-              <span className="muted">Installs the missing tools and bundled plugins for you — no terminal.</span>
+              <span className="muted">{t("onboarding.installMissingHint")}</span>
             </div>
           ) : null}
           {steps.length ? (
@@ -183,10 +185,10 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
               {steps.map((s) => {
                 const cls = s.state === "done" ? "ok" : s.state === "failed" ? "bad" : "warn";
                 const text =
-                  s.state === "installing" ? "installing…"
-                    : s.state === "done" ? (s.message ? `done — ${s.message}` : "done")
-                    : s.state === "skipped" ? (s.message ?? "skipped")
-                    : `failed: ${s.message ?? "error"}`;
+                  s.state === "installing" ? t("onboarding.stepState.installing")
+                    : s.state === "done" ? (s.message ? `${t("onboarding.stepState.done")} — ${s.message}` : t("onboarding.stepState.done"))
+                    : s.state === "skipped" ? (s.message ?? t("onboarding.stepState.skipped"))
+                    : `${t("onboarding.stepState.failed")}: ${s.message ?? t("onboarding.stepState.error")}`;
                 return (
                   <div key={s.id} className="row" style={{ gap: 8, marginTop: 4 }}>
                     <span className={`chip ${cls}`}>{s.state}</span>
@@ -199,30 +201,30 @@ export function Onboarding({ client, onDone }: { client: LoomClient; onDone: () 
           ) : null}
         </div>
       ) : (
-        <div className="muted">Environment status unavailable.</div>
+        <div className="muted">{t("onboarding.envUnavailable")}</div>
       )}
 
       <h2 style={{ marginTop: 18 }}>
-        2 · Connect an AI subscription {hasHealthy ? <span className="chip ok">ready</span> : null}
+        {t("onboarding.step2")} {hasHealthy ? <span className="chip ok">{t("onboarding.ready")}</span> : null}
       </h2>
       {hasHealthy ? (
-        <div className="muted">Healthy profile: {healthyProfiles.map((p) => p.name).join(", ")}.</div>
+        <div className="muted">{t("onboarding.healthyProfile")}: {healthyProfiles.map((p) => p.name).join(", ")}.</div>
       ) : (
         <>
-          <div className="muted">No healthy aimux profile yet — add one to get started.</div>
+          <div className="muted">{t("onboarding.noHealthyProfile")}</div>
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
-            <input className="inp" placeholder="profile name (e.g. work)" value={profile} onChange={(e) => setProfile(e.target.value)} />
-            <button className="btn acc" disabled={busy || !profile.trim()} onClick={addSub}>Add</button>
+            <input className="inp" placeholder={t("onboarding.profilePlaceholder")} value={profile} onChange={(e) => setProfile(e.target.value)} />
+            <button className="btn acc" disabled={busy || !profile.trim()} onClick={addSub}>{t("onboarding.add")}</button>
           </div>
         </>
       )}
       {subMsg ? <div className="muted" style={{ marginTop: 4 }}>{subMsg}</div> : null}
 
-      <h2 style={{ marginTop: 18 }}>3 · Add your first project</h2>
+      <h2 style={{ marginTop: 18 }}>{t("onboarding.step3")}</h2>
       <div className="row" style={{ gap: 8, marginTop: 6 }}>
         <input className="inp" placeholder="/path/to/repo" value={root} onChange={(e) => setRoot(e.target.value)} />
-        <button className="btn" onClick={() => setPicking(true)}>Browse…</button>
-        <button className="btn acc" disabled={busy || !root.trim()} onClick={addProject}>Add project &amp; start</button>
+        <button className="btn" onClick={() => setPicking(true)}>{t("onboarding.browse")}</button>
+        <button className="btn acc" disabled={busy || !root.trim()} onClick={addProject}>{t("onboarding.addProjectStart")}</button>
       </div>
       {projErr ? <div className="state-err" style={{ marginTop: 6 }}>⚠ {projErr}</div> : null}
       {picking ? (

@@ -15,59 +15,59 @@ import { resolveStageModel } from "../pipeline/stage-model.js";
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string },
+    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string; sandbox?: boolean },
   ): Promise<{ text: string }>;
 }
 
 /** Mandatory standing instructions, injected once when the session is created.
  *  These are the user's hard conditions for every task session. */
 export const SESSION_PREAMBLE = [
-  "Ты ведёшь ОДНУ задачу в этой сессии от начала до конца — контекст копится между шагами.",
-  "Обязательные правила на всю сессию:",
+  "You run ONE task in this session from start to finish — context accumulates between steps.",
+  "Mandatory rules for the whole session:",
   "",
-  "1. Инструменты (всегда). Для чтения кода используй token-pilot (smart_read, read_symbol,",
-  "   read_for_edit, find_usages, smart_diff, smart_log, test_summary) — не cat/grep, это экономит токены.",
-  "   ЖУРНАЛ ЗАДАЧИ (task-journal) — это история ЭТОЙ задачи. В начале вызови task_create ОДИН раз",
-  "   (он привяжется к текущей задаче), держи возвращённый task_id и пиши ВСЁ в него — не заводи новые.",
-  "   Фиксируй В МОМЕНТ, когда происходит, КОРОТКО и по делу (одна-две фразы, file:line/id), НЕ эссе:",
-  "   decision (выбранный подход + alternatives — какие варианты взвесил), rejection (что отверг и почему),",
-  "   finding (проверенный факт), evidence (что доказал тест). В конце — task_close с итогом.",
-  "2. СТРОГО ПО ЗАДАЧЕ (хирургически). Делай РОВНО то, что требует задача — ничего сверх:",
-  "   - трогай ТОЛЬКО файлы/код, необходимые для задачи; НЕ «улучшай», не рефактори и не",
-  "     переформатируй несвязанный код; не добавляй фич, абстракций, настроек, которых не просили;",
-  "   - НИКОГДА не удаляй, не отключай и не ослабляй тест, чтобы он «прошёл». Падающий тест — это",
-  "     сигнал починить КОД (или корректно обновить тест, СОХРАНИВ покрытие), а не убрать его;",
-  "   - в общем/чужом коде меняй только АДДИТИВНО, не ломая существующее поведение; соблюдай",
-  "     существующий стиль соседнего кода;",
-  "   - выбирай простейшее решение, минимум кода. Каждая изменённая строка должна напрямую",
-  "     следовать из задачи. Если сомневаешься, нужно ли изменение, — не делай его.",
-  "3. Только факт. Не выдавай неуверенный или предполагаемый результат. Если есть сомнение или",
-  "   результат не финальный — доведи до конца и проверь (чтением кода, тестом, запуском).",
-  "   Шаг считается выполненным ТОЛЬКО когда результат проверен и полон.",
-  "4. Формат. Отвечай на ЯЗЫКЕ ПОЛЬЗОВАТЕЛЯ (на котором поставлена задача и идёт общение).",
-  "   Пиши простым, понятным человеческим языком — без лишнего технического жаргона и машинных",
-  "   формулировок. Любой человек должен понять, что сделано и как этим пользоваться.",
-  "5. Завершение шага. В конце каждого шага дай краткий понятный итог и ПОСЛЕДНЕЙ строкой укажи",
-  "   машиночитаемый статус ровно в таком виде:",
-  "     ИТОГ: ГОТОВО            — если шаг полностью выполнен и проверен;",
-  "     ИТОГ: НЕ ГОТОВО — <причина> — если остались сомнения/недоделки.",
-  "   Пока не ГОТОВО — переход к следующему шагу запрещён.",
-  "6. Само-навигация по конвейеру (по необходимости). Если на этом шаге ты понял, что задача реально",
-  "   должна быть на ДРУГОЙ стадии — напр. на review нашёл проблему настолько глубокую, что её не",
-  "   починить точечно (неверная архитектура/спека → нужен повторный анализ), — НЕ имитируй фикс.",
-  "   Отдельной строкой добавь директиву РОВНО так:",
-  "     LOOM-RELOCATE: <стадия> | <короткая причина>",
-  "   где <стадия> — одна из: analysis, brainstorm, spec, rd, impl, review, qa, pr. Loom вернёт задачу",
-  "   туда. Причина ОБЯЗАТЕЛЬНА. Только при реальной необходимости — число переносов ограничено,",
-  "   не гоняй задачу по кругу. Не нужен перенос — не добавляй директиву.",
+  "1. Tools (always). To read code use token-pilot (smart_read, read_symbol,",
+  "   read_for_edit, find_usages, smart_diff, smart_log, test_summary) — not cat/grep; it saves tokens.",
+  "   The TASK JOURNAL (task-journal) is the history of THIS task. At the start call task_create ONCE",
+  "   (it binds to the current task), hold the returned task_id and write EVERYTHING to it — don't open new ones.",
+  "   Record AT THE MOMENT it happens, SHORT and to the point (one or two sentences, file:line/id), NOT essays:",
+  "   decision (the chosen approach + alternatives — which options you weighed), rejection (what you ruled out and why),",
+  "   finding (a verified fact), evidence (what a test proved). At the end — task_close with the outcome.",
+  "2. STRICTLY ON TASK (surgical). Do EXACTLY what the task requires — nothing extra:",
+  "   - touch ONLY the files/code needed for the task; do NOT \"improve\", refactor or",
+  "     reformat unrelated code; don't add features, abstractions or settings nobody asked for;",
+  "   - NEVER delete, disable or weaken a test just to make it \"pass\". A failing test is a",
+  "     signal to fix the CODE (or update the test correctly, PRESERVING coverage), not to remove it;",
+  "   - in shared/foreign code change only ADDITIVELY, without breaking existing behavior; match",
+  "     the existing style of the surrounding code;",
+  "   - choose the simplest solution, the minimum code. Every changed line must follow directly",
+  "     from the task. If you're unsure whether a change is needed — don't make it.",
+  "3. Facts only. Don't hand back an uncertain or assumed result. If there's any doubt or the",
+  "   result isn't final — finish it and verify (by reading the code, a test, or a run).",
+  "   A step counts as done ONLY when the result is verified and complete.",
+  "4. Format. Reply in the response language stated in the per-step note (default English) —",
+  "   simple, plain human language, no machine jargon; any reader should understand what was",
+  "   done and how to use it. These instructions stay in English regardless.",
+  "5. Finishing a step. At the end of each step give a short, clear summary and on the LAST line state",
+  "   the machine-readable status exactly in this form:",
+  "     RESULT: DONE            — if the step is fully done and verified;",
+  "     RESULT: NOT DONE — <reason> — if any doubts/loose ends remain.",
+  "   Until it's DONE — moving to the next step is forbidden.",
+  "6. Self-navigation across the pipeline (when needed). If at this step you realize the task really",
+  "   belongs at a DIFFERENT stage — e.g. at review you found a problem so deep it can't be fixed",
+  "   surgically (wrong architecture/spec → needs re-analysis) — do NOT fake a fix.",
+  "   On a separate line add the directive EXACTLY like this:",
+  "     LOOM-RELOCATE: <stage> | <short reason>",
+  "   where <stage> is one of: analysis, brainstorm, spec, rd, impl, review, qa, pr. Loom will move the task",
+  "   there. The reason is MANDATORY. Only when truly necessary — the number of relocations is limited,",
+  "   don't bounce the task in circles. If no relocation is needed — don't add the directive.",
 ].join("\n");
 
 /** Short mandatory-tools reminder appended to every stage prompt (not just the
  *  first), so token-pilot + task-journal stay non-optional through the session. */
 export const TOOLS_ANCHOR =
-  "[ОБЯЗАТЕЛЬНО на этом шаге: код читай/ищи ТОЛЬКО через token-pilot " +
+  "[MANDATORY on this step: read/search code ONLY through token-pilot " +
   "(smart_read, read_symbol, read_for_edit, find_usages, smart_diff, smart_log, test_summary) — " +
-  "НЕ Read/Grep/cat/raw-git. Решения, отклонения и находки фиксируй в task-journal по ходу.]";
+  "NOT Read/Grep/cat/raw-git. Record decisions, rejections and findings in task-journal as you go.]";
 
 /** Detect a provider rate-limit / usage-limit message in an agent turn, so the
  *  pipeline can surface WHY a task stopped (limit vs parked vs error) instead of
@@ -86,9 +86,9 @@ export function detectRateLimit(text: string): { hit: boolean; resetsAt?: string
  *  "ГОТОВО" or a missing marker is treated as complete (we don't block on a
  *  forgotten marker, only on a declared doubt). */
 export function parseCompleteness(text: string): { complete: boolean; note?: string } {
-  const m = text.match(/ИТОГ:\s*(НЕ\s+ГОТОВО|ГОТОВО)\s*(?:[—:-]\s*(.*))?/iu);
+  const m = text.match(/(?:RESULT|ИТОГ):\s*(NOT\s+DONE|НЕ\s+ГОТОВО|DONE|ГОТОВО)(?![\p{L}\p{N}])\s*(?:[—:-]\s*(.*))?/iu);
   if (!m) return { complete: true };
-  const complete = !/НЕ\s+ГОТОВО/iu.test(m[1]);
+  const complete = !/NOT\s+DONE|НЕ\s+ГОТОВО/iu.test(m[1]);
   return complete ? { complete: true } : { complete: false, note: m[2]?.trim() || "agent reported the step is not complete" };
 }
 
@@ -102,13 +102,22 @@ export function declaresRemainingWork(text: string): boolean {
 
 /** Per-stage reinforcement — short reminder of the rules + the step's task. */
 export function stageInstruction(stage: string | undefined, instruction: string): string {
-  const head = stage ? `Стадия: ${stage}.` : "Следующий шаг.";
+  const head = stage ? `Stage: ${stage}.` : "Next step.";
   return [
-    `${head} Помни правила сессии (token-pilot + task-journal, только факт, язык пользователя без жаргона, явное завершение шага).`,
+    `${head} Remember the session rules (token-pilot + task-journal, facts only, plain English without jargon, explicit step completion).`,
     "",
-    "Задача шага:",
+    "Step task:",
     instruction,
   ].join("\n");
+}
+
+const LANGUAGE_NAMES: Record<string, string> = { en: "English", ru: "Russian" };
+/** The per-step response-language note the host appends from the ui.language
+ *  setting. The agent's INSTRUCTIONS stay English; this only sets the language of
+ *  the agent's reply to the user. Unknown/absent → English. */
+export function languageDirective(lang: string | undefined): string {
+  const name = LANGUAGE_NAMES[(lang ?? "en").toLowerCase()] ?? "English";
+  return `[Response language: reply to the user in ${name}. These instructions remain in English.]`;
 }
 
 export interface SendOptions {
@@ -125,6 +134,9 @@ export interface SendOptions {
   env?: Record<string, string>;
   bypassPermissions?: boolean;
   allowedTools?: string[];
+  /** Confine the agent's writes to the worktree via the OS sandbox (autopilot
+   *  forces this on, regardless of the global Settings toggle). */
+  sandbox?: boolean;
   onChunk?: (chunk: string) => void;
   /** aimux subscription to run this turn under (else the launcher's default). */
   profile?: string;
@@ -176,7 +188,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // otherwise decay). Keeps token-pilot + task-journal non-optional.
       const body = opts.raw ? instruction : `${stageInstruction(opts.stage, instruction)}\n\n${TOOLS_ANCHOR}`;
       const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
-      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, onChunk: opts.onChunk, profile: opts.profile });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, sandbox: opts.sandbox, onChunk: opts.onChunk, profile: opts.profile });
 
       if (!resume && stageModel) setLaneSession(db, taskId, stageModel, sessionId); // new lane → next stage on this model resumes it
       setTaskSession(db, taskId, sessionId); // active lane = the task's current conversation (interject/terminal/relocate target)

@@ -4,6 +4,7 @@ import { StateView } from "./StateView";
 import { Markdown } from "./Markdown";
 import { Select } from "./Select";
 import { toast } from "../toast";
+import { useT } from "../i18n";
 
 // Split a SKILL.md into its frontmatter fields + body, so the viewer shows a
 // clean header (description + invocable badge) instead of raw `---` yaml.
@@ -18,6 +19,7 @@ function splitFrontmatter(md: string): { description: string; invocable: boolean
 // List + search on the left, view/edit the SKILL.md on the right, and an
 // AI-generate dialog to scaffold a new one.
 export function Skills({ client }: { client: LoomClient }) {
+  const t = useT();
   const [skills, setSkills] = useState<SkillMeta[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -36,13 +38,13 @@ export function Skills({ client }: { client: LoomClient }) {
 
   function open(name: string) {
     setSel(name); setEditing(false); setContent("");
-    client.skillGet(name).then((d) => setContent(d.content)).catch((e) => toast.error(`Couldn’t open the skill: ${e}`));
+    client.skillGet(name).then((d) => setContent(d.content)).catch((e) => toast.error(`${t("skills.openFailed")}: ${e}`));
   }
   function save() {
     if (!sel) return;
     setBusy(true);
     client.skillSave(sel, draft).then(() => { setContent(draft); setEditing(false); reload(); })
-      .catch((e) => toast.error(`Couldn’t save: ${e}`)).finally(() => setBusy(false));
+      .catch((e) => toast.error(`${t("skills.saveFailed")}: ${e}`)).finally(() => setBusy(false));
   }
   function del() {
     // Guard with a ref, not `busy`: a fast double-click fires both handlers
@@ -51,8 +53,8 @@ export function Skills({ client }: { client: LoomClient }) {
     deleting.current = true;
     setBusy(true);
     client.skillDelete(sel)
-      .then(() => { toast.success("Skill deleted"); setConfirmDel(false); setSel(null); setContent(""); setEditing(false); reload(); })
-      .catch((e) => toast.error(`Couldn’t delete: ${e}`)).finally(() => { deleting.current = false; setBusy(false); });
+      .then(() => { toast.success(t("skills.deleted")); setConfirmDel(false); setSel(null); setContent(""); setEditing(false); reload(); })
+      .catch((e) => toast.error(`${t("skills.deleteFailed")}: ${e}`)).finally(() => { deleting.current = false; setBusy(false); });
   }
 
   if (err) return <StateView kind="error" msg={err} />;
@@ -66,14 +68,17 @@ export function Skills({ client }: { client: LoomClient }) {
     <div className="skills">
       <div className="skills-list">
         <div className="skills-head">
-          <input className="skills-search" placeholder="🔍 search skills…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="btn acc sm" onClick={() => setCreating(true)}>+ Create</button>
+          <input className="skills-search" placeholder={t("skills.searchPlaceholder")} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <button className="btn acc sm" onClick={() => setCreating(true)}>+ {t("skills.create")}</button>
+        </div>
+        <div className="muted" style={{ padding: "4px 8px", fontSize: "var(--fs-xs)" }}>
+          {t("skills.locationHintBefore")}<code>~/.claude/skills</code>{t("skills.locationHintAfter")}
         </div>
         {shown.length === 0 ? (
-          <div className="muted" style={{ padding: 12 }}>Nothing found.</div>
+          <div className="muted" style={{ padding: 12 }}>{t("skills.nothingFound")}</div>
         ) : shown.map((s) => (
           <button key={s.name} className={`skill-row ${sel === s.name ? "active" : ""}`} onClick={() => open(s.name)}>
-            <div className="skill-name">{s.name}{s.userInvocable ? <span className="skill-inv">invocable</span> : null}</div>
+            <div className="skill-name">{s.name}{s.userInvocable ? <span className="skill-inv">{t("skills.invocable")}</span> : null}</div>
             <div className="skill-desc">{s.description || <span className="muted">—</span>}</div>
           </button>
         ))}
@@ -81,20 +86,20 @@ export function Skills({ client }: { client: LoomClient }) {
 
       <div className="skills-detail">
         {!sel ? (
-          <div className="muted" style={{ padding: 20 }}>Select a skill on the left, or create a new one.</div>
+          <div className="muted" style={{ padding: 20 }}>{t("skills.selectHint")}</div>
         ) : (
           <>
             <div className="skills-detail-head">
               <b>{sel}</b>
               {editing ? (
                 <span>
-                  <button className="btn sm" onClick={() => setEditing(false)}>Cancel</button>
-                  <button className="btn acc sm" disabled={busy} onClick={save}>{busy ? "…" : "💾 Save"}</button>
+                  <button className="btn sm" onClick={() => setEditing(false)}>{t("skills.cancel")}</button>
+                  <button className="btn acc sm" disabled={busy} onClick={save}>{busy ? "…" : `💾 ${t("skills.save")}`}</button>
                 </span>
               ) : (
                 <span>
-                  <button className="btn sm" style={{ marginRight: 6 }} onClick={() => { setDraft(content); setEditing(true); }}>✏ Edit</button>
-                  <button className="btn sm" onClick={() => setConfirmDel(true)}>🗑 Delete</button>
+                  <button className="btn sm" style={{ marginRight: 6 }} onClick={() => { setDraft(content); setEditing(true); }}>✏ {t("skills.edit")}</button>
+                  <button className="btn sm" onClick={() => setConfirmDel(true)}>🗑 {t("skills.delete")}</button>
                 </span>
               )}
             </div>
@@ -105,7 +110,7 @@ export function Skills({ client }: { client: LoomClient }) {
               return (
                 <>
                   {fm.description ? (
-                    <div className="skills-sub">{fm.description}{fm.invocable ? <span className="skill-inv">invocable</span> : null}</div>
+                    <div className="skills-sub">{fm.description}{fm.invocable ? <span className="skill-inv">{t("skills.invocable")}</span> : null}</div>
                   ) : null}
                   <div className="skills-md"><Markdown text={fm.body} /></div>
                 </>
@@ -120,13 +125,13 @@ export function Skills({ client }: { client: LoomClient }) {
       {confirmDel && sel ? (
         <div className="overlay" onClick={() => !busy && setConfirmDel(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
-            <div className="modal-h">Delete skill</div>
+            <div className="modal-h">{t("skills.deleteModal.title")}</div>
             <div className="modal-b">
-              Delete <b>{sel}</b>? This permanently removes its files from <code>~/.claude/skills</code> and can’t be undone.
+              {t("skills.deleteModal.before")} <b>{sel}</b>{t("skills.deleteModal.mid")}<code>~/.claude/skills</code>{t("skills.deleteModal.after")}
             </div>
             <div className="modal-f">
-              <button className="btn" disabled={busy} onClick={() => setConfirmDel(false)}>Cancel</button>
-              <button className="btn acc" disabled={busy} onClick={del}>{busy ? "Deleting…" : "Delete"}</button>
+              <button className="btn" disabled={busy} onClick={() => setConfirmDel(false)}>{t("skills.cancel")}</button>
+              <button className="btn acc" disabled={busy} onClick={del}>{busy ? t("skills.deleting") : t("skills.delete")}</button>
             </div>
           </div>
         </div>
@@ -139,13 +144,13 @@ export function Skills({ client }: { client: LoomClient }) {
 // slug — mirror the backend's check (and confirm the SKILL.md actually has the
 // expected frontmatter) so we never open an obviously-broken result.
 const VALID_SKILL_NAME = /^[A-Za-z0-9._-]+$/;
-function validateGenerated(name: string, content: string): string | null {
+function validateGenerated(name: string, content: string, t: (k: string) => string): string | null {
   if (!VALID_SKILL_NAME.test(name) || name.startsWith("-") || name.includes("..")) {
-    return "The agent returned an invalid skill name.";
+    return t("skills.invalidName");
   }
   const fm = splitFrontmatter(content);
-  if (!fm.description.trim()) return "The generated SKILL.md has no description in its frontmatter.";
-  if (!fm.body.trim()) return "The generated SKILL.md has no body.";
+  if (!fm.description.trim()) return t("skills.noDescription");
+  if (!fm.body.trim()) return t("skills.noBody");
   return null;
 }
 
@@ -153,6 +158,7 @@ function validateGenerated(name: string, content: string): string | null {
 // SKILL.md → preview the result before opening it. The generate endpoint already
 // saves the file server-side, so "Open" just reveals it and "Regenerate" runs again.
 function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomClient; profiles: string[]; onClose: () => void; onCreated: (name: string) => void }) {
+  const t = useT();
   const [desc, setDesc] = useState("");
   const [profile, setProfile] = useState(profiles[0] ?? "");
   const [busy, setBusy] = useState(false);
@@ -164,34 +170,34 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
     setBusy(true); setError(null); setResult(null);
     client.skillGenerate(desc, profile || undefined)
       .then((r) => {
-        const bad = validateGenerated(r.name, r.content);
+        const bad = validateGenerated(r.name, r.content, t);
         if (bad) setError(bad);
         else setResult(r);
       })
-      .catch((e) => setError(`Couldn't create the skill: ${e}`))
+      .catch((e) => setError(`${t("skills.createFailed")}: ${e}`))
       .finally(() => setBusy(false));
   }
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 520 }}>
-        <div className="modal-h">{result ? "New skill — preview" : "Create skill (AI)"}</div>
+        <div className="modal-h">{result ? t("skills.createModal.previewTitle") : t("skills.createModal.title")}</div>
         <div className="modal-b">
           {result ? (() => {
             const fm = splitFrontmatter(result.content);
             return (
               <>
-                <div className="skills-sub"><b>{result.name}</b>{fm.invocable ? <span className="skill-inv">invocable</span> : null}</div>
+                <div className="skills-sub"><b>{result.name}</b>{fm.invocable ? <span className="skill-inv">{t("skills.invocable")}</span> : null}</div>
                 {fm.description ? <div className="skills-sub">{fm.description}</div> : null}
                 <div className="skills-md"><Markdown text={fm.body} /></div>
               </>
             );
           })() : (
             <>
-              <textarea className="skills-editor" style={{ height: 120 }} placeholder="Describe what the skill should do — the agent writes a standards-compliant SKILL.md…" value={desc} disabled={busy} onChange={(e) => setDesc(e.target.value)} />
+              <textarea className="skills-editor" style={{ height: 120 }} placeholder={t("skills.createModal.descPlaceholder")} value={desc} disabled={busy} onChange={(e) => setDesc(e.target.value)} />
               {profiles.length > 0 ? (
                 <div style={{ marginTop: 8 }}>
-                  <span className="muted" style={{ marginRight: 6 }}>Account:</span>
+                  <span className="muted" style={{ marginRight: 6 }}>{t("newTask.account")}:</span>
                   <Select size="sm" value={profile} disabled={busy} onChange={(e) => setProfile(e.target.value)}>
                     {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
                   </Select>
@@ -204,13 +210,13 @@ function CreateSkill({ client, profiles, onClose, onCreated }: { client: LoomCli
         <div className="modal-f">
           {result ? (
             <>
-              <button className="btn" disabled={busy} onClick={generate}>{busy ? "Generating…" : "Regenerate"}</button>
-              <button className="btn acc" onClick={() => onCreated(result.name)}>Open</button>
+              <button className="btn" disabled={busy} onClick={generate}>{busy ? t("skills.generating") : t("skills.regenerate")}</button>
+              <button className="btn acc" onClick={() => onCreated(result.name)}>{t("skills.open")}</button>
             </>
           ) : (
             <>
-              <button className="btn" onClick={onClose}>Cancel</button>
-              <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? "Generating…" : "Create"}</button>
+              <button className="btn" onClick={onClose}>{t("action.cancel")}</button>
+              <button className="btn acc" disabled={busy || !desc.trim()} onClick={generate}>{busy ? t("skills.generating") : t("action.create")}</button>
             </>
           )}
         </div>
