@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-22
+
+### Added
+
+- **Network egress allowlist** — a task's agent can be confined to a set of
+  allowed hosts; anything off the list is refused. Off by default: first you
+  **observe** (the agent's outbound hosts are logged and shown in the Security
+  panel's Egress tab), then you turn on enforcement with a toggle and a hosts
+  editor (defaults cover the model API, npm, GitHub, PyPI). Fails closed — if the
+  filtering proxy can't start while enforcement is on, the agent gets no network
+  rather than open network.
+- **Provider presets** — add DeepSeek, GLM, Kimi, Qwen, MiniMax, or MiMo as a
+  one-token profile from Accounts → "Add provider". They run on the Claude CLI
+  against the provider's Anthropic-compatible endpoint, so they keep the full
+  toolset and resume natively; pick a provider per task from the task's account
+  selector.
+
+### Changed
+
+- **aimux 0.17** — provider presets and the cross-CLI handoff.
+
+### Fixed
+
+- **token-pilot allowed by default** (gated/manual) — the agent no longer needs
+  approval to use the token-efficient tools it's instructed to use.
+- **Retired the dead command-mode** — an old soft/enforce check that was never
+  wired; the OS sandbox plus the command policy are the real enforcement.
+- **Per-stage model for non-Claude profiles** — a Codex/GLM profile runs its own
+  model instead of being handed a Claude tier.
+
 ## [0.5.0] - 2026-06-20
 
 ### Added
@@ -44,5 +74,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.5.0...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.6.0...master
+[0.6.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.5.0
