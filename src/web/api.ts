@@ -57,7 +57,7 @@ import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
-import { commitWorktree, rebaseWorktreeOnBase } from "../core/automation/auto-commit.js";
+import { commitWorktree, syncWorktreeToRemoteBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
 import { resolveSwarmConfig, type StageSwarmConfig } from "../core/layers/swarm/config.js";
 import { runImplSwarm } from "../core/layers/swarm/impl-swarm.js";
@@ -1261,13 +1261,15 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return { ok: passed, needsAttention: !passed };
     },
     pr: async (_d, id) => {
-      // Rebase the worktree onto the current base first, so the PR/diff shows only
-      // this task's changes — not drift from a base that moved during the run
-      // (loom-705a). A conflict parks for the human to resolve the branch.
+      // Sync the worktree onto the LIVE remote base first (fetch origin → rebase
+      // onto origin/<base>), so the PR shows only this task's changes against
+      // current master — not drift from a base that moved during the run
+      // (loom-705a), and not work already merged while the run was in flight
+      // (loom-bovz). A conflict parks for the human to resolve the branch.
       const prT = getTask(db, id);
       const prWt = taskCwd(id);
       if (prWt && isGitRepo(prWt)) {
-        const reb = rebaseWorktreeOnBase(prWt, [prT?.branch, "master", "main"]);
+        const reb = syncWorktreeToRemoteBase(prWt, [prT?.branch, "master", "main"]);
         if (reb.conflict) {
           const note = `Rebase onto ${reb.base} conflicts — resolve the task branch manually before opening the PR.`;
           saveResult(id, "pr", "pr-result", { description: "", created: false, connector: false, error: note });
@@ -2032,6 +2034,19 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     let opts: PrOptions = deps.prOptions?.(id) ?? {};
     if (body.connector === true) {
       if (!t.repo) return c.json({ error: "task has no repo to push from" }, 400);
+      // Sync onto the LIVE base before pushing, so a manual push doesn't ship work
+      // that was merged during the run (loom-bovz) — mirrors the autopilot PR stage.
+      const mWt = taskCwd(id);
+      if (mWt && isGitRepo(mWt)) {
+        const reb = syncWorktreeToRemoteBase(mWt, [t.branch, await defaultBranch(realSh, mWt), "master", "main"]);
+        if (reb.conflict) {
+          const note = `Rebase onto ${reb.base} conflicts — resolve the task branch manually before pushing.`;
+          const r = { description: "", created: false, connector: false, pushed: false, error: note };
+          saveResult(id, "pr", "pr-result", r);
+          recordTurn(id, "pr", "Rebase needed", note);
+          return c.json(r);
+        }
+      }
       opts = {
         ...opts,
         connector: true,

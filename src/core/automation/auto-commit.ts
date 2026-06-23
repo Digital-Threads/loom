@@ -76,3 +76,23 @@ export function rebaseWorktreeOnBase(
   }
   return { base, conflict: false };
 }
+
+/** Sync a task worktree onto the LIVE remote base before opening a PR: fetch
+ *  origin so origin/* is current, then rebase onto origin/<base> in preference
+ *  to the (possibly stale) local ref. This catches work that landed on the base
+ *  DURING the run — without it the worktree branched off an older master and the
+ *  PR reimplements already-merged changes, producing a redundant/conflicting PR
+ *  (loom-bovz). A reimplementation now surfaces as a rebase conflict → park for a
+ *  human, rather than a bad PR. Falls back to the local ref when there's no
+ *  remote (offline / no `origin`), so a repo without a remote still rebases. */
+export function syncWorktreeToRemoteBase(
+  cwd: string,
+  bases: Array<string | null | undefined>,
+  git: GitSh = defaultGit,
+): { base: string | null; conflict: boolean } {
+  git(["fetch", "origin"], cwd); // best-effort: no origin / offline → local refs below
+  const candidates = bases
+    .filter((b): b is string => !!b)
+    .flatMap((b) => (b.startsWith("origin/") ? [b] : [`origin/${b}`, b]));
+  return rebaseWorktreeOnBase(cwd, candidates, git);
+}

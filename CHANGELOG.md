@@ -13,6 +13,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Silicon), unpacks it with the web UI beside it, and puts `loom` on your PATH —
   no Node required. The README now documents both install paths (npm and binary).
 
+### Fixed
+
+- **PRs no longer reimplement already-merged work** — before opening (or pushing)
+  a PR, Loom now fetches `origin` and rebases the task branch onto the *live* base
+  (`origin/master`), not a stale local copy. A task that branched off an older
+  master and redid work merged during the run now surfaces as a rebase conflict
+  and parks for a human, instead of producing a redundant/conflicting PR
+  (loom-bovz).
+
 ## [0.6.0] - 2026-06-22
 
 ### Added

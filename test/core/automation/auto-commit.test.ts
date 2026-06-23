@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { commitWorktree, rebaseWorktreeOnBase, type GitSh } from "../../../src/core/automation/auto-commit.js";
+import { commitWorktree, rebaseWorktreeOnBase, syncWorktreeToRemoteBase, type GitSh } from "../../../src/core/automation/auto-commit.js";
 
 describe("commitWorktree", () => {
   it("stages and commits when the tree is dirty", () => {
@@ -94,5 +94,33 @@ describe("rebaseWorktreeOnBase (real git)", () => {
   it("no-ops when no base candidate exists", () => {
     writeFileSync(join(dir, "x"), "1\n"); g(["add", "-A"]); g(["commit", "-qm", "x"]);
     expect(rebaseWorktreeOnBase(dir, ["nope", "nada"])).toEqual({ base: null, conflict: false });
+  });
+});
+
+describe("syncWorktreeToRemoteBase (loom-bovz)", () => {
+  it("fetches origin, then rebases onto the LIVE remote base before the local one", () => {
+    const calls: string[][] = [];
+    const git: GitSh = (args) => {
+      calls.push(args);
+      // origin/master exists (remote tracking ref refreshed by the fetch); the
+      // stale local master also exists but must not be the one we rebase onto.
+      if (args[0] === "rev-parse") return { code: args.includes("origin/master") ? 0 : 1, stdout: "" };
+      return { code: 0, stdout: "" };
+    };
+    expect(syncWorktreeToRemoteBase("/wt", [null, "master", "main"], git)).toEqual({ base: "origin/master", conflict: false });
+    expect(calls[0]).toEqual(["fetch", "origin"]); // fetch first, so origin/* is live
+    expect(calls[1]).toEqual(["rev-parse", "--verify", "--quiet", "origin/master"]); // remote preferred over local
+    expect(calls).toContainEqual(["rebase", "origin/master"]);
+  });
+
+  it("falls back to the local base when there's no remote tracking ref (offline / no origin)", () => {
+    const git: GitSh = (args) => {
+      if (args[0] === "rev-parse") {
+        const ref = args[args.length - 1];
+        return { code: ref === "master" ? 0 : 1, stdout: "" }; // only the local master resolves
+      }
+      return { code: 0, stdout: "" };
+    };
+    expect(syncWorktreeToRemoteBase("/wt", ["master", "main"], git)).toEqual({ base: "master", conflict: false });
   });
 });
