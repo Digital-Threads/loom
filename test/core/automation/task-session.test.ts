@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
-import { createTaskSession, SESSION_PREAMBLE, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { setSetting } from "../../../src/core/store/settings.js";
+import { createTaskSession, SESSION_PREAMBLE, aboutSection, ABOUT_MAX_CHARS, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -138,5 +139,55 @@ describe("TaskSession (one session per task)", () => {
     await s.send("2", { stage: "b" }); // turns 1→2
     await s.send("3", { stage: "c" }); // turns==2 before send → compact fires
     expect(compacted).toEqual(["sid"]);
+  });
+});
+
+describe("aboutSection — project taste-profile (loom-ioz8)", () => {
+  it("returns empty for a blank profile (whitespace counts as blank)", () => {
+    expect(aboutSection("")).toBe("");
+    expect(aboutSection("   \n\t ")).toBe("");
+  });
+
+  it("wraps a real profile in a labeled standing-context section", () => {
+    const out = aboutSection("Prefer small pure functions. Avoid global state.");
+    expect(out).toMatch(/About this project/i);
+    expect(out).toContain("Prefer small pure functions. Avoid global state.");
+  });
+
+  it("caps an over-budget profile and marks the truncation", () => {
+    const huge = "x".repeat(ABOUT_MAX_CHARS + 500);
+    const out = aboutSection(huge);
+    expect(out.length).toBeLessThan(huge.length);
+    expect(out).toMatch(/trimmed/i);
+  });
+});
+
+describe("taste-profile injection into the session (loom-ioz8)", () => {
+  it("injects the profile once on session creation, after the preamble, never on resume", async () => {
+    setSetting(db, "taste.profile", "House style: tabs, no default exports.");
+    const { launcher, calls } = recordingLauncher();
+    const s = createTaskSession(db, "t1", { launcher, newId: () => "uuid" });
+
+    // analysis + brainstorm share one model lane (opus), so the 2nd send resumes
+    // it — exercising the "no re-inject on resume" path. (A different-model stage
+    // would open its own lane and legitimately get the standing context afresh.)
+    await s.send("analyze", { stage: "analysis" });  // creation
+    await s.send("ideas", { stage: "brainstorm" });  // resume same lane
+
+    expect(calls[0].resume).toBe(false);
+    expect(calls[0].prompt).toContain(SESSION_PREAMBLE);
+    expect(calls[0].prompt).toContain("House style: tabs, no default exports.");
+    // ordering: preamble before the about section
+    expect(calls[0].prompt.indexOf(SESSION_PREAMBLE)).toBeLessThan(calls[0].prompt.indexOf("House style"));
+
+    expect(calls[1].resume).toBe(true);
+    expect(calls[1].prompt).not.toContain("House style: tabs, no default exports.");
+  });
+
+  it("adds nothing when no profile is set", async () => {
+    const { launcher, calls } = recordingLauncher();
+    const s = createTaskSession(db, "t1", { launcher, newId: () => "uuid" });
+    await s.send("analyze", { stage: "analysis" });
+    expect(calls[0].prompt).not.toMatch(/About this project/i);
   });
 });

@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getTaskSession, setTaskSession, getLaneSession, setLaneSession } from "../store/db.js";
+import { getSetting } from "../store/settings.js";
 import { resolveStageModel } from "../pipeline/stage-model.js";
 
 /** One headless turn against a session. resume=false → create with sessionId. */
@@ -68,6 +69,21 @@ export const TOOLS_ANCHOR =
   "[MANDATORY on this step: read/search code ONLY through token-pilot " +
   "(smart_read, read_symbol, read_for_edit, find_usages, smart_diff, smart_log, test_summary) — " +
   "NOT Read/Grep/cat/raw-git. Record decisions, rejections and findings in task-journal as you go.]";
+
+/** Hard cap on the injected taste-profile, so a bloated "about" can't dominate
+ *  the session prompt. Over-budget text is truncated with a marker. */
+export const ABOUT_MAX_CHARS = 4000;
+
+/** Build the per-project "about" section injected ONCE at session creation: the
+ *  user's standing taste-profile (role, repo conventions, anti-patterns, style),
+ *  framed as context to honor alongside the rules above. An empty/blank profile
+ *  adds nothing (returns ""); an over-budget one is capped (loom-ioz8). */
+export function aboutSection(profile: string): string {
+  const text = profile.trim();
+  if (!text) return "";
+  const capped = text.length > ABOUT_MAX_CHARS ? `${text.slice(0, ABOUT_MAX_CHARS)}\n… (trimmed)` : text;
+  return `About this project & how the user likes work done (standing context — honor it like the rules above):\n${capped}`;
+}
 
 /** Detect a provider rate-limit / usage-limit message in an agent turn, so the
  *  pipeline can surface WHY a task stopped (limit vs parked vs error) instead of
@@ -187,7 +203,11 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // preamble is only sent once at session creation, so on resume it would
       // otherwise decay). Keeps token-pilot + task-journal non-optional.
       const body = opts.raw ? instruction : `${stageInstruction(opts.stage, instruction)}\n\n${TOOLS_ANCHOR}`;
-      const prompt = resume ? body : `${SESSION_PREAMBLE}\n\n${body}`;
+      // On session creation, inject the per-project taste-profile once (after the
+      // preamble, before the body) — db is the project's store, so the setting is
+      // already per-project. Resume turns skip it, keeping the thread light.
+      const about = resume ? "" : aboutSection(getSetting<string>(db, "taste.profile", ""));
+      const prompt = resume ? body : [SESSION_PREAMBLE, about, body].filter(Boolean).join("\n\n");
       const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, sandbox: opts.sandbox, onChunk: opts.onChunk, profile: opts.profile });
 
       if (!resume && stageModel) setLaneSession(db, taskId, stageModel, sessionId); // new lane → next stage on this model resumes it

@@ -12,6 +12,9 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
   const { setLang } = useLang();
   const [s, setS] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Local draft for the taste-profile textarea (null = not yet edited → show the
+  // persisted value). Kept local so typing isn't reset when other settings save.
+  const [taste, setTaste] = useState<string | null>(null);
 
   useEffect(() => { client.settings().then(setS).catch((e) => setErr(String(e))); }, [client]);
 
@@ -91,6 +94,21 @@ export function Settings({ client, onNav }: { client: LoomClient; onNav?: (view:
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: -4 }}>
         {t("settings.flowDefaults.hint")}
+      </div>
+      <div className="kv">
+        <b>{t("settings.taste")}</b>
+        <span>
+          <textarea className="inp" rows={6} aria-label={t("settings.taste")}
+            placeholder={t("settings.taste.placeholder")}
+            value={taste ?? ((s["taste.profile"] as string) ?? "")}
+            onChange={(e) => setTaste(e.target.value)}
+            onBlur={(e) => save("taste.profile", e.target.value.trim())}
+            style={{ width: 420, maxWidth: "100%" }} />
+          <span className="fld-hint" style={{ display: "block" }}>{t("settings.taste.hint")}</span>
+          <span className="muted" style={{ display: "block", fontSize: "var(--fs-xs)", marginTop: 2 }}>
+            {t("settings.taste.chars").replace("{n}", String((taste ?? ((s["taste.profile"] as string) ?? "")).length))}
+          </span>
+        </span>
       </div>
     </div>
   );
