@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Impl-swarm winner always gets the full QA safety net** — swarm candidates are
+  gated only on `build` (the test suite is fragile in a worktree), with the full
+  suite meant to run in the QA stage after the winner is promoted. But a chore
+  route skips QA, so a swarm-elected chore was never fully tested. Now, when a
+  swarm promotes a winner, QA is forced back into the route — the promoted change
+  is always verified by the full suite (loom-287h).
 - **PRs no longer reimplement already-merged work** — before opening (or pushing)
   a PR, Loom now fetches `origin` and rebases the task branch onto the *live* base
   (`origin/master`), not a stale local copy. A task that branched off an older

@@ -9,7 +9,7 @@ import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, ge
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
-import { boardColumns, attentionQueue, startTask, completeStage, moveToStage } from "../core/pipeline/engine.js";
+import { boardColumns, attentionQueue, startTask, completeStage, moveToStage, ensureStageInRoute } from "../core/pipeline/engine.js";
 import { STAGE_MODEL, MODEL_TIERS, resolveStageModel } from "../core/pipeline/stage-model.js";
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
@@ -1161,6 +1161,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       if (swCfg.enabled && getTask(db, id)?.run_mode === "autopilot") {
         const sw = await runImplAsSwarm(id, swCfg);
         if (sw) {
+          // Candidates were gated on `build` only (worktree-safe); guarantee the
+          // promoted winner still hits the full QA suite even on a chore route
+          // that skipped QA — the real safety net (loom-287h).
+          ensureStageInRoute(db, id, "qa");
           saveResult(id, "impl", "impl-report", { report: sw.report });
           recordTurn(id, "impl", "Implementation (swarm)", sw.report);
           return { ok: true };

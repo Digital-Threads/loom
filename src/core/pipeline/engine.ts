@@ -78,6 +78,30 @@ export function moveToStage(db: Database.Database, taskId: string, stageKey: str
   return stageKey;
 }
 
+/**
+ * Re-enable a stage the adaptive route skipped, so a later decision can demand it
+ * back. Used by impl-swarm: candidates are gated only on `build` (worktree-safe),
+ * so the elected winner must still pass the full QA suite — but a chore route
+ * skips QA, leaving a swarm-promoted winner unverified (loom-287h). Flips a
+ * `skipped` row to `pending` and adds the stage to `tasks.route` in canonical
+ * order. No-op (returns false) when the stage is unknown or already in play
+ * (pending/active/done) — the engine walks stage-row status, so a pending row is
+ * enough; the route JSON is kept consistent for the board/route view.
+ */
+export function ensureStageInRoute(db: Database.Database, taskId: string, stageKey: string): boolean {
+  const row = getStages(db, taskId).find((s) => s.stage_key === stageKey);
+  if (!row || row.status !== "skipped") return false;
+  updateStageStatus(db, taskId, stageKey, "pending");
+  let route: string[] = [];
+  try { const r = getTask(db, taskId)?.route; route = r ? (JSON.parse(r) as string[]) : []; } catch { route = []; }
+  if (!route.includes(stageKey)) {
+    const inPlay = new Set([...route, stageKey]);
+    const next = STAGE_KEYS.filter((k) => inPlay.has(k));
+    db.prepare("UPDATE tasks SET route = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(next), Date.now(), taskId);
+  }
+  return true;
+}
+
 export interface BoardCard {
   id: string;
   title: string;

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openStore, createTask, getStages } from "../../../src/core/store/db.js";
+import { openStore, createTask, getStages, getTask } from "../../../src/core/store/db.js";
 import {
   startTask,
   completeStage,
@@ -10,6 +10,7 @@ import {
   boardColumns,
   attentionQueue,
   moveToStage,
+  ensureStageInRoute,
 } from "../../../src/core/pipeline/engine.js";
 import type Database from "better-sqlite3";
 
@@ -122,5 +123,33 @@ describe("pipeline engine", () => {
     expect(stages.find((s) => s.stage_key === "brainstorm")!.status).toBe("skipped");
     expect(stages.find((s) => s.stage_key === "impl")!.status).toBe("done");
     expect(stages.find((s) => s.stage_key === "review")!.status).toBe("active");
+  });
+
+  describe("ensureStageInRoute (loom-287h — swarm post-promote QA safety net)", () => {
+    it("un-skips a skipped stage to pending and adds it to the route in canonical order", () => {
+      // Chore route skips qa — a swarm winner would never hit the full suite.
+      createTask(db, { id: "c", title: "Chore", route: ["analysis", "impl", "review", "done"] });
+      expect(getStages(db, "c").find((s) => s.stage_key === "qa")!.status).toBe("skipped");
+
+      expect(ensureStageInRoute(db, "c", "qa")).toBe(true);
+      expect(getStages(db, "c").find((s) => s.stage_key === "qa")!.status).toBe("pending");
+      // route JSON now includes qa, ordered between review and done (canonical)
+      expect(JSON.parse(getTask(db, "c")!.route!)).toEqual(["analysis", "impl", "review", "qa", "done"]);
+    });
+
+    it("makes the engine actually run the re-added stage after impl/review", () => {
+      createTask(db, { id: "c2", title: "Chore", route: ["analysis", "impl", "review", "done"] });
+      ensureStageInRoute(db, "c2", "qa");
+      startTask(db, "c2");
+      completeStage(db, "c2", "analysis"); // → impl (brainstorm/spec/rd skipped)
+      completeStage(db, "c2", "impl");     // → review
+      expect(completeStage(db, "c2", "review")).toBe("qa"); // qa now runs, not skipped
+    });
+
+    it("is a no-op for a stage already in play (returns false)", () => {
+      createTask(db, { id: "f", title: "Feature" }); // full route → qa already pending
+      expect(ensureStageInRoute(db, "f", "qa")).toBe(false);
+      expect(ensureStageInRoute(db, "f", "nonsense")).toBe(false); // unknown stage
+    });
   });
 });
