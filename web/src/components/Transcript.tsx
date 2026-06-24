@@ -95,7 +95,7 @@ export function Transcript({
             {files.length ? (
               <div className="turn-files">
                 {files.map((p) => (
-                  <button key={p} className="file-chip" title={`Open ${p}`} onClick={() => onOpenFile(p)}>📄 {p}</button>
+                  <button key={p} className="file-chip" title={`Mentioned: ${p} — click to open if available`} onClick={() => onOpenFile(p)}>📄 {p}</button>
                 ))}
               </div>
             ) : null}

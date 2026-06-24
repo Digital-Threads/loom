@@ -31,7 +31,10 @@ export function DocPanel({
     if (view === "file") {
       if (!path) return;
       setContent(null);
-      client.readFile(taskId, path).then((d) => setContent(d.content)).catch((e) => setErr(String(e)));
+      client.readFile(taskId, path).then((d) => setContent(d.content)).catch((e) => {
+        const msg = String(e);
+        setErr(msg.includes("404") ? `File "${path}" was mentioned in the output but is not in the task's working tree.` : msg);
+      });
     } else {
       setDiff(null);
       client.readDiff(taskId, path || undefined).then((d) => setDiff(d.diff)).catch((e) => setErr(String(e)));
