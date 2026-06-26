@@ -36,7 +36,6 @@ export function StageResult({
   if (stage === "review" && review?.result) {
     const r = review.result;
     const done = review.reviewersDone ?? [];
-    const allReviewersRan = REVIEWER_ORDER.every((k) => done.includes(k));
     return (
       <div className="result-card">
         <div className="result-head">
@@ -48,8 +47,9 @@ export function StageResult({
               {done.includes(k) ? "✓ " : "○ "}{REVIEWER_LABELS[k]}
             </span>
           ))}
-          {/* Fix once at the end — only after all three reviewers have run. */}
-          {allReviewersRan && r.findings.length ? <button className="btn acc sm" style={{ marginLeft: "auto" }} onClick={onFix}>🔧 Fix all findings</button> : null}
+          {/* Offer the fix as soon as there are findings — the user needn't run
+              every reviewer first (running the rest just accumulates more). */}
+          {r.findings.length ? <button className="btn acc sm" style={{ marginLeft: "auto" }} onClick={onFix}>🔧 Fix all findings</button> : null}
         </div>
         {r.findings.length ? (
           <ul className="finding-list">

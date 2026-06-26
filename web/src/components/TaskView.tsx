@@ -407,7 +407,7 @@ export function TaskView({
                       {reviewerBusy ? `⏳ ${t("taskView.running")}` : `▶ ${t("taskView.approveAndRun")}: ${t(REVIEWER_LABELS[reviewNext])}`}
                     </button>
                   ) : null}
-                  {active === "review" && !reviewNext && reviewFindings > 0 ? (
+                  {active === "review" && reviewFindings > 0 ? (
                     <button className="btn acc sm" title={t("taskView.fixAllFindingsTitle")} onClick={fixFindings}>🔧 {t("taskView.fixAllFindings")} ({reviewFindings})</button>
                   ) : null}
                   {activeStatus === "active" ? (
