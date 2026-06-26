@@ -305,6 +305,7 @@ export function TaskView({
           <div className="rail-title">{task.title}</div>
           <div className="rail-sub">
             <span className="chip">{task.run_mode}</span>
+            {detail.ultracode ? <span className="chip" title={t("taskView.ultracodeTitle")}>⚡ ultracode</span> : null}
             {profiles.length ? (
               (() => {
                 // Effective account: the task's pinned profile, else the active

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveSwarmConfig, SWARM_MAX_ATTEMPTS, SWARM_STAGE_DEFAULT } from "../../../../src/core/layers/swarm/config.js";
+import { resolveSwarmConfig, applyUltracode, ULTRACODE_STAGES, SWARM_MAX_ATTEMPTS, SWARM_STAGE_DEFAULT } from "../../../../src/core/layers/swarm/config.js";
 
 describe("resolveSwarmConfig (L5 per-stage swarm config)", () => {
   it("defaults to off, attempts=3, no perspectives when nothing is set", () => {
@@ -23,5 +23,31 @@ describe("resolveSwarmConfig (L5 per-stage swarm config)", () => {
     expect(resolveSwarmConfig({ enabled: "yes" }, undefined).enabled).toBe(false);
     expect(resolveSwarmConfig(undefined, { perspectives: ["security", "", 3, "perf"] }).perspectives).toEqual(["security", "perf"]);
     expect(resolveSwarmConfig(undefined, { perspectives: "x" }).perspectives).toEqual([]);
+  });
+});
+
+describe("applyUltracode (loom-34th — per-task fan-out)", () => {
+  const off = { ...SWARM_STAGE_DEFAULT };
+
+  it("forces the swarm on for the hard stages when ultracode is set", () => {
+    for (const stage of ULTRACODE_STAGES) {
+      expect(applyUltracode(off, stage, true).enabled).toBe(true);
+    }
+  });
+
+  it("leaves the base config untouched for non-ultracode tasks", () => {
+    expect(applyUltracode(off, "spec", false)).toEqual(off); // enabled stays false
+    expect(applyUltracode({ ...off, enabled: true }, "impl", false).enabled).toBe(true); // global-on preserved
+  });
+
+  it("does not touch stages outside the hard set, even under ultracode", () => {
+    expect(applyUltracode(off, "review", true).enabled).toBe(false);
+    expect(applyUltracode(off, "qa", true).enabled).toBe(false);
+    expect(applyUltracode(off, "analysis", true).enabled).toBe(false);
+  });
+
+  it("preserves attempts/perspectives when forcing enabled on", () => {
+    const base = { enabled: false, attempts: 4, perspectives: ["simplest", "robust"] };
+    expect(applyUltracode(base, "spec", true)).toEqual({ ...base, enabled: true });
   });
 });

@@ -22,6 +22,7 @@ export function NewTaskModal({
   const [description, setDescription] = useState("");
   const [runMode, setRunMode] = useState("gated");
   const [qaMode, setQaMode] = useState("inherit"); // inherit | minimal | full
+  const [ultracode, setUltracode] = useState(false); // big task → fan-out (swarm on hard stages)
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [profiles, setProfiles] = useState<string[]>([]);
   const [profile, setProfile] = useState("");
@@ -63,6 +64,7 @@ export function NewTaskModal({
         run_mode: runMode,
         profile: profile || undefined,
         qaMode: qaMode === "inherit" ? undefined : qaMode,
+        ultracode: ultracode || undefined,
       });
       onCreated();
       onClose();
@@ -133,6 +135,15 @@ export function NewTaskModal({
               <option value="full">{t("newTask.qaDepth.full")}</option>
             </Select>
             <span className="fld-hint">{t("newTask.qaDepth.hint")}</span>
+          </label>
+          <label className="fld">
+            <span>{t("newTask.ultracode")}</span>
+            <span>
+              <button type="button" className={`btn ${ultracode ? "acc" : ""}`} onClick={() => setUltracode((v) => !v)}>
+                {ultracode ? t("settings.on") : t("settings.off")}
+              </button>
+            </span>
+            <span className="fld-hint">{t("newTask.ultracode.hint")}</span>
           </label>
           {profiles.length ? (
             <label className="fld">

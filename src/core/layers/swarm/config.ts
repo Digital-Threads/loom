@@ -26,6 +26,17 @@ function sanitizePerspectives(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((p): p is string => typeof p === "string" && p.trim() !== "") : [];
 }
 
+/** The hard stages an ultracode task fans out (swarm) — design + build, where N
+ *  approaches pay off; mechanical stages are left alone (loom-34th). */
+export const ULTRACODE_STAGES = ["spec", "impl"] as const;
+
+/** Ultracode override: a big task opts into fan-out, so force the swarm on for the
+ *  hard stages REGARDLESS of the global per-stage toggle. Other stages and
+ *  non-ultracode tasks return the base config unchanged. Pure → testable. */
+export function applyUltracode(base: StageSwarmConfig, stage: string, ultracode: boolean): StageSwarmConfig {
+  return ultracode && (ULTRACODE_STAGES as readonly string[]).includes(stage) ? { ...base, enabled: true } : base;
+}
+
 /** Resolve the effective swarm config for a stage: per-stage value wins over the
  *  global default, both over the built-in defaults. Each input is the raw stored
  *  setting object (or undefined). Never throws — bad values fall back. */

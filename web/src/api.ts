@@ -68,6 +68,7 @@ export interface TaskDetail {
   costs: CostRow[];
   stopReason?: StopReason | null;
   degraded?: string[]; // silent failures surfaced (cost/journal/MCP/token-pilot); [] when healthy
+  ultracode?: boolean; // task opted into fan-out (swarm on the hard stages)
 }
 
 export type Fetcher = typeof fetch;
@@ -111,6 +112,8 @@ export interface NewTask {
   projectId?: string;
   /** Per-task QA depth override: "minimal" | "full". Omit to inherit the global default. */
   qaMode?: string;
+  /** Ultracode: opt this (big) task into fan-out — swarm on the hard stages. */
+  ultracode?: boolean;
 }
 
 // ── 3-module workspace (aimux / token-pilot / task-journal) — F1 ──────────────

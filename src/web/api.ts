@@ -60,7 +60,7 @@ import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type 
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, syncWorktreeToRemoteBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
-import { resolveSwarmConfig, type StageSwarmConfig } from "../core/layers/swarm/config.js";
+import { resolveSwarmConfig, applyUltracode, type StageSwarmConfig } from "../core/layers/swarm/config.js";
 import { runImplSwarm } from "../core/layers/swarm/impl-swarm.js";
 import { perspectivePrompt } from "../core/layers/swarm/discrete-swarm.js";
 import { swarmRunEvent, sumAttemptCost } from "../core/layers/swarm/events.js";
@@ -1046,8 +1046,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const doneProjectId = () => projectActive()?.projectId ?? "default";
 
   // ── Impl-as-swarm (preview, gated by swarm.impl.enabled) ──────────────────────
-  const swarmConfigFor = (stage: string): StageSwarmConfig =>
-    resolveSwarmConfig(getSetting<unknown>(db, "swarm.default", {}), getSetting<unknown>(db, `swarm.${stage}`, {}));
+  // Per-stage swarm config, with a per-task ultracode override: an ultracode task
+  // forces fan-out (swarm) on the hard stages (spec + impl) for THAT task, even
+  // when the global swarm toggle is off — that's what the ultracode flag buys for
+  // a big task (loom-34th). Other stages and non-ultracode tasks read the global
+  // config unchanged.
+  const swarmConfigFor = (stage: string, taskId?: string): StageSwarmConfig => {
+    const base = resolveSwarmConfig(getSetting<unknown>(db, "swarm.default", {}), getSetting<unknown>(db, `swarm.${stage}`, {}));
+    const ultracode = taskId ? getSetting<boolean>(db, `ultracode.${taskId}`, false) : false;
+    return applyUltracode(base, stage, ultracode);
+  };
   const JUDGE_PROMPT =
     "You are judging candidate implementations of the SAME task — each already passed the objective QA checks. Pick the ONE best: simplest correct change, cleanest diff, least risk. Reply with the winner as 'sw<N>' on the first line, then one short sentence why.";
   // Run impl as a swarm of N candidates (each in its own worktree), gate each on
@@ -1147,7 +1155,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // which can't take concurrent sends) and let a judge elect the best. Falls
       // back to the single-pass draftSpec when off, not autopilot, or nothing came
       // back. N× the spec cost — autopilot only.
-      const swSpec = swarmConfigFor("spec");
+      const swSpec = swarmConfigFor("spec", id);
       let art = swSpec.enabled && getTask(db, id)?.run_mode === "autopilot"
         ? await draftSpecSwarm(db, id, createAimuxStageAgent({ profile: getTask(db, id)?.profile ?? undefined, model: getSetting<string>(db, `model.task.${id}.spec`, "") || getSetting<string>(db, "model.col.spec", "") || undefined }), swSpec)
         : null;
@@ -1168,7 +1176,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // Impl-as-swarm (preview): when swarm.impl.enabled and the task is autopilot,
       // run N candidates and promote the judged winner. Falls through to single
       // impl when disabled, not autopilot, or nothing passed QA.
-      const swCfg = swarmConfigFor("impl");
+      const swCfg = swarmConfigFor("impl", id);
       if (swCfg.enabled && getTask(db, id)?.run_mode === "autopilot") {
         const sw = await runImplAsSwarm(id, swCfg);
         if (sw) {
@@ -1570,6 +1578,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       costs: getCosts(db, id),
       stopReason: stop && stop.kind !== "none" ? stop : null, // why the task last stopped (e.g. rate_limit)
       degraded: degradedReasons(id), // what silently degraded (cost/journal/MCP/token-pilot), [] when healthy
+      ultracode: getSetting<boolean>(db, `ultracode.${id}`, false), // fan-out on the hard stages (loom-34th)
     });
   });
 
@@ -1613,6 +1622,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     // Per-task QA depth override (inherit|minimal|full). "inherit"/absent → the
     // task follows the global qa.mode default; only persist a real override.
     if (body.qaMode === "minimal" || body.qaMode === "full") setSetting(db, `qa.mode.${id}`, body.qaMode);
+    // Ultracode: a big task opts into fan-out — swarm on the hard stages (spec +
+    // impl) for THIS task, regardless of the global swarm toggle (loom-34th).
+    if (body.ultracode === true) setSetting(db, `ultracode.${id}`, true);
     return c.json({ task }, 201);
   });
 

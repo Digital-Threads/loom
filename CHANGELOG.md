@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Ultracode (preview)** — a per-task toggle at creation that opts a big task into
+  fan-out: the hard stages (spec + implementation) run as a swarm of candidates and
+  a judge picks the best, even when the global swarm toggles are off. Shown as an
+  ⚡ badge on the task. Autopilot only, N× the cost; the cost cap still applies.
+  Heavier reasoning (effort) for ultracode tasks is tracked separately (loom-34th).
 - **Spec stage as a swarm (preview)** — the spec stage can draft several candidate
   SDDs in parallel (each through a different lens) and let a judge elect the best,
   the same "ask for N approaches, pick the winner" idea as the implementation
