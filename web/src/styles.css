@@ -460,6 +460,7 @@ h3.md-h{font-size:15px}h4.md-h{font-size:13px}h5.md-h,h6.md-h{font-size:12px;col
 .live-tool-head:disabled{cursor:default}
 .live-tool-arrow{color:var(--acc)}
 .live-tool-head b{font-weight:650}
+.live-tool-raw{color:var(--dim);font-size:11px}
 .live-tool-count{background:var(--chip);color:var(--mut);border-radius:20px;font-size:11px;font-weight:600;padding:0 7px}
 .live-tool-inline{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .live-tool-toggle{margin-left:auto;color:var(--dim);font-size:11px;white-space:nowrap}

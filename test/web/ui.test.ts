@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatTokens, formatUsd, summarizeCosts, groupLiveStream } from "../../web/src/ui.js";
+import { formatTokens, formatUsd, summarizeCosts, groupLiveStream, toolAction } from "../../web/src/ui.js";
 
 describe("formatTokens", () => {
   it("scales to k / M and trims", () => {
@@ -80,5 +80,38 @@ describe("groupLiveStream", () => {
 
   it("returns empty for no lines", () => {
     expect(groupLiveStream([])).toEqual([{ kind: "text", text: "" }]);
+  });
+});
+
+describe("toolAction", () => {
+  it("maps read/edit/search tools to human actions", () => {
+    expect(toolAction("Read").label).toBe("Reading code");
+    expect(toolAction("smart_read").label).toBe("Reading code");
+    expect(toolAction("mcp__token-pilot__read_symbol").label).toBe("Reading code");
+    // edit wins over read even though read_for_edit contains "read"
+    expect(toolAction("read_for_edit").label).toBe("Editing files");
+    expect(toolAction("Edit").label).toBe("Editing files");
+    expect(toolAction("Write").label).toBe("Editing files");
+    expect(toolAction("Grep").label).toBe("Searching the code");
+    expect(toolAction("find_usages").label).toBe("Searching the code");
+  });
+
+  it("reads the Bash command to label the action", () => {
+    expect(toolAction("Bash", "npm test").label).toBe("Running tests");
+    expect(toolAction("Bash", "npx vitest run").label).toBe("Running tests");
+    expect(toolAction("Bash", "git status").label).toBe("Working with git");
+    expect(toolAction("Bash", "npm install").label).toBe("Installing dependencies");
+    expect(toolAction("Bash", "npm run build").label).toBe("Building");
+    expect(toolAction("Bash", "echo hi").label).toBe("Running a command");
+  });
+
+  it("records reasoning / planning / web actions", () => {
+    expect(toolAction("mcp__task-journal__event_add").label).toBe("Recording its reasoning");
+    expect(toolAction("TodoWrite").label).toBe("Planning the steps");
+    expect(toolAction("WebFetch").label).toBe("Looking things up");
+  });
+
+  it("falls back to the raw tool name for anything unknown", () => {
+    expect(toolAction("SomeNewTool")).toEqual({ icon: "→", label: "SomeNewTool" });
   });
 });

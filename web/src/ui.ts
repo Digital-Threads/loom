@@ -157,3 +157,33 @@ export function groupLiveStream(lines: string[]): StreamItem[] {
   }
   return out;
 }
+
+export interface ToolAction { icon: string; label: string }
+
+/** Map a tool call (its name + main arg) to a human action for the live log, so a
+ *  reader sees "Reading code" / "Running tests" instead of bare tool names. Pure
+ *  and heuristic — order matters (edit before read, since read_for_edit contains
+ *  "read"); an unknown tool falls back to its own name. The raw tool name is still
+ *  shown next to the label in the UI, so transparency is kept. */
+export function toolAction(tool: string, arg = ""): ToolAction {
+  const t = tool.toLowerCase();
+  const a = arg.toLowerCase();
+  const has = (...keys: string[]) => keys.some((k) => t.includes(k));
+  // Bash/shell — the action lives in the command, not the tool name.
+  if (t === "bash" || t === "shell" || t.endsWith("__bash")) {
+    if (/\b(test|vitest|jest|pytest|phpunit|cargo test|go test)\b/.test(a)) return { icon: "🧪", label: "Running tests" };
+    if (/\b(npm|pnpm|yarn|bun)\s+(install|i|ci|add)\b/.test(a) || a.includes("pip install") || a.includes("cargo install")) return { icon: "📦", label: "Installing dependencies" };
+    if (/\b(build|tsc|compile|vite build|webpack)\b/.test(a)) return { icon: "🏗️", label: "Building" };
+    if (/\bgit\b/.test(a)) return { icon: "🔧", label: "Working with git" };
+    return { icon: "⚙️", label: "Running a command" };
+  }
+  if (has("read_for_edit") || ["edit", "write", "notebookedit"].includes(t) || has("__edit", "__write")) return { icon: "✏️", label: "Editing files" };
+  if (has("read", "outline", "explore", "project_overview", "module_info", "related_files")) return { icon: "📖", label: "Reading code" };
+  if (has("grep", "glob", "find_usages", "find_unused", "code_audit") || t.endsWith("search")) return { icon: "🔍", label: "Searching the code" };
+  if (has("test_summary")) return { icon: "🧪", label: "Running tests" };
+  if (has("smart_diff", "read_diff", "smart_log")) return { icon: "🔧", label: "Inspecting changes" };
+  if (has("task_", "event_add", "memory", "journal")) return { icon: "📝", label: "Recording its reasoning" };
+  if (t === "todowrite" || has("todo")) return { icon: "✅", label: "Planning the steps" };
+  if (has("webfetch", "websearch", "fetch")) return { icon: "🌐", label: "Looking things up" };
+  return { icon: "→", label: tool };
+}
