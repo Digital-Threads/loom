@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Spec stage as a swarm (preview)** — the spec stage can draft several candidate
+  SDDs in parallel (each through a different lens) and let a judge elect the best,
+  the same "ask for N approaches, pick the winner" idea as the implementation
+  swarm but for the design doc. Off by default, autopilot only, N× the cost;
+  configured per-stage on the Swarm page next to the impl swarm (loom-dmha).
 - **One-line binary installer** — `curl -fsSL …/install.sh | sh` downloads the
   latest self-contained binary for your platform (Linux x64, macOS Apple
   Silicon), unpacks it with the web UI beside it, and puts `loom` on your PATH —

@@ -14,6 +14,8 @@ import {
   getChatMessages,
   type ArtifactRow,
 } from "../store/artifacts.js";
+import { runTextSwarm } from "../layers/swarm/text-swarm.js";
+import { perspectivePrompt } from "../layers/swarm/discrete-swarm.js";
 
 export type StageAgent = (prompt: string) => Promise<string>;
 
@@ -238,23 +240,55 @@ export async function runAutoBrainstorm(
 
 // ─── L12.3 Spec (draft → edit / return-with-comment → accept) ─────────────────
 /** Draft a spec from the brainstorm summary (new spec-md artifact, draft). */
+function specPrompt(summary: string): string {
+  return [
+    "Write a clear SDD (software design document, markdown) for this brief.",
+    "Use the `writing-plans` skill's approach to make it implementable.",
+    "Cover: goal, scope (and explicit NON-goals), the design/approach, the data and",
+    "control flow, edge cases, and concrete acceptance criteria a reviewer can check.",
+    "Surface the weak assumptions — anything that, if wrong, breaks the plan — and",
+    "resolve or flag each. A cheaper implementation model will FOLLOW this spec, so",
+    "it must be airtight and unambiguous, not aspirational.",
+    "",
+    "BRIEF:",
+    summary,
+  ].join("\n");
+}
+
+const SPEC_JUDGE_PROMPT = [
+  "You are judging candidate SDDs (software design documents) written for the SAME brief.",
+  "Pick the ONE best: airtight and unambiguous, correct scope (incl. explicit non-goals),",
+  "implementable AS-IS by a cheaper model, with concrete acceptance criteria — not the",
+  "longest or the most aspirational.",
+  "Answer with the winner's number (1-based) on the FIRST line, then one short sentence why.",
+].join("\n");
+
 export async function draftSpec(db: Database.Database, taskId: string, agent: StageAgent): Promise<ArtifactRow> {
   const summary = latestArtifact(db, taskId, "brainstorm-summary")?.content ?? "";
-  const md = await agent(
-    [
-      "Write a clear SDD (software design document, markdown) for this brief.",
-      "Use the `writing-plans` skill's approach to make it implementable.",
-      "Cover: goal, scope (and explicit NON-goals), the design/approach, the data and",
-      "control flow, edge cases, and concrete acceptance criteria a reviewer can check.",
-      "Surface the weak assumptions — anything that, if wrong, breaks the plan — and",
-      "resolve or flag each. A cheaper implementation model will FOLLOW this spec, so",
-      "it must be airtight and unambiguous, not aspirational.",
-      "",
-      "BRIEF:",
-      summary,
-    ].join("\n"),
-  );
+  const md = await agent(specPrompt(summary));
   return createArtifact(db, { id: id("art"), taskId, stage: "spec", kind: "spec-md", content: md });
+}
+
+/** Spec-as-swarm (loom-dmha): draft N candidate SDDs under different lenses, then an
+ *  LLM judge elects the best — persisted as the spec artifact. `agent` MUST be a
+ *  fresh one-shot agent (a new session per call), NOT a lane-resuming one, since the
+ *  N attempts run in parallel and would otherwise race on one session. Returns null
+ *  when no candidate was produced, so the caller falls back to a single draftSpec. */
+export async function draftSpecSwarm(
+  db: Database.Database,
+  taskId: string,
+  agent: StageAgent,
+  cfg: { attempts: number; perspectives?: string[] },
+): Promise<ArtifactRow | null> {
+  const summary = latestArtifact(db, taskId, "brainstorm-summary")?.content ?? "";
+  const result = await runTextSwarm(
+    cfg,
+    (_i, perspective) => agent(perspectivePrompt(specPrompt(summary), perspective)),
+    (candidates) =>
+      agent(`${SPEC_JUDGE_PROMPT}\n\n${candidates.map((c, i) => `### Candidate ${i + 1}\n${c.slice(0, 4000)}`).join("\n\n")}`),
+  );
+  if (!result) return null;
+  return createArtifact(db, { id: id("art"), taskId, stage: "spec", kind: "spec-md", content: result.winner });
 }
 
 /** Return the spec with a comment → the agent revises into a NEW version. */

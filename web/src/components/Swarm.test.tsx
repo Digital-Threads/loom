@@ -13,33 +13,42 @@ function mkClient(over: Partial<LoomClient> = {}) {
   } as unknown as LoomClient;
 }
 
-describe("Swarm (impl-as-swarm config)", () => {
+describe("Swarm (per-stage config)", () => {
   it("reflects swarm.impl from settings (enabled + attempts)", async () => {
     const client = mkClient({ settings: vi.fn(() => Promise.resolve({ "swarm.impl": { enabled: true, attempts: 4 } })) });
     render(<Swarm client={client} />);
-    expect(((await screen.findByLabelText("Attempts")) as HTMLInputElement).value).toBe("4");
-    expect(screen.getByText("on")).toBeInTheDocument(); // toggle reflects enabled
+    expect(((await screen.findByLabelText("impl attempts")) as HTMLInputElement).value).toBe("4");
+    expect(screen.getByText("on")).toBeInTheDocument(); // impl toggle reflects enabled (spec stays off)
   });
 
   it("defaults attempts to 3 when swarm.impl is unset", async () => {
     render(<Swarm client={mkClient()} />);
-    expect(((await screen.findByLabelText("Attempts")) as HTMLInputElement).value).toBe("3");
+    expect(((await screen.findByLabelText("impl attempts")) as HTMLInputElement).value).toBe("3");
   });
 
   it("toggling on saves swarm.impl.enabled", async () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    await screen.findByLabelText("Attempts");
-    await user.click(screen.getByText("off"));
+    await screen.findByLabelText("impl attempts");
+    await user.click(screen.getAllByText("off")[0]); // impl block is first
     await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ enabled: true })));
+  });
+
+  it("toggling the spec block saves swarm.spec.enabled", async () => {
+    const user = userEvent.setup();
+    const client = mkClient();
+    render(<Swarm client={client} />);
+    await screen.findByLabelText("spec attempts");
+    await user.click(screen.getAllByText("off")[1]); // spec block is second
+    await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.spec", expect.objectContaining({ enabled: true })));
   });
 
   it("clamps attempts to the cap (5) on blur", async () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    const input = await screen.findByLabelText("Attempts");
+    const input = await screen.findByLabelText("impl attempts");
     await user.clear(input); await user.type(input, "100"); await user.tab();
     await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ attempts: 5 })));
   });
@@ -48,7 +57,7 @@ describe("Swarm (impl-as-swarm config)", () => {
     const user = userEvent.setup();
     const client = mkClient();
     render(<Swarm client={client} />);
-    const input = await screen.findByLabelText("Perspectives");
+    const input = await screen.findByLabelText("impl perspectives");
     await user.type(input, " simplest , robust ,");
     await user.tab();
     await waitFor(() => expect(client.saveSetting).toHaveBeenCalledWith("swarm.impl", expect.objectContaining({ perspectives: ["simplest", "robust"] })));

@@ -44,6 +44,7 @@ import {
   summarizeBrainstorm,
   runAutoBrainstorm,
   draftSpec,
+  draftSpecSwarm,
   reviseSpec,
   acceptSpec,
   parseAnalysis,
@@ -1141,7 +1142,17 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       return res.blocked ? { ok: true, needsAttention: true, note: res.note } : { ok: true };
     },
     spec: async (_d, id) => {
-      const art = await draftSpec(db, id, stageAgentFor(id, "spec"));
+      // Spec-as-swarm (preview, loom-dmha): when swarm.spec.enabled and autopilot,
+      // draft N candidate SDDs in parallel (FRESH one-shot agents — not the lane,
+      // which can't take concurrent sends) and let a judge elect the best. Falls
+      // back to the single-pass draftSpec when off, not autopilot, or nothing came
+      // back. N× the spec cost — autopilot only.
+      const swSpec = swarmConfigFor("spec");
+      let art = swSpec.enabled && getTask(db, id)?.run_mode === "autopilot"
+        ? await draftSpecSwarm(db, id, createAimuxStageAgent({ profile: getTask(db, id)?.profile ?? undefined, model: getSetting<string>(db, `model.task.${id}.spec`, "") || getSetting<string>(db, "model.col.spec", "") || undefined }), swSpec)
+        : null;
+      if (art) recordTurn(id, "spec", "Spec (swarm)", `Drafted ${swSpec.attempts} candidate SDDs in parallel; a judge elected the best.`);
+      if (!art) art = await draftSpec(db, id, stageAgentFor(id, "spec"));
       const { complete, note } = parseCompleteness(art.content); // completeness-gate: don't advance a doubtful spec
       if (!complete) return { ok: true, needsAttention: true, note };
       acceptSpec(db, id);
