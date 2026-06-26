@@ -47,8 +47,14 @@ function stripAnsi(s: string): string {
 
 function defaultSpawn(name: string): ProcLike {
   if (!VALID_NAME.test(name)) throw new Error(`invalid profile name: ${name}`);
-  // script -q (quiet) -f (flush) -e (return child's exit code) -c <cmd> <typescript>
-  return spawn("script", ["-qfec", `aimux auth login ${name}`, "/dev/null"], {
+  // `script` gives the CLI a pseudo-TTY so it runs + prints the OAuth URL. Its
+  // flags differ by OS: util-linux is `script -qfec "<cmd>" <file>`, but BSD/macOS
+  // is `script -q <file> <cmd> <args...>` (no -f/-e/-c). Using the Linux form on
+  // macOS passes invalid flags and the auth flow dies with "did not complete".
+  const args = process.platform === "darwin"
+    ? ["-q", "/dev/null", "aimux", "auth", "login", name]
+    : ["-qfec", `aimux auth login ${name}`, "/dev/null"];
+  return spawn("script", args, {
     stdio: ["pipe", "pipe", "pipe"],
   }) as unknown as ProcLike;
 }
