@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-26
+
 ### Added
 
 - **Ultracode raises reasoning effort** — an ultracode task now runs its agent
@@ -42,6 +44,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   master and redid work merged during the run now surfaces as a rebase conflict
   and parks for a human, instead of producing a redundant/conflicting PR
   (loom-bovz).
+- **Clearer "mentioned file" chips** — the 📄 chips under a turn are file paths
+  the agent *mentioned*, not necessarily files it changed. Clicking one that isn't
+  in the task's working tree (e.g. a path quoted from another project during
+  analysis) now shows "mentioned but not in the task's tree" instead of a raw 404.
 
 ## [0.6.0] - 2026-06-22
 
@@ -111,6 +117,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.6.0...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.0...master
+[0.7.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.5.0
