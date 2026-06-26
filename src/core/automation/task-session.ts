@@ -89,9 +89,13 @@ export function aboutSection(profile: string): string {
 /** Detect a provider rate-limit / usage-limit message in an agent turn, so the
  *  pipeline can surface WHY a task stopped (limit vs parked vs error) instead of
  *  burying "You've hit your session limit" in the transcript. Returns the reset
- *  hint when the provider includes one. */
+ *  hint when the provider includes one. Deliberately NARROW: it matches the
+ *  provider's own block phrasing, NOT bare "rate limit" / "429" / "too many
+ *  requests" — those appear in normal agent output (e.g. an analysis discussing
+ *  HTTP codes or rate-limiting code) and used to false-fire a "switch account"
+ *  prompt at low usage (loom-rlfp). */
 export function detectRateLimit(text: string): { hit: boolean; resetsAt?: string } {
-  if (!/\b(hit (your|the) (session|usage) limit|rate limit|usage limit reached|too many requests|429)\b/i.test(text)) {
+  if (!/\b(hit (your|the) (session|usage) limit|usage limit reached|rate[ _-]?limit[ _-]?(error|exceeded|reached)|api error:\s*429)\b/i.test(text)) {
     return { hit: false };
   }
   const reset = text.match(/resets?\s+(?:at\s+)?([0-9][^\n.]{0,40})/i);

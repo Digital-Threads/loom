@@ -110,6 +110,16 @@ describe("TaskSession (one session per task)", () => {
     expect(detectRateLimit("all good, tests pass").hit).toBe(false);
   });
 
+  it("detectRateLimit: real provider phrasings hit; bare content mentions don't (loom-rlfp)", () => {
+    // real provider blocks
+    expect(detectRateLimit("Claude usage limit reached").hit).toBe(true);
+    expect(detectRateLimit("API Error: rate_limit_error").hit).toBe(true);
+    expect(detectRateLimit("API Error: 429").hit).toBe(true);
+    // agent CONTENT that merely talks about limits — must NOT false-fire a switch
+    expect(detectRateLimit("The endpoint returns 429 when the client sends too many requests; add a rate limit.").hit).toBe(false);
+    expect(detectRateLimit("This service implements a rate limit of 100 req/min.").hit).toBe(false);
+  });
+
   it("detectAuthError: flags a 401 / auth failure, not a rate limit or other error (loom-authfail)", () => {
     expect(detectAuthError("Failed to authenticate. API Error: 401 Invalid authentication credentials")).toBe(true);
     expect(detectAuthError("Error: not logged in — please run /login")).toBe(true);
