@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-06-26
+
+### Fixed
+
+- **Account authorization works on macOS** — the in-UI "Authorize" used
+  Linux-only `script` flags, so on a Mac it ended with "authorization did not
+  complete". The invocation is now platform-correct (BSD form on darwin).
+- **An auth failure offers re-authorize / switch** — a 401 / invalid-credentials
+  error now shows an account banner (re-authorize or switch account), like a rate
+  limit, instead of a silent "degraded" park.
+- **No false "switch subscription" prompt** — the rate-limit detector matched bare
+  "rate limit" / "429" / "too many requests" in the agent's own output (e.g. an
+  analysis discussing HTTP codes), popping a switch prompt at low usage. Narrowed
+  to the provider's actual block phrasing.
+- **Onboarding installs cleanly** — task-journal's marketplace used a `github:`
+  prefix the CLI rejects (now an `https://` URL); a plugin "update" at the wrong
+  scope no longer fails the whole install (best-effort).
+
+### Changed
+
+- **Readable system log** — each tool burst is labelled with a human action
+  (📖 Reading code / 🧪 Running tests / ✏️ Editing files / 🔍 Searching …), with the
+  raw tool name kept beside it; the analysis stage is steered to token-pilot
+  exploration instead of raw recursive `find`/`grep`.
+
 ## [0.7.0] - 2026-06-26
 
 ### Added
@@ -117,7 +142,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.0...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.1...master
+[0.7.1]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.5.0
