@@ -46,7 +46,7 @@ let cmd="";try{cmd=(JSON.parse(s).tool_input||{}).command||""}catch{}
 const recGrep=/(^|[\\s;&|])(grep|egrep|rg)\\s+[^|]*-[A-Za-z]*[rR]/.test(cmd);
 const broadFind=/(^|[\\s;&|])find\\s+\\S+[^|]*-name\\b/.test(cmd)&&!/-maxdepth/.test(cmd);
 const bounded=/\\|\\s*(head|tail|wc)\\b/.test(cmd)||/--max-count|(^|\\s)-m\\s*\\d/.test(cmd);
-if((recGrep||broadFind)&&!bounded){process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"Безлимитный рекурсивный поиск вываливает много в контекст. Для символов кода используй mcp__token-pilot__find_usages(symbol); для файлов — Glob; либо ограничь: grep ... | head -50, find ... -maxdepth N."}}))}
+if((recGrep||broadFind)&&!bounded){process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"Unbounded recursive search floods the context. For code symbols use mcp__token-pilot__find_usages(symbol); for files use Glob; or bound it: grep ... | head -50, find ... -maxdepth N."}}))}
 process.exit(0)});`;
 
 // Command-policy PreToolUse(Bash) hook: enforce the security command policy on
