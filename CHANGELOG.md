@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-06-26
+
+### Fixed
+
+- **"Fix all findings" appears as soon as review has findings** — the button was
+  gated on all three reviewers (self → ralph → adversarial) having run, so a user
+  who saw bugs after the first reviewer had no obvious way to fix them and assumed
+  the button was missing. It now shows whenever findings exist, next to the "run
+  next reviewer" action — fix now, or keep accumulating.
+- **The board and task view never show a stale stage** — the polls (and a reload)
+  could serve a browser-cached API response, so a running task kept showing an old
+  stage and only a fresh tab was current. Every GET is now fetched with
+  `no-store`.
+
 ## [0.7.3] - 2026-06-26
 
 ### Fixed
@@ -168,7 +182,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.3...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.4...master
+[0.7.4]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.4
 [0.7.3]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.3
 [0.7.2]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.2
 [0.7.1]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.1
