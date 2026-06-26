@@ -635,6 +635,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       sandbox: autopilot || getSetting<boolean>(db, "sandbox.enabled", false),
       onChunk: streamSinks.get(id),
       profile: t?.profile ?? undefined, // run under the task's current subscription
+      // Ultracode raises reasoning effort for the whole task's sessions (loom-34th
+      // / loom-daeq); a normal task uses the CLI default.
+      effort: getSetting<boolean>(db, `ultracode.${id}`, false) ? "xhigh" : undefined,
     });
     // A fatal agent/API error (auth/credentials/429/dead session) comes back AS
     // the reply text — the stage never really ran. Don't let the pipeline mark it
@@ -1093,7 +1096,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         // a valid UUID — a slug like `${id}-sw${slot}` makes claude exit immediately
         // ("agent process ended before replying"). Use a fresh UUID per attempt.
         const sid = randomUUID();
-        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: sid, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined });
+        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${body}`, { sessionId: sid, resume: false, model, cwd: wt.path, env: spineEnv(ids), bypassPermissions: true, sandbox: true, profile: t.profile ?? undefined, effort: getSetting<boolean>(db, `ultracode.${id}`, false) ? "xhigh" : undefined });
         costs.push(sessionLauncher.costOf?.(sid)); // fresh session → this attempt's spend
         if (isFatalAgentError(r.text)) throw new Error(`agent error: ${r.text.trim().slice(0, 120)}`);
         const c = commitWorktree(wt.path, `loom: ${t.title} (sw${slot})`);
@@ -1157,7 +1160,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // back. N× the spec cost — autopilot only.
       const swSpec = swarmConfigFor("spec", id);
       let art = swSpec.enabled && getTask(db, id)?.run_mode === "autopilot"
-        ? await draftSpecSwarm(db, id, createAimuxStageAgent({ profile: getTask(db, id)?.profile ?? undefined, model: getSetting<string>(db, `model.task.${id}.spec`, "") || getSetting<string>(db, "model.col.spec", "") || undefined }), swSpec)
+        ? await draftSpecSwarm(db, id, createAimuxStageAgent({ profile: getTask(db, id)?.profile ?? undefined, model: getSetting<string>(db, `model.task.${id}.spec`, "") || getSetting<string>(db, "model.col.spec", "") || undefined, effort: getSetting<boolean>(db, `ultracode.${id}`, false) ? "xhigh" : undefined }), swSpec)
         : null;
       if (art) recordTurn(id, "spec", "Spec (swarm)", `Drafted ${swSpec.attempts} candidate SDDs in parallel; a judge elected the best.`);
       if (!art) art = await draftSpec(db, id, stageAgentFor(id, "spec"));

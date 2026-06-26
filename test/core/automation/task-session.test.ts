@@ -21,10 +21,10 @@ afterEach(() => {
 });
 
 function recordingLauncher() {
-  const calls: Array<{ prompt: string; sessionId: string; resume: boolean }> = [];
+  const calls: Array<{ prompt: string; sessionId: string; resume: boolean; effort?: string }> = [];
   const launcher: SessionLauncher = {
     run: async (prompt, opts) => {
-      calls.push({ prompt, sessionId: opts.sessionId, resume: opts.resume });
+      calls.push({ prompt, sessionId: opts.sessionId, resume: opts.resume, effort: opts.effort });
       opts.onChunk?.("chunk");
       return { text: "ok" };
     },
@@ -139,6 +139,15 @@ describe("TaskSession (one session per task)", () => {
     await s.send("2", { stage: "b" }); // turns 1→2
     await s.send("3", { stage: "c" }); // turns==2 before send → compact fires
     expect(compacted).toEqual(["sid"]);
+  });
+
+  it("passes the per-turn reasoning effort through to the launcher (loom-daeq)", async () => {
+    const { launcher, calls } = recordingLauncher();
+    const s = createTaskSession(db, "t1", { launcher });
+    await s.send("hard one", { stage: "spec", effort: "xhigh" });
+    await s.send("normal one", { stage: "spec" }); // no effort → undefined
+    expect(calls[0].effort).toBe("xhigh");
+    expect(calls[1].effort).toBeUndefined();
   });
 });
 

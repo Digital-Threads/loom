@@ -16,7 +16,7 @@ import { resolveStageModel } from "../pipeline/stage-model.js";
 export interface SessionLauncher {
   run(
     prompt: string,
-    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string; sandbox?: boolean },
+    opts: { sessionId: string; resume: boolean; model?: string; cwd?: string; env?: Record<string, string>; bypassPermissions?: boolean; allowedTools?: string[]; onChunk?: (chunk: string) => void; profile?: string; sandbox?: boolean; effort?: string },
   ): Promise<{ text: string }>;
 }
 
@@ -157,6 +157,9 @@ export interface SendOptions {
   onChunk?: (chunk: string) => void;
   /** aimux subscription to run this turn under (else the launcher's default). */
   profile?: string;
+  /** Reasoning effort for this turn (→ claude `--effort`), e.g. "xhigh" for an
+   *  ultracode task. Omit → the CLI default. */
+  effort?: string;
 }
 
 export interface TaskSession {
@@ -209,7 +212,7 @@ export function createTaskSession(db: Database.Database, taskId: string, deps: T
       // already per-project. Resume turns skip it, keeping the thread light.
       const about = resume ? "" : aboutSection(getSetting<string>(db, "taste.profile", ""));
       const prompt = resume ? body : [SESSION_PREAMBLE, about, body].filter(Boolean).join("\n\n");
-      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, sandbox: opts.sandbox, onChunk: opts.onChunk, profile: opts.profile });
+      const res = await deps.launcher.run(prompt, { sessionId, resume, model, cwd: opts.cwd, env: opts.env, bypassPermissions: opts.bypassPermissions, allowedTools: opts.allowedTools, sandbox: opts.sandbox, onChunk: opts.onChunk, profile: opts.profile, effort: opts.effort });
 
       if (!resume && stageModel) setLaneSession(db, taskId, stageModel, sessionId); // new lane → next stage on this model resumes it
       setTaskSession(db, taskId, sessionId); // active lane = the task's current conversation (interject/terminal/relocate target)

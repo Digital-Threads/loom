@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Ultracode raises reasoning effort** — an ultracode task now runs its agent
+  sessions at `--effort xhigh` (the heavier-reasoning half of the mode), threaded
+  through the whole pipeline: the main stage lanes, the spec swarm, and the impl
+  swarm. A normal task uses the CLI default. Requires aimux ≥ 0.18 (which exposes
+  the per-session effort flag) — loom-34th / loom-daeq.
 - **Ultracode (preview)** — a per-task toggle at creation that opts a big task into
   fan-out: the hard stages (spec + implementation) run as a swarm of candidates and
   a judge picks the best, even when the global swarm toggles are off. Shown as an

@@ -62,6 +62,8 @@ interface RunOpts {
   /** Confine the agent's writes to the worktree via the OS sandbox for THIS run
    *  (per-task override — autopilot forces it on). Falls back to deps.sandbox. */
   sandbox?: boolean;
+  /** Reasoning effort for this session (→ claude `--effort`); undefined → default. */
+  effort?: string;
 }
 
 /** A LiveSession that yields one empty turn — used when there is no aimux
@@ -210,6 +212,7 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
 
     const session = open(cfg, profile, {
       model: opts.model ?? deps.model,
+      effort: opts.effort, // per-task reasoning effort (ultracode → xhigh); undefined → CLI default
       sessionId: opts.sessionId,
       resume: opts.resume,
       cwd: opts.cwd,

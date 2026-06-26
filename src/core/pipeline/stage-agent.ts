@@ -11,6 +11,8 @@ export interface StageAgentDeps {
   loadConfig?: typeof loadConfig;
   profile?: string;
   model?: string;
+  /** Reasoning effort (→ claude `--effort`), e.g. "xhigh" for an ultracode task. */
+  effort?: string;
 }
 
 export function createAimuxStageAgent(deps: StageAgentDeps = {}): StageAgent {
@@ -23,7 +25,8 @@ export function createAimuxStageAgent(deps: StageAgentDeps = {}): StageAgent {
     if (!profile) return "";
     // Force token-pilot's hooks into this headless session too — without these
     // the stage (and the skill-generation path) would run on raw reads.
-    const res = await launch(cfg, profile, { model: deps.model, extraArgs: ["-p", prompt, ...enforceFlags()] });
+    const effortArgs = deps.effort ? ["--effort", deps.effort] : [];
+    const res = await launch(cfg, profile, { model: deps.model, extraArgs: ["-p", prompt, ...enforceFlags(), ...effortArgs] });
     return res.stdout ?? "";
   };
 }
