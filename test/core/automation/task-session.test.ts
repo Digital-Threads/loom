@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, createTask, getTaskSession } from "../../../src/core/store/db.js";
 import { setSetting } from "../../../src/core/store/settings.js";
-import { createTaskSession, SESSION_PREAMBLE, aboutSection, ABOUT_MAX_CHARS, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
+import { createTaskSession, SESSION_PREAMBLE, aboutSection, ABOUT_MAX_CHARS, parseCompleteness, declaresRemainingWork, detectRateLimit, detectAuthError, languageDirective, type SessionLauncher } from "../../../src/core/automation/task-session.js";
 import type Database from "better-sqlite3";
 
 let dir: string;
@@ -108,6 +108,16 @@ describe("TaskSession (one session per task)", () => {
     expect(r.hit).toBe(true);
     expect(r.resetsAt).toContain("6:30pm");
     expect(detectRateLimit("all good, tests pass").hit).toBe(false);
+  });
+
+  it("detectAuthError: flags a 401 / auth failure, not a rate limit or other error (loom-authfail)", () => {
+    expect(detectAuthError("Failed to authenticate. API Error: 401 Invalid authentication credentials")).toBe(true);
+    expect(detectAuthError("Error: not logged in — please run /login")).toBe(true);
+    expect(detectAuthError("API Error: 403 Forbidden")).toBe(true);
+    // not auth: rate limit, server error, timeout
+    expect(detectAuthError("You've hit your session limit")).toBe(false);
+    expect(detectAuthError("API Error: 500 Internal Server Error")).toBe(false);
+    expect(detectAuthError("The agent did not respond within the time limit")).toBe(false);
   });
 
   it("declaresRemainingWork: catches a ГОТОВО that still lists leftover plan items", () => {

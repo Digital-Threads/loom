@@ -98,6 +98,14 @@ export function detectRateLimit(text: string): { hit: boolean; resetsAt?: string
   return { hit: true, resetsAt: reset?.[1]?.trim() };
 }
 
+/** Detect an authentication / credential failure in an agent turn (a 401, expired
+ *  or missing login) — distinct from a rate limit. The pipeline surfaces it as a
+ *  fixable stop ("re-authorize or switch account") instead of a silent degraded
+ *  park (loom-authfail). Excludes 404/5xx, which are not auth problems. */
+export function detectAuthError(text: string): boolean {
+  return /\b(failed to authenticate|invalid authentication|authentication credentials|authentication failed|not logged in|please run \/login|api error:\s*40[13])\b/i.test(text);
+}
+
 /** Parse the mandatory completeness marker the agent appends as the last line.
  *  Conservative: only an explicit "НЕ ГОТОВО" parks the stage; an explicit
  *  "ГОТОВО" or a missing marker is treated as complete (we don't block on a

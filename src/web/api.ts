@@ -51,7 +51,7 @@ import {
   type StageAgent,
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
-import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, languageDirective, type SessionLauncher } from "../core/automation/task-session.js";
+import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, detectAuthError, languageDirective, type SessionLauncher } from "../core/automation/task-session.js";
 import type { SessionControl } from "../core/automation/live-session.js";
 import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
@@ -648,6 +648,10 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     if (isFatalAgentError(text)) {
       saveResult(id, stage, "turn", { input: prompt, output: text });
       markDegraded(id, `agent error: ${text.trim().slice(0, 140)}`);
+      // An auth/credential failure (401 / not logged in) is fixable — record an
+      // "auth" stop reason so the UI offers re-authorize / switch account, like a
+      // rate limit, instead of a silent degraded park (loom-authfail).
+      if (detectAuthError(text)) saveResult(id, stage, "stop-reason", { kind: "auth", profile: t?.profile ?? null });
       throw new Error(`agent send failed at ${stage}: ${text.trim().slice(0, 160)}`);
     }
     // Read token-pilot stats from where the agent actually ran — its worktree —

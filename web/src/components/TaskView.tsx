@@ -439,6 +439,10 @@ export function TaskView({
               ⚠ {t("taskView.runStoppedCost")} ${detail.stopReason.cap}
               {detail.stopReason.spent != null ? ` (${t("taskView.spent")} $${detail.stopReason.spent.toFixed(2)})` : ""}. {t("taskView.raiseLimit")}
             </div>
+          ) : detail.stopReason?.kind === "auth" ? (
+            <div className="banner banner-warn" role="status">
+              ⚠ {t("taskView.runStoppedAuth")}{detail.stopReason.profile ? ` "${detail.stopReason.profile}"` : ""} {t("taskView.authFailed")} {t("taskView.reauthOrSwitch")}
+            </div>
           ) : null}
           {detail.degraded && detail.degraded.length ? (
             <div className="banner banner-warn" role="status">
