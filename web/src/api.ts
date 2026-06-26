@@ -81,7 +81,11 @@ function onHttpError(path: string, status: number): Error {
 }
 
 async function getJson<T>(path: string, f: Fetcher): Promise<T> {
-  const res = await f(path);
+  // no-store: board/task state changes every few seconds while a task runs, so the
+  // browser must never serve a cached copy — otherwise the poll and a reload show a
+  // stale stage (e.g. "analysis" while the task is really in review) and only a
+  // fresh tab is current (loom-stale).
+  const res = await f(path, { cache: "no-store" });
   if (!res.ok) throw onHttpError(path, res.status);
   return (await res.json()) as T;
 }
