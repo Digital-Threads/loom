@@ -18,7 +18,7 @@
     "install": [
       { "cmd": "cargo", "args": ["install","task-journal-cli","--bin","task-journal"], "optional": true },
       { "cmd": "cargo", "args": ["install","task-journal-mcp"], "optional": true },
-      { "cmd": "claude", "args": ["plugin","marketplace","add","github:Digital-Threads/Task-Journal"] },
+      { "cmd": "claude", "args": ["plugin","marketplace","add","https://github.com/Digital-Threads/Task-Journal"] },
       { "cmd": "claude", "args": ["plugin","install","--scope","{scope}","task-journal@task-journal"], "scoped": true }
     ],
     "detect": { "probe": { "cmd": "claude", "args": ["plugin","list"] },
