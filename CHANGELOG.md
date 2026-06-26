@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-06-26
+
+### Fixed
+
+- **A long stage turn no longer dies on the reply watchdog** — a single turn (a
+  deep analysis that explores + delegates to a subagent, a long implementation,
+  especially at high effort) can run past aimux's 10-minute default reply
+  watchdog and get killed mid-work with "the agent did not respond within the
+  time limit". The per-turn timeout for pipeline sessions is raised to 30
+  minutes. (The proper fix — a watchdog that resets on streamed activity instead
+  of a hard cap — is in aimux and lands in a later release.)
+
 ## [0.7.1] - 2026-06-26
 
 ### Fixed
@@ -142,7 +154,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.1...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.2...master
+[0.7.2]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.2
 [0.7.1]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.6.0

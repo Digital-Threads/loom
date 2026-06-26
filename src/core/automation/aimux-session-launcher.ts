@@ -48,6 +48,12 @@ export interface AimuxLiveLauncherDeps {
   egressPolicy?: () => { enforce: boolean; allow: string[] };
 }
 
+/** Per-turn reply watchdog for pipeline sessions — well above aimux's 10-minute
+ *  default, since a stage's single turn (deep analysis + subagent, long impl, high
+ *  effort) legitimately runs longer. With aimux's inactivity-reset watchdog this
+ *  is the max SILENCE before a stuck turn is killed; without it, the hard cap. */
+const REPLY_TIMEOUT_MS = 30 * 60_000;
+
 interface RunOpts {
   sessionId: string;
   resume: boolean;
@@ -213,6 +219,11 @@ export function createAimuxLiveLauncher(deps: AimuxLiveLauncherDeps = {}): Sessi
     const session = open(cfg, profile, {
       model: opts.model ?? deps.model,
       effort: opts.effort, // per-task reasoning effort (ultracode → xhigh); undefined → CLI default
+      // A pipeline stage (a long implementation, a deep analysis that explores +
+      // delegates to a subagent, especially at high effort) can run a single turn
+      // far past aimux's 10-minute default reply watchdog, which would kill it
+      // mid-work. Give it room (loom-rlwd).
+      replyTimeoutMs: REPLY_TIMEOUT_MS,
       sessionId: opts.sessionId,
       resume: opts.resume,
       cwd: opts.cwd,

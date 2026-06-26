@@ -1,6 +1,6 @@
 {
   "name": "@digital-threads/loom",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
   "description": "Loom — local AI-dev orchestrator: give it a task and it runs the work through an analysis → spec → code → review → PR pipeline on a board, with cost, reasoning memory and multi-account support. Public beta.",
   "license": "MIT",
