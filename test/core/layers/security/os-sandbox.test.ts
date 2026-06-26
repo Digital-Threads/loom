@@ -50,6 +50,10 @@ describe("os-sandbox (experimental, opt-in)", () => {
     expect(w.args[0]).toBe("-p");
     expect(w.args[1]).toContain('(deny file-write* (subpath "/"))');
     expect(w.args[1]).toContain("/wt");
+    // …but the agent's temp dir stays writable — without it every command fails
+    // with "EPERM: mkdir /private/tmp/claude-<uid>" and the task stalls (loom-sbtmp).
+    expect(w.args[1]).toContain('(allow file-write* (subpath "/private/tmp"))');
+    expect(w.args[1]).toContain('(subpath "/private/var/folders")');
     expect(w.args.slice(2)).toEqual(["claude", "-p"]);
   });
 

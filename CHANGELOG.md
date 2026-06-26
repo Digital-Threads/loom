@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-06-26
+
+### Fixed
+
+- **Autopilot can run commands on macOS** — the OS sandbox (sandbox-exec) denied
+  all writes outside the worktree, but the agent's temp dir lives elsewhere
+  (`/private/tmp/claude-<uid>` and the resolved per-user `TMPDIR` under
+  `/private/var/folders`). So on a Mac EVERY command died with "EPERM: operation
+  not permitted, mkdir" — the agent couldn't run git/npm/tests, asked the user to
+  run them, and the task stalled in implementation. The sandbox profile now keeps
+  those temp paths writable (the passed `os.tmpdir()` didn't match because of the
+  `/var`→`/private/var` symlink). Linux (bubblewrap) was unaffected — it already
+  binds `/tmp` writable.
+
 ## [0.7.2] - 2026-06-26
 
 ### Fixed
@@ -154,7 +168,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.2...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.3...master
+[0.7.3]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.3
 [0.7.2]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.2
 [0.7.1]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.0

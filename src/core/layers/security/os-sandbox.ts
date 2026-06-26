@@ -78,6 +78,13 @@ export function wrapCommand(
       "(version 1)",
       "(allow default)",
       '(deny file-write* (subpath "/"))',
+      // The agent (and the claude CLI / its Bun runtime) needs a writable temp
+      // dir — e.g. /private/tmp/claude-<uid> and the per-user TMPDIR under
+      // /private/var/folders. Without it EVERY command fails with "EPERM:
+      // operation not permitted, mkdir" and the task stalls. Confinement is about
+      // the user's repo/home, not temp (loom-sbtmp).
+      '(allow file-write* (subpath "/private/tmp"))',
+      '(allow file-write* (subpath "/private/var/folders"))',
       ...writable.map((p) => `(allow file-write* (subpath ${JSON.stringify(p)}))`),
     ].join(" ");
     return { cli: "sandbox-exec", args: ["-p", profile, cli, ...args] };
