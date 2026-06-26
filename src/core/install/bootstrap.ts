@@ -26,7 +26,11 @@ export interface InstallUnit {
 
 // A claude plugin's "update" step: refresh it to the marketplace's latest. The
 // command is a no-op when already current, so it's safe to run every onboarding.
-const pluginUpdate = (ref: string): RecipeStep[] => [{ cmd: "claude", args: ["plugin", "update", ref] }];
+// Refreshing a plugin is best-effort: `claude plugin update` fails when the
+// plugin is present at a different scope (project, not user), already current, or
+// offline — none of which should fail onboarding, since the plugin IS installed.
+// Marked optional so a failed update is a warning, not a hard failure (loom-isd).
+const pluginUpdate = (ref: string): RecipeStep[] => [{ cmd: "claude", args: ["plugin", "update", ref], optional: true }];
 
 // Pull a bundled plugin's install recipe straight from its plugin.json — the
 // single source of truth, so we never duplicate the steps here.
