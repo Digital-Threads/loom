@@ -57,6 +57,7 @@ import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
 import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from "../core/store/artifacts.js";
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
+import { resolveRebaseWithAgent } from "../core/pipeline/rebase-resolve.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
 import { commitWorktree, syncWorktreeToRemoteBase } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
@@ -773,6 +774,28 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
         resolve({ code: typeof err.code === "number" ? err.code : 1, stdout: combined });
       });
     });
+  // On a PR-stage rebase conflict, hand it to the AGENT (a coding task) rather
+  // than punting to the human. sandbox:false because the agent must write the
+  // rebase state in the worktree's git dir (outside the writable worktree); this
+  // matches gated mode, which already runs unsandboxed (loom-wb9t). The human is
+  // the last-resort fallback when the agent can't finish.
+  const agentResolveRebase = async (id: string, base: string, wt: string): Promise<boolean> => {
+    const t = getTask(db, id);
+    const ids = buildSpineIds({ repoRoot: t?.repo ?? wt, taskId: id });
+    const model = getSetting<string>(db, `model.task.${id}.impl`, "") || getSetting<string>(db, "model.col.impl", "") || undefined;
+    const { resolved } = await resolveRebaseWithAgent(wt, base, {
+      git: (args, cwd) => realSh("git", args, cwd),
+      agent: async (prompt) => {
+        const r = await sessionLauncher.run(`${SESSION_PREAMBLE}\n\n${prompt}`, {
+          sessionId: randomUUID(), resume: false, model, cwd: wt, env: spineEnv(ids),
+          bypassPermissions: true, sandbox: false, profile: t?.profile ?? undefined,
+        });
+        return r.text;
+      },
+    });
+    if (resolved) recordTurn(id, "pr", "Rebase resolved by the agent", `Rebased onto ${base} and resolved the conflicts.`);
+    return resolved;
+  };
   // Default MCP reachability probe: spawn `command … --help` and read its exit
   // code. Without this wired, the Connectors "Test" button always reported
   // "no probe configured" (loom-ivvi). Sync to match the McpProbe contract.
@@ -1301,10 +1324,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       if (prWt && isGitRepo(prWt)) {
         const reb = syncWorktreeToRemoteBase(prWt, [prT?.branch, "master", "main"]);
         if (reb.conflict) {
-          const note = `Rebase onto ${reb.base} conflicts — resolve the task branch manually before opening the PR.`;
-          saveResult(id, "pr", "pr-result", { description: "", created: false, connector: false, error: note });
-          recordTurn(id, "pr", "Rebase needed", note);
-          return { ok: true, needsAttention: true, note };
+          const fixed = reb.base ? await agentResolveRebase(id, reb.base, prWt) : false;
+          if (!fixed) {
+            const note = `Rebase onto ${reb.base} conflicts and the agent couldn't resolve it — needs a human.`;
+            saveResult(id, "pr", "pr-result", { description: "", created: false, connector: false, error: note });
+            recordTurn(id, "pr", "Rebase needed", note);
+            return { ok: true, needsAttention: true, note };
+          }
         }
       }
       // Default PR options: in autopilot, actually push the branch to origin and
@@ -2074,11 +2100,14 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       if (mWt && isGitRepo(mWt)) {
         const reb = syncWorktreeToRemoteBase(mWt, [t.branch, await defaultBranch(realSh, mWt), "master", "main"]);
         if (reb.conflict) {
-          const note = `Rebase onto ${reb.base} conflicts — resolve the task branch manually before pushing.`;
-          const r = { description: "", created: false, connector: false, pushed: false, error: note };
-          saveResult(id, "pr", "pr-result", r);
-          recordTurn(id, "pr", "Rebase needed", note);
-          return c.json(r);
+          const fixed = reb.base ? await agentResolveRebase(id, reb.base, mWt) : false;
+          if (!fixed) {
+            const note = `Rebase onto ${reb.base} conflicts and the agent couldn't resolve it — needs a human.`;
+            const r = { description: "", created: false, connector: false, pushed: false, error: note };
+            saveResult(id, "pr", "pr-result", r);
+            recordTurn(id, "pr", "Rebase needed", note);
+            return c.json(r);
+          }
         }
       }
       opts = {
