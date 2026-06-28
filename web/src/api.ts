@@ -339,7 +339,7 @@ export function createClient(base = "", f: Fetcher = fetch) {
     runStageNext: (id: string) =>
       postJson<{ ran: string[]; stoppedAt: string | null }>(`${base}/api/tasks/${id}/run-stage`, {}, f),
     // L14 — PR / Done
-    prRun: (id: string, opts?: { connector?: boolean; base?: string }) =>
+    prRun: (id: string, opts?: { connector?: boolean; base?: string; skipRebase?: boolean }) =>
       postJson<{ pr: PrResult }>(`${base}/api/tasks/${id}/pr/run`, opts ?? {}, f).then((d) => d.pr),
     prGet: (id: string) =>
       getJson<{ pr: PrResult | null }>(`${base}/api/tasks/${id}/pr`, f).then((d) => d.pr),

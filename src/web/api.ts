@@ -2095,14 +2095,16 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const id = c.req.param("id");
     const t = getTask(db, id);
     if (!t) return c.json({ error: "not found" }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { connector?: unknown; base?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { connector?: unknown; base?: unknown; skipRebase?: unknown };
     let opts: PrOptions = deps.prOptions?.(id) ?? {};
     if (body.connector === true) {
       if (!t.repo) return c.json({ error: "task has no repo to push from" }, 400);
       // Sync onto the LIVE base before pushing, so a manual push doesn't ship work
       // that was merged during the run (loom-bovz) — mirrors the autopilot PR stage.
+      // skipRebase:true forces the push as-is — the "Push anyway" escape hatch for
+      // when the agent can't resolve the conflict (loom-b2xl).
       const mWt = taskCwd(id);
-      if (mWt && isGitRepo(mWt)) {
+      if (mWt && isGitRepo(mWt) && body.skipRebase !== true) {
         const reb = syncWorktreeToRemoteBase(mWt, [t.branch, await defaultBranch(realSh, mWt), "master", "main"]);
         if (reb.conflict) {
           const fixed = reb.base ? await agentResolveRebase(id, reb.base, mWt) : false;

@@ -23,6 +23,7 @@ export function StageResult({
   const [review, setReview] = useState<{ result: ReviewResult | null; action?: string; reviewersDone?: string[] } | null>(null);
   const [qa, setQa] = useState<QaResult | null>(null);
   const [pr, setPr] = useState<PrResult | null>(null);
+  const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
     setReview(null);
@@ -107,6 +108,19 @@ export function StageResult({
         </div>
         {pr.error ? (
           <pre className="finding sev-bug" style={{ whiteSpace: "pre-wrap", padding: "6px 8px", margin: "6px 0" }}>{pr.error}</pre>
+        ) : null}
+        {pr.error && /rebase/i.test(pr.error) ? (
+          <button
+            className="btn acc sm"
+            disabled={pushing}
+            style={{ margin: "0 0 6px" }}
+            title="Push the branch as-is, skipping the rebase onto the base"
+            onClick={async () => {
+              setPushing(true);
+              try { setPr(await client.prRun(taskId, { connector: true, skipRebase: true })); }
+              finally { setPushing(false); }
+            }}
+          >{pushing ? "Pushing…" : "⤴ Push anyway (skip rebase)"}</button>
         ) : null}
         <pre className="pr-desc" style={{ whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto", margin: 0 }}>{pr.description}</pre>
       </div>

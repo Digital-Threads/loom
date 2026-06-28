@@ -152,6 +152,9 @@ describe("web api client", () => {
     expect(calls[0]).toEqual({ path: "/api/runs/run_1/stdin", body: { data: "y\n" } });
     expect(calls[1]).toEqual({ path: "/api/tasks/t1/pr/run", body: { connector: true } });
     expect(pr.created).toBe(true);
+    // "Push anyway" forwards skipRebase so the host bypasses the rebase sync (loom-b2xl)
+    await c.prRun("t1", { connector: true, skipRebase: true });
+    expect(calls[2]).toEqual({ path: "/api/tasks/t1/pr/run", body: { connector: true, skipRebase: true } });
   });
 });
 
