@@ -44,17 +44,9 @@ const tokenPilot = pluginRecipe(tokenPilotManifest);
 const taskJournal = pluginRecipe(taskJournalManifest);
 
 // Ordered: system tools first (they are prerequisites), then the plugins that
-// build on them. task-journal needs both cargo (its binary) and claude (plugin).
+// build on them. task-journal installs prebuilt binaries from its GitHub release
+// (no Rust toolchain) plus the claude plugin (loom-hwfu).
 export const INSTALL_UNITS: InstallUnit[] = [
-  {
-    id: "cargo",
-    title: "Rust toolchain (cargo)",
-    why: "Builds the Task Journal binary that stores your task memory.",
-    detect: { probe: { cmd: "which", args: ["cargo"] } },
-    // rustup's official one-liner; -y runs it non-interactively. Needs a shell
-    // for the pipe, hence `sh -c` (makeShellRunner executes it as a pipe).
-    steps: [{ cmd: "sh", args: ["-c", "curl https://sh.rustup.rs -sSf | sh -s -- -y"] }],
-  },
   {
     id: "claude",
     title: "Claude Code CLI",
@@ -78,7 +70,7 @@ export const INSTALL_UNITS: InstallUnit[] = [
     detect: taskJournal.detect,
     steps: taskJournal.install,
     update: pluginUpdate("task-journal@task-journal"),
-    requires: ["cargo", "claude"],
+    requires: ["claude"],
   },
   // Mandatory third-party plugins Loom's pipeline relies on: code review
   // (caveman) and QA (qa-skills, canary). Installed as Claude plugins from their

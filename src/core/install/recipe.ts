@@ -42,6 +42,20 @@ export function runRecipe(steps: RecipeStep[], ctx: RecipeCtx, deps: InstallDeps
   let warning: string | undefined;
   const platform = ctx.platform ?? process.platform;
   for (const step of steps) {
+    // Prebuilt-binary install (loom-hwfu): the host fetches + verifies + extracts;
+    // cmd/args are placeholders. Handled before the cmd path.
+    if (step.fetchRelease) {
+      planned.push(["fetch-release", `${step.fetchRelease.repo}@${step.fetchRelease.tag}`]);
+      if (ctx.dryRun) continue;
+      const res = deps.fetchRelease?.(step.fetchRelease, { platform, dryRun: ctx.dryRun })
+        ?? { ok: false, error: "this runner can't fetch release binaries" };
+      if (!res.ok) {
+        const msg = res.error || "fetch-release failed";
+        if (step.optional) { warning = warning ? `${warning}; ${msg}` : msg; continue; }
+        return { ok: false, error: msg, planned };
+      }
+      continue;
+    }
     if (step.scoped && !isValidScope(ctx.scope)) {
       return { ok: false, error: `invalid scope: ${ctx.scope}` };
     }

@@ -33,10 +33,13 @@ it("token-pilot: install = marketplace add + claude install with scope", () => {
   expect(calls).toContainEqual(["claude","plugin","install","--scope","project","token-pilot@token-pilot"]);
 });
 
-it("task-journal: install = cargo + claude install", () => {
+it("task-journal: install = prebuilt binaries (fetchRelease) + claude install, no Rust", () => {
   const { run, calls } = fake();
-  runRecipe(recipe("task-journal").install, { scope: "user" }, deps(run));
-  expect(calls.some((c) => c[0] === "cargo" && c[1] === "install")).toBe(true);
+  let fetched: any = null;
+  const d = { dataDir: "/tmp", run, fetchRelease: (spec: any) => { fetched = spec; return { ok: true }; } };
+  expect(runRecipe(recipe("task-journal").install, { scope: "user" }, d).ok).toBe(true);
+  expect(fetched).toMatchObject({ repo: "Digital-Threads/Task-Journal", bins: ["task-journal", "task-journal-mcp"] });
+  expect(calls.some((c) => c[0] === "cargo")).toBe(false); // no build-from-source
   expect(calls).toContainEqual(["claude","plugin","install","--scope","user","task-journal@task-journal"]);
 });
 

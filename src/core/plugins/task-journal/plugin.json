@@ -16,17 +16,16 @@
   },
   "install": {
     "install": [
-      { "cmd": "cargo", "args": ["install","task-journal-cli","--bin","task-journal"], "optional": true },
-      { "cmd": "cargo", "args": ["install","task-journal-mcp"], "optional": true },
+      { "cmd": "fetch-release", "args": [],
+        "fetchRelease": { "repo": "Digital-Threads/Task-Journal", "tag": "v0.28.3", "name": "task-journal", "bins": ["task-journal", "task-journal-mcp"] } },
       { "cmd": "claude", "args": ["plugin","marketplace","add","https://github.com/Digital-Threads/Task-Journal"] },
       { "cmd": "claude", "args": ["plugin","install","--scope","{scope}","task-journal@task-journal"], "scoped": true }
     ],
     "detect": { "probe": { "cmd": "claude", "args": ["plugin","list"] },
                 "presenceMatch": "task-journal@task-journal",
-                "latest": { "probe": { "cmd": "cargo", "args": ["search","task-journal-cli","--limit","1"] }, "versionRegex": "task-journal-cli = \"([0-9.]+)\"" } },
+                "latest": { "probe": { "cmd": "curl", "args": ["-fsSL","https://api.github.com/repos/Digital-Threads/Task-Journal/releases/latest"] }, "versionRegex": "\"tag_name\":\\s*\"v?([0-9.]+)\"" } },
     "remove": [
-      { "cmd": "claude", "args": ["plugin","uninstall","task-journal@task-journal"] },
-      { "cmd": "cargo", "args": ["uninstall","task-journal-cli","task-journal-mcp"], "optional": true }
+      { "cmd": "claude", "args": ["plugin","uninstall","task-journal@task-journal"] }
     ]
   }
 }

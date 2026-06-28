@@ -259,15 +259,28 @@ export interface LoomPluginManifest {
 }
 
 // -- Install recipe (LP2) ------------------------------------------------------
+// Install a tool from its GitHub Release prebuilt binaries (no build-from-source).
+// The host downloads the platform asset, verifies its sha256 against the release's
+// checksums.txt, and extracts the named binaries onto PATH (loom-hwfu).
+export interface FetchReleaseSpec {
+  repo: string;        // "owner/name", e.g. "Digital-Threads/Task-Journal"
+  tag: string;         // pinned release tag, e.g. "v0.28.3"
+  name: string;        // asset prefix, e.g. "task-journal"
+  bins: string[];      // binaries inside the archive to install
+}
+
 // An install/remove recipe step. cmd+args -- the plugin's public command.
 // scoped:true -> the host substitutes the "{scope}" placeholder with the real scope (user|project).
 export interface RecipeStep {
-  cmd: string;            // "npm" | "claude" | "cargo" | "which" | ...
+  cmd: string;            // "npm" | "claude" | "cargo" | "which" | ... (placeholder when fetchRelease is set)
   args: string[];         // may contain the "{scope}" placeholder
   scoped?: boolean;       // true -> requires scope substitution in args
   optional?: boolean;     // true -> a step failure does NOT fail the recipe (warning only)
   // true -> interactive (OAuth/choice), Loom does NOT run it but hands it to the user (semi-auto).
   interactive?: boolean;
+  // set -> the host installs prebuilt binaries from a GitHub Release instead of
+  // running cmd/args (the host handles download + checksum + extract).
+  fetchRelease?: FetchReleaseSpec;
 }
 
 // How to detect that a plugin is installed, and its version.

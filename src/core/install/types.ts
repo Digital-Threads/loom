@@ -1,6 +1,6 @@
 // Types for the Loom plugin install/remove pipeline (Task 10.2).
 // Everything is injected (dataDir + CmdRunner) so tests have no real side effects.
-import type { InstallRecipe, LoomPluginManifest } from "../plugins/contract.js";
+import type { InstallRecipe, LoomPluginManifest, FetchReleaseSpec } from "../plugins/contract.js";
 export type { InstallRecipe } from "../plugins/contract.js";
 export type { RecipeCtx, DetectResult, Scope } from "./recipe.js";
 
@@ -24,6 +24,12 @@ export type CmdRunner = (cmd: string, args: string[]) => CmdResult;
 export interface InstallDeps {
   dataDir: string; // = loomDataDir() in prod, temp in tests
   run: CmdRunner; // = defaultRun in prod, a fake in tests
+  // Install prebuilt binaries from a GitHub release (loom-hwfu). Optional: absent
+  // in test deps; wired by defaultDeps in prod. Synchronous, like run.
+  fetchRelease?: (
+    spec: FetchReleaseSpec,
+    ctx: { platform: NodeJS.Platform; dryRun?: boolean },
+  ) => { ok: boolean; error?: string };
 }
 
 // Normalized claudePlugin: source coerced to a string (or undefined).

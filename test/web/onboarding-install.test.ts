@@ -17,6 +17,9 @@ const allInstall: CmdRunner = (cmd, args) => {
 
 // Hermetic skills install: never touch the real ~/.claude/skills in tests.
 const noSkills = () => ({ installed: [], skipped: [] });
+// task-journal installs prebuilt binaries via fetchRelease — stub it so the SSE
+// plan never hits the network in tests (loom-hwfu).
+const okFetch = () => ({ ok: true });
 
 let dir: string;
 let db: Database.Database;
@@ -32,14 +35,14 @@ afterEach(() => {
 
 describe("GET /api/onboarding/install/stream", () => {
   it("streams per-step progress and a final done event", async () => {
-    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills });
+    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills, installFetchRelease: okFetch });
     const res = await app.request("/api/onboarding/install/stream");
     expect(res.status).toBe(200);
     const text = await res.text();
     // every unit reports progress, ending in a done summary
     expect(text).toContain("event: step");
     expect(text).toContain("event: done");
-    for (const id of ["cargo", "claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode", "superpowers"]) {
+    for (const id of ["claude", "token-pilot", "task-journal", "caveman", "qa-skills", "canary", "context-mode", "superpowers"]) {
       expect(text).toContain(`"id":"${id}"`);
     }
     expect(text).toContain('"state":"done"');
@@ -51,16 +54,16 @@ describe("GET /api/onboarding/install/stream", () => {
       if (args.includes("list")) return { ok: true, stdout: "token-pilot@token-pilot\ntask-journal@task-journal\ncaveman@caveman\nqa-skills@neonwatty-qa\ncanary@canary-marketplace\ncontext-mode@context-mode\nsuperpowers@claude-plugins-official", stderr: "" };
       return { ok: true, stdout: "", stderr: "" };
     };
-    const app = createApi(db, { installRunner: present, installSkills: noSkills });
+    const app = createApi(db, { installRunner: present, installSkills: noSkills, installFetchRelease: okFetch });
     const res = await app.request("/api/onboarding/install/stream");
     const text = await res.text();
-    expect(text).toContain('"state":"skipped"'); // cargo/claude — no version-force
+    expect(text).toContain('"state":"skipped"'); // claude — no version-force
     expect(text).toContain("already installed");
     expect(text).toContain("updated to latest"); // present plugins refreshed
   });
 
   it("releases the in-flight lock: a second sequential request also runs", async () => {
-    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills });
+    const app = createApi(db, { installRunner: allInstall, installSkills: noSkills, installFetchRelease: okFetch });
     const first = await (await app.request("/api/onboarding/install/stream")).text();
     const second = await (await app.request("/api/onboarding/install/stream")).text();
     expect(first).toContain("event: done");
