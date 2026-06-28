@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-06-28
+
+### Changed
+
+- **Onboarding no longer installs a Rust toolchain** — task-journal was built from
+  source with `cargo`, which pulled the whole Rust toolchain just to get one
+  binary. It now installs task-journal's prebuilt binaries straight from its
+  GitHub release (download + sha256 verify + extract to `~/.local/bin`),
+  cross-platform. The `cargo` install step is gone entirely.
+
+### Fixed
+
+- **The agent resolves a PR-stage rebase conflict** — when syncing the task branch
+  onto the live base hit a conflict, Loom told the user to "resolve the branch
+  manually". A rebase conflict is a coding task, so it's now handed to an agent
+  pass (resolve → continue → verify) instead of the human; the human is the
+  last-resort fallback.
+- **"Push anyway (skip rebase)" escape hatch** — if the agent still can't resolve
+  a conflict, the PR result card now offers a button to push the branch as-is
+  (skipping the rebase) from the UI, instead of a dead-end error.
+
 ## [0.7.4] - 2026-06-26
 
 ### Fixed
@@ -182,7 +203,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task-journal availability** — every session reaches task-journal, so
   reasoning-chain events are recorded; confirmed working end-to-end.
 
-[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.4...master
+[Unreleased]: https://github.com/Digital-Threads/loom/compare/v0.7.5...master
+[0.7.5]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.5
 [0.7.4]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.4
 [0.7.3]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.3
 [0.7.2]: https://github.com/Digital-Threads/loom/releases/tag/v0.7.2
