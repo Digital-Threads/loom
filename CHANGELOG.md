@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Reply watchdog is a true inactivity timeout** — bumped aimux to 0.19.1, whose
+  reply watchdog resets on every streamed event. A long but actively-working stage
+  turn is no longer killed; only a genuinely silent/stuck one is (after the
+  30-minute inactivity bound). The flat 30-minute cap from 0.7.2 was a band-aid;
+  this is the real fix (aimux #18).
+
 ## [0.7.5] - 2026-06-28
 
 ### Changed
