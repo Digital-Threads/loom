@@ -5,7 +5,7 @@
 import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, getLaneSessionIds, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
+import { listTasks, getTask, getStages, createTask, deleteTask, setStageGate, getTaskSession, setTaskSession, getLaneSessionIds, setTaskProfile, updateTaskStatus, findTaskByExternalRef } from "../core/store/db.js";
 import { getSteps } from "../core/store/steps.js";
 import { getCosts, insertRun, completeRun, reconcileInterruptedRuns } from "../core/store/execute.js";
 import { DEGRADED_KIND } from "../core/store/degraded.js";
@@ -14,7 +14,8 @@ import { STAGE_MODEL, MODEL_TIERS, resolveStageModel } from "../core/pipeline/st
 import { loadWorkspaceData, type WorkspaceData } from "../core/data/loader.js";
 import { resolveProjectRoot, deriveProjectId } from "../core/workspace/project-id.js";
 import { taskDetail, taskPack, boardTaskJournal, boardTaskStory, exportEventsSafe, renderJournalFromEvents, bindExternal, openTask, tasksFromEvents, type TjEvent } from "../core/plugins/task-journal/adapter.js";
-import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile } from "@digital-threads/aimux/core";
+import { saveActiveProfile, loadActiveProfile, loadConfig, fetchRateLimits, expandHome, getProfile, buildHandoffPrompt } from "@digital-threads/aimux/core";
+import { isCrossCli, buildHandoffSeed } from "../core/automation/cross-cli-handoff.js";
 import { homedir } from "node:os";
 import { relocateSession } from "../core/automation/session-relocate.js";
 import { pickFallbackProfile, shouldAutoFallback, type ProfileLimit } from "../core/automation/auto-fallback.js";
@@ -1702,6 +1703,35 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     return c.json({ ok: true });
   });
 
+  // Repoint a task to another profile, handling the session correctly: a SAME-CLI
+  // switch keeps the conversation via native --resume (relocate), but a CROSS-CLI
+  // switch (Codex…) can't resume a Claude session, so it starts a FRESH session
+  // seeded with a compact handoff of the task's own context and flags it degraded
+  // (the target may lack MCP/token-pilot/permissions) — loom-yzmk. Shared by the
+  // user switch endpoint and the rate-limit auto-fallback.
+  const applyProfileSwitch = async (id: string, toProfile: string): Promise<void> => {
+    const cfg = loadConfig();
+    const fromProfile = getTask(db, id)?.profile ?? null;
+    const fromCli = cfg && fromProfile ? getProfile(cfg, fromProfile)?.cli : null;
+    const toCli = cfg ? getProfile(cfg, toProfile)?.cli : null;
+    const crossCli = isCrossCli(fromCli, toCli);
+    const sid = getTaskSession(db, id).sessionId;
+    sessionLauncher.stop?.(sid ?? ""); // kill the live process; the next send respawns
+    setTaskProfile(db, id, toProfile);
+    if (sid && crossCli) {
+      setTaskSession(db, id, ""); // fresh session under the new CLI
+      markDegraded(id, `Switched to a ${toCli ?? "different"}-CLI profile — token-pilot/MCP/permission enforcement may not apply (degraded).`);
+      const seed = buildHandoffSeed({
+        spec: taskSpec(id),
+        analysis: latestArtifact(db, id, "analysis")?.content,
+        specMd: latestArtifact(db, id, "spec-md")?.content,
+      });
+      if (seed) await sessionSend(id, "advance", buildHandoffPrompt(seed), { raw: true });
+    } else if (sid) {
+      relocateSessionForProfile(toProfile, sid); // same CLI → native --resume continues
+    }
+  };
+
   // Switch the subscription a task runs under. Body: { profile, resume? }.
   //  - resume omitted/true: mid-session switch — stop the live process, repoint
   //    the profile, then resume (--resume) under it with a "Continue" nudge
@@ -1715,14 +1745,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
     const profile = typeof body.profile === "string" ? body.profile.trim() : "";
     if (!profile) return c.json({ error: "profile required" }, 400);
     const resume = body.resume !== false;
-    const sid = getTaskSession(db, id).sessionId;
-    // Kill any live process so the next send respawns under the new profile.
-    sessionLauncher.stop?.(sid ?? "");
-    setTaskProfile(db, id, profile);
-    // Move the session transcript into the new profile's config dir so `--resume`
-    // continues the SAME conversation under the new account (not the old, rate-
-    // limited one). Then clear the stale rate-limit banner.
-    if (sid) relocateSessionForProfile(profile, sid);
+    await applyProfileSwitch(id, profile); // same-CLI relocate or cross-CLI handoff
     saveResult(id, "advance", "stop-reason", { kind: "none" });
     if (!resume) return c.json({ ok: true });
     const projectId = projectActive()?.projectId ?? "default";
@@ -2712,11 +2735,8 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // that still has headroom and continue the SAME session there. The server runs
   // this on a timer (see server.ts). Profile names come from the live config —
   // never hardcoded — and if nothing healthy exists the task stays parked.
-  function performProfileSwitch(id: string, profile: string): void {
-    const sid = getTaskSession(db, id).sessionId;
-    sessionLauncher.stop?.(sid ?? "");
-    setTaskProfile(db, id, profile);
-    if (sid) relocateSessionForProfile(profile, sid);
+  async function performProfileSwitch(id: string, profile: string): Promise<void> {
+    await applyProfileSwitch(id, profile); // same-CLI relocate or cross-CLI handoff
     saveResult(id, "advance", "stop-reason", { kind: "none" });
     const projectId = projectActive()?.projectId ?? "default";
     rm.start({ projectId, taskId: id }, async (ctx) => {
@@ -2746,7 +2766,7 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const next = pickFallbackProfile(limits, current);
       if (!next) continue; // no healthy alternative → stay parked, honest
       recordTurn(t.id, "advance", "Auto-fallback", `No account chosen within the grace window — switching to "${next}" (has headroom) and continuing.`);
-      performProfileSwitch(t.id, next);
+      await performProfileSwitch(t.id, next);
     }
   }
   (app as Hono & { autoFallbackTick?: () => Promise<void> }).autoFallbackTick = autoFallbackTick;
