@@ -61,7 +61,7 @@ import { getChatMessages, latestArtifact, createArtifact, getArtifacts } from ".
 import { runPr, runDone, prConnectorStatus, defaultBranch, type PrOptions, type Sh } from "../core/pipeline/pr-done.js";
 import { resolveRebaseWithAgent } from "../core/pipeline/rebase-resolve.js";
 import { buildQaChecks } from "../core/quality/default-qa-checks.js";
-import { commitWorktree, syncWorktreeToRemoteBase } from "../core/automation/auto-commit.js";
+import { commitWorktree, syncWorktreeToRemoteBase, worktreeHasChanges } from "../core/automation/auto-commit.js";
 import { worktreeBranch, ensureWorktree, worktreePath, removeWorktree, securityDataDir, prepareSwarmWorktree, removeSwarmWorktree, swarmWorktreePath, type GitRunner } from "../core/security/sandbox.js";
 import { resolveSwarmConfig, applyUltracode, type StageSwarmConfig } from "../core/layers/swarm/config.js";
 import { runImplSwarm } from "../core/layers/swarm/impl-swarm.js";
@@ -150,6 +150,10 @@ export interface ApiDeps {
   reviewPass?: (key: string, target: string) => ReviewPass;
   /** Build QA checks for the resolved keys (default: none until configured). */
   qaChecks?: (keys: string[]) => QaCheck[];
+  /** Did the impl actually change anything in the task's worktree? Defaults to a
+   *  `git status --porcelain` check; an empty result means the impl produced no
+   *  edits, so its "DONE" is refused (loom-noop). Injectable for tests. */
+  implMadeChanges?: (taskId: string) => boolean;
   /** PR options for the PR stage (default: description-only, no connector). */
   prOptions?: (taskId: string) => PrOptions;
   /** Close the task in task-journal at Done (default: no-op). */
@@ -716,6 +720,20 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   // a git failure never blocks task completion or boot.
   const worktreeGit: GitRunner =
     deps.worktreeGit ?? ((args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+  // Did the impl actually touch anything? At verify-time the agent's edits are
+  // still uncommitted (Loom commits after the loop), so a worktree with no REAL
+  // changes means it changed nothing. worktreeHasChanges applies the same artifact
+  // exclusion as the commit, so the agent's session droppings (.claude/ leaks into
+  // the cwd and isn't always gitignored) don't masquerade as work. Unknown (no
+  // worktree / git error) → don't block, preserving prior behaviour; only a
+  // genuinely empty worktree fails the gate (loom-noop).
+  const implMadeChanges =
+    deps.implMadeChanges ??
+    ((taskId: string): boolean => {
+      const wt = taskCwd(taskId);
+      if (!wt || !isGitRepo(wt)) return true;
+      try { return worktreeHasChanges(wt); } catch { return true; }
+    });
   // Drop a finished task's worktree AND its branch, then prune stale git admin
   // records. removeWorktree only removes the worktree dir — the branch leaks
   // unless deleted explicitly. Best-effort: isolate each step.
@@ -1247,6 +1265,13 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       // word. A failure feeds the real output back and the agent must fix it — the
       // impl stage self-heals instead of shipping unverified code (loom-implverify).
       const verifyImpl = async (): Promise<{ ok: boolean; failures: string }> => {
+        // Empty-diff guard (loom-noop): a "DONE" with NO changes in the worktree
+        // implemented nothing — refuse it even when build/tests are vacuous (e.g. a
+        // non-npm repo whose checks all skip). A dogfood run hit exactly this: a
+        // hallucinated impl ("cargo test 310/310 passed") sailed through to an empty
+        // PR. The agent must actually edit files (and run a red→green test).
+        if (!implMadeChanges(id))
+          return { ok: false, failures: "No code changes were made in the worktree — the implementation produced an empty diff. Actually edit the files the task requires and add a test you run red→green, then report done." };
         let checks;
         if (deps.qaChecks) checks = deps.qaChecks(["build", "test"]); // injected (tests) — run regardless of worktree
         else {

@@ -54,6 +54,16 @@ export function commitWorktree(cwd: string, message: string, git: GitSh = defaul
   return { committed: res.code === 0 };
 }
 
+/** Does the worktree hold REAL (non-artifact) changes — i.e. would commitWorktree
+ *  commit anything? Applies the SAME artifact exclusion first, so the agent's
+ *  session/tool droppings (.claude/, .token-pilot/) that leak into the cwd don't
+ *  masquerade as work. The impl empty-diff guard uses this so a "DONE" that edited
+ *  nothing can't pass just because an untracked .claude/ appeared (loom-noop). */
+export function worktreeHasChanges(cwd: string, git: GitSh = defaultGit): boolean {
+  excludeArtifacts(cwd, git);
+  return git(["status", "--porcelain"], cwd).stdout.trim() !== "";
+}
+
 /** Rebase the worktree branch onto its base branch (first of `candidates` that
  *  exists) so the PR / diff reflects only the task's own changes — not drift
  *  from a base that moved during the run (loom-705a). On conflict the rebase is

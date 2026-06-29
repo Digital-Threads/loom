@@ -1310,6 +1310,26 @@ describe("web api — fs browse + PR connector", () => {
     expect(stages.stages.find((s) => s.stage_key === "review")!.status).toBe("active");
   });
 
+  it("impl parks when the agent claims done but made NO changes (empty-diff guard, loom-noop)", async () => {
+    createTask(database, { id: "im3", title: "Impl3", run_mode: "manual" });
+    const rm = createRunManager();
+    // A confident ГОТОВО with no leftover items AND green build/tests — but the
+    // worktree has ZERO changes (a hallucinated impl). The empty-diff guard must
+    // refuse to advance: a "DONE" with an empty diff implemented nothing.
+    const a = createApi(database, {
+      runManager: rm,
+      stageAgent: async () => "Весь план реализован и проверен, регрессий нет.\nИТОГ: ГОТОВО",
+      qaChecks: () => [{ key: "tests", run: async () => ({ ok: true, output: "ok" }) }], // build/test green…
+      implMadeChanges: () => false, // …but nothing was actually changed
+    });
+    await a.request("/api/tasks/im3/start", { method: "POST" });
+    await a.request("/api/tasks/im3/move", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stageKey: "impl" }) });
+    const { runId } = (await (await a.request("/api/tasks/im3/stages/impl/run", { method: "POST", body: "{}" })).json()) as { runId: string };
+    await rm.wait(runId);
+    const stages = (await (await a.request("/api/tasks/im3")).json()) as { stages: { stage_key: string; status: string }[] };
+    expect(stages.stages.find((s) => s.stage_key === "impl")!.status).toBe("active"); // parked, not advanced
+  });
+
   it("brainstorm Done → Spec advances to the spec stage", async () => {
     createTask(database, { id: "bd", title: "BD", run_mode: "manual" });
     const a = createApi(database, { stageAgent: async () => "requirements brief" });

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { commitWorktree, rebaseWorktreeOnBase, syncWorktreeToRemoteBase, type GitSh } from "../../../src/core/automation/auto-commit.js";
+import { commitWorktree, rebaseWorktreeOnBase, syncWorktreeToRemoteBase, worktreeHasChanges, type GitSh } from "../../../src/core/automation/auto-commit.js";
 
 describe("commitWorktree", () => {
   it("stages and commits when the tree is dirty", () => {
@@ -61,6 +61,42 @@ describe("commitWorktree — excludes session/tool artifacts (real git)", () => 
     expect(tracked).toContain("index.js");
     expect(tracked.some((f) => f.startsWith(".claude/"))).toBe(false);
     expect(tracked.some((f) => f.startsWith(".token-pilot"))).toBe(false);
+  });
+});
+
+describe("worktreeHasChanges — session droppings don't masquerade as work (real git, loom-noop)", () => {
+  let dir: string;
+  const g = (args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "loom-haschanges-"));
+    g(["init", "-q"]); g(["config", "user.email", "t@t"]); g(["config", "user.name", "t"]);
+    writeFileSync(join(dir, "index.js"), "export const x = 1;\n");
+    g(["add", "-A"]); g(["commit", "-qm", "init"]);
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("a clean worktree has no changes", () => {
+    expect(worktreeHasChanges(dir)).toBe(false);
+  });
+
+  it("only .claude / .token-pilot droppings → NO changes (the no-op that fooled the first guard)", () => {
+    // A hallucinated impl edits nothing, but the spawned agent leaks .claude/ into
+    // the cwd (not always gitignored) — that must NOT read as work.
+    mkdirSync(join(dir, ".claude"), { recursive: true });
+    writeFileSync(join(dir, ".claude/settings.json"), "{}\n");
+    mkdirSync(join(dir, ".token-pilot"), { recursive: true });
+    writeFileSync(join(dir, ".token-pilot/hook-events.jsonl"), "{}\n");
+    expect(worktreeHasChanges(dir)).toBe(false);
+  });
+
+  it("a real edit to a tracked file counts as a change", () => {
+    writeFileSync(join(dir, "index.js"), "export const x = 2;\n");
+    expect(worktreeHasChanges(dir)).toBe(true);
+  });
+
+  it("a new (untracked) source file counts as a change", () => {
+    writeFileSync(join(dir, "feature.js"), "export const y = 1;\n");
+    expect(worktreeHasChanges(dir)).toBe(true);
   });
 });
 
