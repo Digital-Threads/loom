@@ -53,6 +53,7 @@ import {
 } from "../core/pipeline/stage-runners.js";
 import { createAimuxStageAgent } from "../core/pipeline/stage-agent.js";
 import { createTaskSession, parseCompleteness, declaresRemainingWork, detectRateLimit, detectAuthError, languageDirective, type SessionLauncher } from "../core/automation/task-session.js";
+import { runImplLoop } from "../core/automation/impl-loop.js";
 import type { SessionControl } from "../core/automation/live-session.js";
 import { createClaudeRuntime } from "../core/runtime/claude-runtime.js";
 import type { AgentRuntime } from "../core/runtime/agent-runtime.js";
@@ -1075,9 +1076,11 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
   const RD_PROMPT =
     "R&D stage — planning. Follow the `writing-plans` skill. Break the task into self-sufficient subtasks (a plan/DAG): for each, describe exactly what gets implemented, which files it touches, and the done criterion. Do NOT write code yet. At the end state the status on the RESULT line.";
   const IMPL_PROMPT =
-    "Implementation stage. Work by the `executing-plans` skill (go through the plan step by step) and `test-driven-development` (failing test first → minimal code → refactor); when stuck, `systematic-debugging`. Implement the ENTIRE plan — all subtasks/epics, NOT just the first. Make real changes to the code (delegate to subagents via `subagent-driven-development` when needed) and verify the result. Don't stop after one epic. If for any reason you couldn't finish everything — at the end you MUST add the line 'RESULT: NOT DONE — <what's left>'. Write 'RESULT: DONE' ONLY when the whole plan is implemented and verified.";
+    "Implementation stage. Work by the `executing-plans` skill (step through the WHOLE plan — all subtasks/epics, not just the first) and `test-driven-development` (failing test first → minimal code → refactor); when stuck, `systematic-debugging`. Make real changes to the code, delegating to subagents (`subagent-driven-development`) when useful. " +
+    "The bar for 'RESULT: DONE' is high and FACTUAL, never a claim: (1) the ENTIRE plan is implemented; (2) every behaviour change is covered by a test you ACTUALLY RAN and watched go red→green — an untested change is NOT done; (3) you RAN the repo's test suite AND its build/typecheck and they PASS — name the exact commands you ran; (4) every acceptance criterion in the spec is met (re-read it). " +
+    "If you cannot run the tests/build, or anything is unfinished or unverified, end with 'RESULT: NOT DONE — <what's left or what you could not verify>'. Write 'RESULT: DONE' ONLY on a green test+build run you performed yourself — never on the strength of 'it should work'.";
   const IMPL_CONTINUE_PROMPT =
-    "Continue the implementation: take the NEXT unfinished items of the plan and carry them through (real changes in the code + verification). When the whole plan is implemented and verified — 'RESULT: DONE'; otherwise 'RESULT: NOT DONE — <what's left>'.";
+    "Continue: take the NEXT unfinished plan items and carry them through — real code changes plus a test you run red→green. Before 'RESULT: DONE' you MUST have RUN the repo's tests AND build/typecheck and seen them pass (name the commands) with every spec acceptance criterion met; otherwise 'RESULT: NOT DONE — <what's left or unverified>'.";
   const IMPL_MAX_CONTINUES = 6; // bound the auto-continue loop so a huge/looping plan parks instead of running forever
   const doneProjectId = () => projectActive()?.projectId ?? "default";
 
@@ -1239,16 +1242,40 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const overBudget = () =>
         capUsd > 0 &&
         getCosts(db, id).filter((r) => r.source === "aimux" && r.metric === "spent").reduce((s, r) => s + r.value, 0) >= capUsd;
-      let text = await sessionSend(id, "impl", IMPL_PROMPT + lessonsBlock());
-      for (let i = 0; i < IMPL_MAX_CONTINUES && !settled(text); i++) {
-        if (overBudget()) {
-          saveResult(id, "impl", "impl-report", { report: text });
-          return { ok: true, needsAttention: true, note: `cost cap $${capUsd} reached mid-implementation` };
+      // After the agent reports done, VERIFY it: Loom runs the repo's build + test
+      // in the worktree itself, so DONE is a fact (a green run), not the agent's
+      // word. A failure feeds the real output back and the agent must fix it — the
+      // impl stage self-heals instead of shipping unverified code (loom-implverify).
+      const verifyImpl = async (): Promise<{ ok: boolean; failures: string }> => {
+        let checks;
+        if (deps.qaChecks) checks = deps.qaChecks(["build", "test"]); // injected (tests) — run regardless of worktree
+        else {
+          const wt = taskCwd(id);
+          if (!wt || !isGitRepo(wt)) return { ok: true, failures: "" }; // nothing to run against → trust
+          checks = buildQaChecks(["build", "test"], { repoRoot: wt });
         }
-        text = await sessionSend(id, "impl", IMPL_CONTINUE_PROMPT);
+        const res = await runQa(checks);
+        return { ok: res.passed, failures: res.results.filter((r) => !r.ok).map((r) => `[${r.key}]\n${r.output}`).join("\n\n") };
+      };
+      const loop = await runImplLoop({
+        send: (p) => sessionSend(id, "impl", p),
+        verify: verifyImpl,
+        settled,
+        overBudget,
+        prompts: {
+          first: IMPL_PROMPT + lessonsBlock(),
+          cont: IMPL_CONTINUE_PROMPT,
+          fail: (failures) => `You reported done, but the build/tests FAILED when I ran them. Fix the code until they pass, and re-run them yourself. Failures:\n${failures}\nEnd with the RESULT line.`,
+        },
+        maxContinues: IMPL_MAX_CONTINUES,
+      });
+      if (loop.budgetHit) {
+        saveResult(id, "impl", "impl-report", { report: loop.text });
+        return { ok: true, needsAttention: true, note: `cost cap $${capUsd} reached mid-implementation` };
       }
+      const text = loop.text;
       const t = getTask(db, id);
-      const done = settled(text);
+      const done = loop.verified;
       // Mark the commit WIP when the plan isn't fully implemented, so a parked
       // impl (and any PR built from it) reads as incomplete (loom-3s07).
       if (t?.repo && isGitRepo(t.repo)) commitWorktree(ensureWorktree(t.repo, id).path, `loom${done ? "" : " WIP"}: ${t.title}`);
@@ -1256,7 +1283,9 @@ export function createApi(db: Database.Database, deps: ApiDeps = {}): Hono {
       const implRel = applyRelocate(id, "impl", text);
       if (implRel) return { ok: true, relocate: implRel };
       if (done) return { ok: true };
-      const note = parseCompleteness(text).note ?? "implementation still has remaining plan items";
+      const note = settled(text)
+        ? "build/tests still failing after fix attempts" // claimed done, but Loom's run kept failing
+        : (parseCompleteness(text).note ?? "implementation still has remaining plan items");
       return { ok: true, needsAttention: true, note };
     },
     review: async (_d, id) => {
